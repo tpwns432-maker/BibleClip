@@ -1,0 +1,42 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+
+# PyInstaller
+build/
+dist/
+build_test/
+dist_test/
+build_web/
+dist_web/
+*.spec
+
+# User runtime data (created at first launch)
+bibleclip_settings.json
+autobible_settings.json
+*.log
+
+# Editor / OS
+.claude/
+.idea/
+.vscode/
+*.swp
+.DS_Store
+Thumbs.db
+
+# Misc local files
+image.jpg
+*.png
+!icon.png
+
+# Original-language data: track only the 3 files used (for CI builds);
+# ignore the rest of the folder and the full legacy archive.
+BethlehemWin/
+original_lang/*
+!original_lang/개역한글S.sdb
+!original_lang/HebGrkKo.dct
+!original_lang/HebGrkEn.dct
+
+# Mac source package (assembled artifact, contains data)
+AutoBible-mac-source.zip
