@@ -333,7 +333,19 @@ body {
   cursor: grabbing;
 }
 .mcard.resizing { user-select: none; }
-.mcard.locked { box-shadow: inset 0 0 0 1px var(--accent); }
+/* Locked cards no longer draw an outer stroke (7차-1): the border stroke is
+   reserved exclusively for the ACTIVE card so the two states never read alike.
+   A locked card is signalled by a calm header tone + a lit lock chip instead
+   (see .mcard.locked .card-hd and .card-lock.on below). */
+.mcard.locked .card-hd { background: var(--seg-bg); }
+/* Active (focused) card — neon accent stroke + soft glow (작업 6차-3). Only one
+   card carries .active at a time (set by bringToFront on click/drag/resize).
+   Listed after .moving so the focus ring wins while dragging. The accent
+   border-color shows regardless of any box-shadow override. */
+.mcard.active {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 1px var(--accent), 0 0 10px var(--accent-blur);
+}
 
 /* Card header: grip · title · controls · lock · close.
    The header itself is the move handle (drag to reposition the card). */
@@ -376,6 +388,12 @@ body {
   cursor: pointer; transition: border-color .15s;
 }
 .card-hd .hd-mini:hover { border-color: var(--accent); }
+/* per-card history nav (◀ ▶) — slightly tighter glyphs */
+.card-hd .hd-mini.hd-nav { font-size: 9px; }
+/* disabled: at an end of the card's navigation history. Greyed; the click is a
+   no-op (bounds-guarded) and the .hd-mini hit still blocks an accidental drag. */
+.card-hd .hd-mini.disabled { opacity: .32; cursor: default; }
+.card-hd .hd-mini.disabled:hover { border-color: var(--pill-border); }
 
 /* Close (✕) */
 .card-x {
@@ -387,21 +405,24 @@ body {
 }
 .card-x:hover { color: var(--danger, #D6456A); background: var(--pill-sel-bg); }
 
-/* Conditional-reception lock toggle (성경 카드 전용). Has a hover tooltip. */
+/* Conditional-reception lock toggle (성경 카드 전용). Has a hover tooltip.
+   Unlocked: faded grey (.32) so it recedes. Locked (.on): lit neon lavender —
+   this chip (with the header tone) is the SOLE indicator of the locked state
+   now that the outer stroke is gone (7차-1). */
 .card-lock {
   position: relative; flex: 0 0 auto;
   width: 24px; height: 24px; border-radius: 7px;
   display: inline-flex; align-items: center; justify-content: center;
-  color: var(--text-dim); cursor: pointer;
-  transition: background .15s, color .15s;
+  color: var(--text-dim); cursor: pointer; opacity: .32;
+  transition: background .15s, color .15s, opacity .15s;
 }
 .card-lock svg { width: 14px; height: 14px; }
-.card-lock:hover { background: var(--pill-sel-bg); color: var(--accent); }
-.card-lock.on { color: var(--accent); background: var(--pill-sel-bg); }
+.card-lock:hover { background: var(--pill-sel-bg); color: var(--accent); opacity: 1; }
+.card-lock.on { color: #9A86FF; background: var(--pill-sel-bg); opacity: 1; }
 /* disabled: only one bible card on screen, or N-1 limit reached for an unlocked
    card. Greyed and non-interactive (but still shows its tooltip). */
 .card-lock.disabled { opacity: .38; cursor: not-allowed; }
-.card-lock.disabled:hover { background: none; color: var(--text-dim); }
+.card-lock.disabled:hover { background: none; color: var(--text-dim); opacity: .38; }
 
 /* ---- 8-direction resize handles (edges + corners) ----
    Kept inside the card bounds (the card clips overflow for rounded corners). */

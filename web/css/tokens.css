@@ -9,6 +9,7 @@
   --accent-2:      #5B7CFA;
   --accent-hover:  #5B3DF0;
   --accent-grad:   linear-gradient(135deg, #6D4DFF, #5B7CFA);
+  --accent-blur:   rgba(109, 77, 255, .45);   /* soft glow for the active card */
   --on-accent:     #FFFFFF;
   /* accent as TEXT (verse #, chip, romanization, links). Brightened in dark
      mode for legibility on dark surfaces. */

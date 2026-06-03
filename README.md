@@ -1,48 +1,59 @@
 # BibleClip
 
 클립보드의 성경 구절(예: `창 2:1`)을 자동으로 인식해 설정한 형식으로 변환·복사해 주는
-한국어 데스크톱 앱입니다. 여러 역본 병렬 보기, 히브리어/헬라어 원어·사전 패널,
-키워드 검색, GitHub 기반 자동 업데이트를 지원합니다.
+한국어 데스크톱 앱입니다. 자유 배치 카드 워크스페이스(본문/원어/사전), 여러 역본 병렬
+보기, 히브리어/헬라어 원어·사전, 키워드 검색, GitHub 기반 자동 업데이트를 지원합니다.
 
-> 이 프로젝트는 이전 `AutoBible` 저장소에서 **`BibleClip`** 으로 이전했으며, 정식 버전 **v1.0.0** 으로 새 출발합니다.
+> 이 프로젝트는 이전 `AutoBible` 저장소에서 **`BibleClip`** 으로 이전했습니다.
+> 현재 배포본은 **pywebview 기반 웹 UI**(`bibleclip_web.py` + `web/`)입니다. 과거
+> CustomTkinter UI(`bibleclip_app.py` + `bibleclip/ui/`)는 빌드/배포하지 않지만
+> 하위 호환을 위해 소스에 남아 있습니다.
 
 ## 실행 (개발)
 
 ```bash
-python -m bibleclip
+python bibleclip_web.py
 # 또는
-python bibleclip_app.py
+python -m bibleclip.webui
 ```
 
-Python 3.9+ 와 표준 라이브러리만 필요합니다(tkinter 포함). 자동 업데이트의 SSL
-검증을 위해 `certifi` 가 있으면 사용합니다.
+Python 3.9+ 와 `pywebview` 가 필요합니다(Windows는 WebView2가 OS에 기본 내장,
+macOS는 내장 WKWebView 사용). 클립보드 입출력에 `pyperclip`, 자동 업데이트 SSL
+검증에 `certifi` 를 사용합니다. (`requirements.txt` 참고.)
 
 ## 프로젝트 구조
 
 ```
-bibleclip_app.py        진입점 슈팅 → bibleclip.ui.app:main
+bibleclip_web.py        웹 앱 진입점 → bibleclip.webui
 bibleclip/              애플리케이션 패키지
 ├─ _version.py          버전 단일 출처(ASCII 전용)
 ├─ config.py            플랫폼·폰트·경로·GitHub URL
 ├─ constants.py         자모/책이름 매핑
 ├─ text_utils.py        한글 조립·정제·검색 trigram
-├─ theme.py             라이트/다크 팔레트
 ├─ update.py            릴리스 체크·플랫폼 자산 선택
 ├─ data/                bible_db.py · original_lang.py
-├─ core/                engine.py(파서) · formatter.py
-└─ ui/                  app.py + 믹스인(viewer·settings·lexicon·order·
-                        viewer_ops·search·nav·monitor·theming·updater_ui)
+├─ core/                library.py(비-UI 코어) · engine.py(파서) · formatter.py
+│                       · clipboard_monitor.py · installer.py
+├─ webui/               api.py(JS-facing 브리지, pywebview 비의존) + 진입 모듈
+└─ ui/                  (레거시 CustomTkinter — 미배포, 하위호환 보존)
 
-bible_versions/         성경 SQLite DB (런타임 데이터)
-original_lang/          원어/사전 데이터 (런타임 데이터)
+web/                    프론트엔드 (배포 UI)
+├─ index.html / app.js  레이아웃 + 전체 로직(CardManager 포함)
+├─ css/                 tokens.css · styles.css · fonts.css
+└─ fonts/               Pretendard 번들
+
+bible_versions/         성경 SQLite DB (런타임 데이터, 루트 고정)
+original_lang/          원어/사전 데이터 (런타임 데이터, 루트 고정)
 icon.ico / icon.png     앱 아이콘
-packaging/              build_mac.sh (macOS 로컬 빌드)
-docs/                   CHANGELOG · BUILD_MAC · 리팩터링 파이프라인 문서
+사용법.txt              사용자 매뉴얼 (릴리스 zip에 동봉)
+packaging/              build_web.ps1(Win 프리즈) · build_mac.sh
+tests/                  헤드리스 테스트(test_core · test_webui_api 등)
+docs/                   CHANGELOG · HANDOFF · 작업 로그 · BUILD_MAC
 .github/workflows/      태그 푸시 시 Windows/macOS 자동 빌드·릴리스
 ```
 
-UI 한 부분을 고칠 때 해당 믹스인 파일(`bibleclip/ui/*.py`)만 보면 되도록
-관심사별로 분리돼 있습니다.
+`bibleclip/webui/api.py` 의 `Api` 는 pywebview 없이도 생성·검사할 수 있어
+헤드리스 테스트가 가능합니다(`tests/test_webui_api.py`).
 
 ## 빌드 / 릴리스
 

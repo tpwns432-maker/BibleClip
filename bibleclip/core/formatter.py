@@ -89,8 +89,17 @@ class Formatter:
                     lines.append(f"{v_num} {v_text}")
             body = '\n'.join(lines)
         else:
-            # inline - join all texts
-            body = ' '.join(text for _, text in all_verse_data)
+            # inline - join texts. Between non-consecutive verse groups (a comma
+            # split in the reference, e.g. "1-2,4-6") insert " // " so the
+            # discontinuity stays legible; consecutive verses keep a plain space.
+            pieces = []
+            prev_v = None
+            for v_num, v_text in all_verse_data:
+                if prev_v is not None:
+                    pieces.append(' // ' if v_num != prev_v + 1 else ' ')
+                pieces.append(v_text)
+                prev_v = v_num
+            body = ''.join(pieces)
 
         # --- Assemble with brackets/position ---
         hide_ref = s.get('hide_reference', False)

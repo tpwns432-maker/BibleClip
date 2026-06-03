@@ -65,6 +65,29 @@ def main():
     else:
         print("(original_lang data absent — skipping lexicon/interlinear checks)")
 
+    # 8) discontinuous comma references (6차 작업 1): "요 1:1-2,4-6" merges to a
+    #    single sorted verse set with no gaps lost.
+    refs = lib.parse_reference('요 1:1-2,4-6')
+    assert refs and refs[0][4] == [1, 2, 4, 5, 6], refs
+    print(f"parse_reference('요 1:1-2,4-6') -> verses {refs[0][4]}")
+    assert lib.parse_reference('요 1:2,9')[0][4] == [2, 9]
+
+    # 9) inline output inserts ' // ' between non-consecutive verse groups, and
+    #    NOT between consecutive verses (6차 작업 2).
+    saved_mode = lib.settings['output_mode']
+    saved_hdr = lib.settings['show_version_header']
+    lib.settings['output_mode'] = 'inline'
+    lib.settings['show_version_header'] = False
+    try:
+        gap = lib.build_output('요 1:1-2,4')
+        assert gap and ' // ' in gap['text'], gap
+        cont = lib.build_output('요 1:1-3')
+        assert cont and ' // ' not in cont['text'], cont
+    finally:
+        lib.settings['output_mode'] = saved_mode
+        lib.settings['show_version_header'] = saved_hdr
+    print("inline output: '요 1:1-2,4' has ' // ', '요 1:1-3' does not")
+
     print("\nALL CORE CHECKS PASSED ✅")
 
 

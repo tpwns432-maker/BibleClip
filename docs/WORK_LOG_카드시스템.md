@@ -247,3 +247,133 @@ computePush(dir, rawGrow, card, orig):
 
 - [ ] 어떤 카드에서든 역본/책/장 드롭다운을 펼쳤을 때 다른 카드에 가려지지 않음
 - [ ] 카드를 수십 번 클릭한 뒤에도 드롭다운·스냅 가이드·드로어가 정상적으로 카드 위에 표시됨
+
+---
+
+## 11. 5차 피드백 작업 (완료 — 최신, v1.0.2 대상)
+
+> TODO.md 5차 명세 기준. Phase 1·2를 격리 구현. 변경 파일: `web/app.js`, `web/css/styles.css`.
+
+### Phase 1 — 카드별 독립 탐색 히스토리 (◀ ▶ 뒤로/앞으로)
+
+각 **성경 카드**가 자신이 방문한 `{book, chapter}` 참조를 독립적으로 기억해, 헤더의 ◀ ▶ 버튼으로
+**다른 카드에 영향 없이** 그 카드만 이전/다음 구절로 이동한다. 히스토리는 **세션 한정**(serialize에
+미포함 — 영속 저장 안 함)이며 카드 생성/복원 시 현재 참조로 시드된다.
+
+| 구분 | 내용 |
+|---|---|
+| 데이터 | `card.history: [{book, chapter}, …]`, `card.historyIndex` (성경 카드 전용) |
+| 시드 | `seedHistory(card)` — `init`(restore 후 forEach) + `addCard`(bible) 에서 호출 |
+| 기록 | `recordHistory(card)` — 사용자 내비게이션 후 호출. 현재와 동일하면 no-op, 분기 시 forward 엔트리 절단(splice) 후 push |
+| 이동 | `cardHistoryNav(card, ±1)` — 히스토리에서 참조를 꺼내 적용(기록 안 함). 바운드 가드 |
+| 버튼 | `updateNavButtons(card)` — 양 끝에서 `.disabled` 토글. `loadBibleCard` 끝/기록/이동 시 갱신 |
+| UI | `headerHTML` bible 분기에 `◀`(`data-act="back"`)·`▶`(`data-act="forward"`) `.hd-mini.hd-nav` 추가. 좌측(제목 뒤) 배치 |
+| 배선 | `handleAction`에 `back`/`forward` case. `recordHistory` 삽입처: 책 선택, 장 선택, `cardChapStep`(이전/다음 장), `goToRef`(잠금 아닌 타깃이 이동했을 때만) |
+
+- **CSS**: `.card-hd .hd-mini.hd-nav { font-size: 9px }`, `.card-hd .hd-mini.disabled { opacity:.32; cursor:default }` (+ hover 무효화)
+- **설계 메모**: 잠금 카드가 제자리 반응(book/chapter 불변)하면 `recordHistory`가 no-op이므로 안전. 비활성 버튼은 `pointer-events`를 유지 → 클릭은 바운드 가드로 no-op, 동시에 `.hd-mini` 히트가 헤더 드래그(이동) 오발동을 막음.
+
+### Phase 2 — 디바운스 기반 레이아웃 자동 저장 최적화
+
+기존 `saveLayout()`은 이미 400ms 디바운스였고 드래그/리사이즈 **도중에는 호출되지 않으며**(매 프레임은
+`applyGeom`만 — 스토리지 I/O 없음) `onUp`에서만 저장했다. 유일한 누수는 제스처 시작 시 `bringToFront()`가
+부르는 `saveLayout` 1회였다(긴 드래그면 도중 1회 기록 가능). 이를 막아 **제스처당 정확히 1회** 저장으로 정리.
+
+| 구분 | 내용 |
+|---|---|
+| 디바운스 | 400ms → **300ms** (`SAVE_DEBOUNCE_MS` 상수화) |
+| 제스처 중 쓰기 차단 | `interacting` 플래그. `startMove`/`startResizeCard` 시작에서 `true`, 각 `onUp`에서 `false`. `saveLayout()`은 `interacting`이면 즉시 return(스케줄 안 함) → 드래그 프레임은 100% 렌더에만 사용 |
+| 저장 로그 | 디바운스 콜백에서 `console.log("[BibleClip] 레이아웃 저장 완료")` — 손 뗀 뒤 300ms에 1번만 출력(검증용) |
+
+### 5차 테스트 체크리스트
+
+- [ ] 카드별 ◀ ▶ 가 서로 독립적으로 동작(한 카드 뒤로가기가 다른 카드에 영향 없음)
+- [ ] 히스토리 양 끝에서 버튼 비활성(흐려짐)
+- [ ] 책/장 변경·이전/다음 장·클립보드 이동 모두 히스토리에 기록됨
+- [ ] 드래그/리사이즈 중 렉 없이 부드러움, 손 뗀 뒤 300ms에 "레이아웃 저장 완료" 1번만 콘솔 출력
+
+### 5차 검증 상태
+
+- ✅ `node --check web/app.js` 문법 OK · NUL 0
+- ✅ `python -X utf8 tests/test_webui_api.py` 전체 통과
+- ⏳ 사용자 실창 테스트 대기
+
+---
+
+## 12. 6차 피드백 작업 (완료 — 최신, v1.0.2 대상)
+
+> TODO.md 6차 명세 기준. Phase 1(엔진/포맷), Phase 2(활성 카드·절 단위 히스토리)로 격리.
+> 변경 파일: `bibleclip/core/formatter.py`, `web/app.js`, `web/css/styles.css`, `web/css/tokens.css`, `tests/test_core.py`.
+
+### Phase 1 — 불연속 구절 콤마 파싱 & 한 줄 출력 ` // ` 구분
+
+| # | 항목 | 구현 |
+|---|---|---|
+| 작업 1 | 콤마 파싱 | **이미 구현되어 있었음**. `engine.py`의 `VERSE_PATTERN`/`KOREAN_STYLE_PATTERN` 정규식이 `(?:[,，]\d+(?:[-~]\d+)?)*`로 콤마 그룹을 포착하고 `parse_verses`가 `re.split(r'[,，]')` 후 합집합·정렬. `요 1:1-2,4-6` → `[1,2,4,5,6]` 검증 완료. **코드 변경 없음**(회귀 테스트만 추가) |
+| 작업 2 | 한 줄 ` // ` | **`formatter.py`** `format_version_output`의 inline 분기 수정(명세는 library.py로 안내했으나 실제 절 결합부는 Formatter임). `all_verse_data`를 순회하며 `v_num != prev_v + 1`(불연속=콤마 경계)일 때만 ` // ` 삽입, 연속 절은 공백. 결과: `요 1:1-2,4` → `[1절] [2절] // [4절]` |
+
+- **설계 메모**: `parse_verses`가 콤마 그룹 정보를 평탄화(set)하므로 그룹 경계는 보존되지 않음 → 출력 시 **절 번호 불연속(gap) 감지**로 ` // ` 위치를 복원(= 콤마 경계와 동치). `newline`(여러 줄) 모드는 미변경.
+
+### Phase 2 — 활성 카드 시스템 & 절 단위 히스토리 복원
+
+| # | 항목 | 구현 (web/app.js) |
+|---|---|---|
+| 작업 3 | 활성 카드 네온 | `activeId` 상태 + `setActive(card)`(다른 카드 `.active` 해제 후 대상에 주입). `bringToFront` 최상단에서 호출(z 불변이어도 포커스 갱신). `renderAll` 후 `.active` 재적용. CSS `.mcard.active { border-color:accent; box-shadow: 0 0 0 1px accent, 0 0 10px var(--accent-blur) }` (`tokens.css`에 `--accent-blur` 추가). `.moving`/`.locked` 뒤에 배치해 드래그 중에도 네온 유지 |
+| 작업 4 | 키보드 ←/→ 활성 타겟 | `activeBibleCard()`(active가 성경 카드면 그것, 아니면 `primaryBible` 폴백) + `chapStepActive(delta)`. keydown 리스너를 `chapStepPrimary`→`chapStepActive`로 교체. 공개 API에 `chapStepActive` 노출 |
+| 작업 5 | 절 단위 히스토리 | 히스토리 엔트리 `{book, chapter}` → **`{book, chapter, verse}`**로 승격. `seedHistory` verse=null, `recordHistory(card, verse)`(같은 장이면 엔트리 verse만 갱신), `goToRef`는 하이라이트 첫 절(`verses[0]`)을 앵커로 전달. **`syncInterlinFrom`이 스크롤 시 현재 엔트리 verse를 라이브 추적**(떠날 때의 스크롤 위치 기억). `cardHistoryNav`는 복원 후 `scrollVerseToTop`(`scrollIntoView({block:'start'})`)로 그 절을 패널 최상단에 안착 |
+
+### 6차 테스트 체크리스트
+
+- [ ] 클립보드 `요 1:1-2,4-6` 수신 시 1·2·4·5·6절 누락 없이 카드에 로드
+- [ ] 한 줄 출력 모드에서 `요 1:1-2,4` 복사 시 `… // …` 구분 표기
+- [ ] 카드 클릭/드래그 시 테두리 네온 퍼플 스트로크 즉시 표시(1개만 활성)
+- [ ] 키보드 ←/→ 가 네온 들어온(활성) 카드의 장을 이동(활성 없으면 1번 카드)
+- [ ] 3·5절 보던 중 이동 후 ◀ 누르면 그 절이 패널 최상단에 안착
+
+### 6차 검증 상태
+
+- ✅ `node --check web/app.js` 문법 OK · NUL 0
+- ✅ `python -X utf8 tests/test_core.py` 통과(콤마 파싱·`//` 케이스 추가) · `tests/test_webui_api.py` 전체 통과
+- ✅ 6차 실창 유저 테스트 올패스
+
+---
+
+## 13. 7차 피드백 작업 (완료 — 최신, v1.0.2 대상)
+
+> TODO.md 7차 명세 기준. 6차 실창 테스트에서 드러난 **시각 혼선**과 **스크롤 상태머신**을 정리.
+> 변경 파일: `web/css/styles.css`, `web/app.js`.
+
+### Phase 1 — 잠금/활성 카드 시각 분리 (작업 1)
+
+**문제**: `.mcard.locked`(inset 스트로크)와 `.mcard.active`(아웃셋 네온 스트로크)가 둘 다 테두리를 써서, 잠금+포커스가 겹치면 혼동.
+
+| 구분 | 변경 (styles.css) |
+|---|---|
+| 스트로크 독점 | `.mcard.locked { box-shadow: inset 0 0 0 1px var(--accent) }` **제거**. 외곽 스트로크는 이제 `.mcard.active` 전용 |
+| 잠금 헤더 톤 | `.mcard.locked .card-hd { background: var(--seg-bg) }` — 차분한 톤으로 잠금 표시(테마 무관) |
+| 자물쇠 칩 | `.card-lock` 기본 `opacity:.32`(흐린 회색) → hover 시 `opacity:1`. `.card-lock.on { color:#9A86FF; opacity:1 }`(네온 라벤더 점등). `.card-lock.disabled`는 `.38` 유지 |
+
+- **결과**: 잠긴 카드는 외곽 스트로크가 전혀 없어 활성 네온과 절대 혼동되지 않고, 헤더 톤 + 점등된 자물쇠로 식별. 활성 네온은 그대로 유지.
+
+### Phase 2 — 스크롤 라이브 추적 500ms 디바운스 (작업 2)
+
+**문제**: 6차에서 `syncInterlinFrom`이 스크롤 매 프레임마다 `card.history[idx].verse`를 갱신 → 연산 낭비.
+
+| 구분 | 변경 (app.js) |
+|---|---|
+| 관심사 분리 | `topVerseOf(body)` 헬퍼 추출. `syncInterlinFrom`은 **원어 카드 정렬만**(실시간 rAF 유지, history 미접근). history 기록은 신설 `lockHistoryVerse(card, body)`로 이전 |
+| 500ms 디바운스 | 스크롤 리스너에 `scrollTimer` 추가. 스크롤 중엔 매 이벤트마다 `clearTimeout`으로 리셋 → **멈춘 뒤 500ms** 도달 시 1회만 `lockHistoryVerse` 실행(최상단 절을 현재 엔트리 verse에 락온 + `saveLayout()` 디바운스 연결) |
+
+- **결과**: 휠 굴리는 내내 history 쓰기 동결, 정착 지점의 절만 기록. 원어 실시간 동기화는 영향 없음. `cardHistoryNav`의 프로그램 스크롤도 동일 경로로 멱등 처리.
+
+### 7차 테스트 체크리스트
+
+- [ ] 카드 잠가도 외곽 테두리 스트로크 없음 → 활성 네온과 혼동 불가
+- [ ] 잠긴 카드: 헤더 톤 변화 + 자물쇠 네온 라벤더 점등 / 잠금 해제 시 자물쇠 흐려짐(.32)
+- [ ] 스크롤 내리는 도중엔 이력 동결, 멈추고 0.5초 뒤 정착 절만 기록(◀로 복원 시 그 절)
+
+### 7차 검증 상태
+
+- ✅ `node --check web/app.js` 문법 OK · NUL 0
+- ✅ `python -X utf8 tests/test_core.py` · `tests/test_webui_api.py` 전체 통과
+- ⏳ 사용자 실창 테스트 대기

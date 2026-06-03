@@ -273,8 +273,12 @@
   const CardManager = (() => {
     let cards = [];          // card descriptors (each carries free-form geometry)
     let saveTimer = null;
+    let interacting = false; // true while a move/resize gesture is in flight
     let zTop = 1;            // highest z-index in use (click-to-front counter)
     let cascadeN = 0;        // cascade offset counter for newly added cards
+    let activeId = null;     // id of the focused card (neon stroke + keyboard target)
+
+    const SAVE_DEBOUNCE_MS = 300;  // layout autosave debounce (Phase 2)
 
     // Free-form workspace geometry. All card positions/sizes are stored as
     // PERCENTAGES of the workspace, so a window resize scales every card
@@ -327,13 +331,21 @@
       });
     }
 
+    // Debounced layout autosave (Phase 2). While a move/resize gesture is in
+    // flight, storage writes are blocked OUTRIGHT so drag/resize frames spend
+    // 100% on rendering (no I/O jank); the gesture's onUp clears the flag and
+    // calls this once, so exactly one write lands ~300ms after the mouse is
+    // released. Frame updates during a gesture go through applyGeom only.
     function saveLayout() {
+      if (interacting) return; // drag/resize in progress → defer to its onUp
       if (saveTimer) clearTimeout(saveTimer);
       saveTimer = setTimeout(() => {
+        saveTimer = null;
         if (hasBridge() && typeof api().save_cards_layout === "function") {
           api().save_cards_layout(serialize());
         }
-      }, 400);
+        console.log("[BibleClip] 레이아웃 저장 완료");
+      }, SAVE_DEBOUNCE_MS);
     }
 
     function defaultLayout() {
@@ -481,6 +493,8 @@
       const grip = `<span class="card-grip" data-tip="드래그하여 이동">⠿</span>`;
       if (card.type === "bible") {
         return `<div class="card-hd">${grip}<span class="card-title">${TYPE_LABEL.bible}</span>` +
+          `<span class="hd-mini hd-nav disabled" data-act="back" data-tip="이전 구절로">◀</span>` +
+          `<span class="hd-mini hd-nav disabled" data-act="forward" data-tip="다음 구절로">▶</span>` +
           `<span class="card-hd-ctrls">` +
             `<span class="hd-pill dropdown" data-act="book">…</span>` +
             `<span class="hd-pill dropdown" data-act="chapter">${card.chapter || 1}장</span>` +
@@ -527,6 +541,8 @@
       c.innerHTML = cards.map(skeleton).join("");
       normalizeLocks();
       refreshLockStates();
+      // Re-apply the active highlight (innerHTML rebuild dropped the class).
+      if (activeId && cardById(activeId)) setActive(cardById(activeId));
       cards.forEach((card) => loadCard(card));
     }
 
@@ -554,6 +570,7 @@
       const b2 = bodyEl(card.id);
       if (b2) renderMultiVersesInto(b2, viewerVers, chapDataArr, highlight);
       updateBibleHeader(card);
+      updateNavButtons(card);
     }
 
     async function loadInterlinearCard(card) {
@@ -637,6 +654,7 @@
           chapter: base ? base.chapter : state.lastChapter,
           locked: false, ...geom,
         };
+        seedHistory(card);
       } else {
         card = { id, type, link: (firstBible() && firstBible().id) || null, ...geom };
       }
@@ -653,6 +671,81 @@
       saveLayout();
     }
 
+    // ---- per-card navigation history (카드별 독립 탐색 이력) ----
+    // Each bible card remembers the {book, chapter} references it has visited so
+    // its ◀ ▶ buttons step back/forward WITHOUT disturbing any other card. The
+    // history is session-only (not serialized) and is seeded with the card's
+    // initial reference on init/add. recordHistory() is called after any user
+    // navigation; back/forward set the reference directly and DON'T record.
+
+    function seedHistory(card) {
+      if (!card || card.type !== "bible") return;
+      card.history = [{ book: card.book, chapter: card.chapter, verse: null }];
+      card.historyIndex = 0;
+    }
+
+    // Record the card's current reference (with the starting verse) as a new
+    // history entry, dropping any forward entries — we're branching. When the
+    // book+chapter already match the current entry, just refresh its verse (e.g.
+    // a clipboard hit on the same chapter) without growing the stack. The verse
+    // a user scrolled to before leaving is captured live by syncInterlinFrom.
+    function recordHistory(card, verse) {
+      if (!card || card.type !== "bible") return;
+      if (!Array.isArray(card.history)) seedHistory(card);
+      const h = card.history;
+      const v = verse || null;
+      const cur = h[card.historyIndex];
+      if (cur && cur.book === card.book && cur.chapter === card.chapter) {
+        cur.verse = v;
+        return;
+      }
+      if (card.historyIndex < h.length - 1) h.splice(card.historyIndex + 1);
+      h.push({ book: card.book, chapter: card.chapter, verse: v });
+      card.historyIndex = h.length - 1;
+      updateNavButtons(card);
+    }
+
+    // Enable/disable the ◀ ▶ buttons based on the card's position in its history.
+    function updateNavButtons(card) {
+      const s = sectionEl(card.id);
+      if (!s) return;
+      const len = Array.isArray(card.history) ? card.history.length : 0;
+      const i = card.historyIndex || 0;
+      const back = s.querySelector('[data-act="back"]');
+      const fwd = s.querySelector('[data-act="forward"]');
+      if (back) back.classList.toggle("disabled", i <= 0);
+      if (fwd) fwd.classList.toggle("disabled", i >= len - 1);
+    }
+
+    // Scroll a bible card's body so the given verse sits at the TOP of the
+    // scrollport (block:'start'). No-op for a falsy verse (stay at natural top).
+    function scrollVerseToTop(card, verse) {
+      if (!verse) return;
+      const body = bodyEl(card.id);
+      if (!body) return;
+      const el = body.querySelector(`.v[data-v="${verse}"]`);
+      if (el) el.scrollIntoView({ block: "start" });
+    }
+
+    // Step the card's reference along its own history (delta -1 back, +1 forward).
+    // Restores the remembered verse to the top of the panel. Does NOT record a
+    // new entry; other cards are untouched.
+    async function cardHistoryNav(card, delta) {
+      if (!card || card.type !== "bible" || !Array.isArray(card.history)) return;
+      const j = card.historyIndex + delta;
+      if (j < 0 || j >= card.history.length) return;
+      card.historyIndex = j;
+      const ref = card.history[j];
+      card.book = ref.book;
+      card.chapter = ref.chapter;
+      await loadBibleCard(card);
+      reloadDependents(card);
+      scrollVerseToTop(card, ref.verse);   // restore scroll position (작업 5)
+      if (card === primaryBible()) api().note_position(card.book, card.chapter);
+      updateNavButtons(card);
+      saveLayout();
+    }
+
     // ---- chapter stepping ----
 
     async function cardChapStep(card, delta) {
@@ -662,12 +755,18 @@
       card.chapter = chs[j];
       await loadBibleCard(card);
       reloadDependents(card);
+      recordHistory(card);
       if (card === primaryBible()) api().note_position(card.book, card.chapter);
       saveLayout();
     }
     function chapStepPrimary(delta) {
       const pb = primaryBible();
       if (pb) cardChapStep(pb, delta);
+    }
+    // Keyboard ←/→ targets the ACTIVE card (falls back to the primary card).
+    function chapStepActive(delta) {
+      const card = activeBibleCard();
+      if (card) cardChapStep(card, delta);
     }
     function linkedBibleFor(id) {
       const card = cardById(id);
@@ -701,6 +800,11 @@
       // Render (highlight the specific verses).
       await loadBibleCard(target, verses && verses.length ? verses : null);
       reloadDependents(target);
+      // A locked card reacts in place (book/chapter unchanged) → recordHistory
+      // refreshes the entry's verse; an unlocked card that navigated records the
+      // new reference, remembering the first highlighted verse as its anchor.
+      const anchorVerse = verses && verses.length ? verses[0] : null;
+      recordHistory(target, anchorVerse);
 
       const pb = primaryBible();
       if (pb) api().note_position(pb.book, pb.chapter);
@@ -723,6 +827,7 @@
               card.chapter = chs[0] || 1;
               await loadBibleCard(card);
               reloadDependents(card);
+              recordHistory(card);
               if (card === primaryBible()) api().note_position(card.book, card.chapter);
               saveLayout();
             });
@@ -736,6 +841,7 @@
               card.chapter = c;
               await loadBibleCard(card);
               reloadDependents(card);
+              recordHistory(card);
               if (card === primaryBible()) api().note_position(card.book, card.chapter);
               saveLayout();
             }, { grid: true });
@@ -743,6 +849,8 @@
         }
         case "prev": cardChapStep(card, -1); break;
         case "next": cardChapStep(card, 1); break;
+        case "back": cardHistoryNav(card, -1); break;
+        case "forward": cardHistoryNav(card, 1); break;
         case "lock": toggleLock(card); break;
         case "close": removeCard(card.id); break;
         case "link":
@@ -771,6 +879,7 @@
     // snap guides, tooltips, the log drawer (z-index 80+) — which previously got
     // hidden behind cards after enough clicks.
     function bringToFront(card) {
+      setActive(card); // focus highlight updates even when z doesn't change
       if (card.z >= zTop) return;
       card.z = ++zTop;
       if (zTop > 50) {
@@ -784,6 +893,29 @@
         if (el) el.style.zIndex = card.z;
       }
       saveLayout();
+    }
+
+    // ---- active (focused) card (활성 카드) ----
+    // Exactly one card carries the .active neon stroke at a time; it is also the
+    // target for keyboard ←/→ chapter stepping. Updated on every bringToFront
+    // (click / drag / resize / programmatic raise).
+    function setActive(card) {
+      if (!card) return;
+      activeId = card.id;
+      const c = container();
+      if (!c) return;
+      c.querySelectorAll(".mcard.active").forEach((el) => {
+        if (el.dataset.id !== card.id) el.classList.remove("active");
+      });
+      const el = sectionEl(card.id);
+      if (el) el.classList.add("active");
+    }
+
+    // The bible card to target for keyboard stepping: the active card if it's a
+    // bible card, else the primary (first) bible card as a fallback.
+    function activeBibleCard() {
+      const c = activeId && cardById(activeId);
+      return (c && c.type === "bible") ? c : primaryBible();
     }
 
     // PowerPoint-style alignment guides (shown while a snap is active).
@@ -898,6 +1030,7 @@
     // Header-drag move with snap + alignment guides.
     // Card-to-card snaps land GUTTER apart; card-to-boundary snaps stay flush.
     function startMove(card, sec, e) {
+      interacting = true; // block layout writes for the whole gesture (Phase 2)
       bringToFront(card);
       const cont = container().getBoundingClientRect();
       const sx = e.clientX, sy = e.clientY;
@@ -945,6 +1078,7 @@
         document.removeEventListener("mouseup", onUp);
         sec.classList.remove("moving");
         clearGuides();
+        interacting = false;
         if (moved) saveLayout();
       };
       document.addEventListener("mousemove", onMove);
@@ -957,6 +1091,7 @@
     //   "e" grow: east edge moves right.   "w" grow: west edge moves left.
     //   "s" grow: south edge moves down.   "n" grow: north edge moves up.
     function startResizeCard(card, sec, dirs, e) {
+      interacting = true; // block layout writes for the whole gesture (Phase 2)
       bringToFront(card);
       const cont = container().getBoundingClientRect();
       const sx = e.clientX, sy = e.clientY;
@@ -1044,6 +1179,7 @@
         document.removeEventListener("mouseup", onUp);
         sec.classList.remove("resizing");
         clearGuides();
+        interacting = false;
         saveLayout();
       };
       document.addEventListener("mousemove", onMove);
@@ -1056,15 +1192,22 @@
     // same verse sits at their top. One-way (bible → interlinear), rAF-throttled.
 
     let syncRaf = null;
+    let scrollTimer = null;   // 500ms debounce for locking the history verse (7차-2)
 
-    function syncInterlinFrom(card, body) {
+    // The topmost fully-visible verse number in a scripture body (or null).
+    function topVerseOf(body) {
       const bodyTop = body.getBoundingClientRect().top;
-      let topVerse = null;
       for (const v of body.querySelectorAll(".v[data-v]")) {
-        if (v.getBoundingClientRect().top >= bodyTop - 2) { topVerse = v; break; }
+        if (v.getBoundingClientRect().top >= bodyTop - 2) return +v.dataset.v;
       }
-      if (!topVerse) return;
-      const n = topVerse.dataset.v;
+      return null;
+    }
+
+    // Real-time (every frame): keep linked interlinear cards aligned to the
+    // bible card's top verse. Does NOT touch history — that's debounced (7차-2).
+    function syncInterlinFrom(card, body) {
+      const n = topVerseOf(body);
+      if (!n) return;
       cards
         .filter((c) => c.type === "interlinear" && linkedBible(c) === card)
         .forEach((ic) => {
@@ -1074,6 +1217,19 @@
           if (!target) return;
           ib.scrollTop += target.getBoundingClientRect().top - ib.getBoundingClientRect().top;
         });
+    }
+
+    // Debounced (500ms after scrolling stops): lock the settled top verse into
+    // the card's current history entry so ◀ ▶ restore the scroll position. While
+    // the wheel is moving, history writes are held off entirely (7차-2).
+    function lockHistoryVerse(card, body) {
+      const n = topVerseOf(body);
+      if (!n) return;
+      card.verse = n;
+      if (Array.isArray(card.history) && card.history[card.historyIndex]) {
+        card.history[card.historyIndex].verse = n;
+      }
+      saveLayout();
     }
 
     function wireContainer() {
@@ -1143,7 +1299,9 @@
       });
 
       // Scroll inside a scripture body → hide tooltips + sync linked interlinear
-      // cards to the topmost fully-visible verse (실시간 동기화).
+      // cards to the topmost fully-visible verse (실시간 동기화). The history
+      // verse is locked only once scrolling settles for 500ms (7차-2): the rAF
+      // keeps the interlinear alignment live, the timer holds off history writes.
       c.addEventListener("scroll", (e) => {
         hideTip();
         const body = e.target;
@@ -1157,6 +1315,11 @@
           syncRaf = null;
           syncInterlinFrom(card, body);
         });
+        if (scrollTimer) clearTimeout(scrollTimer);
+        scrollTimer = setTimeout(() => {
+          scrollTimer = null;
+          lockHistoryVerse(card, body);
+        }, 500);
       }, true);
 
       // Mousedown: resize handles → resize, header → move, anywhere else → raise.
@@ -1189,6 +1352,7 @@
     // ---- public ----
     async function init(layout) {
       cards = restore(layout);
+      cards.forEach(seedHistory); // seed per-card nav history (bible cards only)
       normalizeLocks();
       zTop = Math.max(1, ...cards.map((c) => c.z || 1));
       // Preload the nav version's book list so headers fill at once.
@@ -1224,7 +1388,7 @@
 
     return { init, addCard, addCardWithLink, goToRef, primaryVersion,
              primaryBible, bibleCards, lexiconCards, bodyEl, linkedBibleFor,
-             chapStepPrimary, reloadAllBible };
+             chapStepPrimary, chapStepActive, reloadAllBible };
   })();
 
   // ---- Scripture / interlinear / lexicon rendering (into a card body) ----
@@ -2197,14 +2361,14 @@
     // DB rescan (settings tab). Refreshes available versions everywhere.
     if ($("db-refresh")) $("db-refresh").addEventListener("click", refreshDbs);
 
-    // Keyboard: ←/→ steps the primary bible card when the viewer is active.
+    // Keyboard: ←/→ steps the ACTIVE bible card (the focused/neon-stroked one;
+    // falls back to the primary card) when the viewer is active.
     document.addEventListener("keydown", (e) => {
       if (e.target.closest("input, textarea")) return;
       if ($("viewer-view").hidden) return;
-      const pb = CardManager.primaryBible();
-      if (!pb) return;
-      if (e.key === "ArrowLeft") { e.preventDefault(); CardManager.chapStepPrimary(-1); }
-      else if (e.key === "ArrowRight") { e.preventDefault(); CardManager.chapStepPrimary(1); }
+      if (!CardManager.primaryBible()) return;
+      if (e.key === "ArrowLeft") { e.preventDefault(); CardManager.chapStepActive(-1); }
+      else if (e.key === "ArrowRight") { e.preventDefault(); CardManager.chapStepActive(1); }
     });
   }
 
