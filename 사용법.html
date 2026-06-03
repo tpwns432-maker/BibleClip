@@ -1,0 +1,631 @@
+<!DOCTYPE html>
+<html lang="ko" data-theme="light">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>BibleClip 사용법 · v1.0.2</title>
+<style>
+  /* Pretendard (앱 번들 폰트). 없으면 시스템 한글 폰트로 폴백 — 오프라인 안전. */
+  @font-face{font-family:"Pretendard";font-weight:400;font-display:swap;src:url("web/fonts/Pretendard-Regular.woff2") format("woff2")}
+  @font-face{font-family:"Pretendard";font-weight:600;font-display:swap;src:url("web/fonts/Pretendard-SemiBold.woff2") format("woff2")}
+  @font-face{font-family:"Pretendard";font-weight:700;font-display:swap;src:url("web/fonts/Pretendard-Bold.woff2") format("woff2")}
+  @font-face{font-family:"Pretendard";font-weight:800;font-display:swap;src:url("web/fonts/Pretendard-ExtraBold.woff2") format("woff2")}
+
+  :root{
+    --accent:#6D4DFF; --accent-2:#5B7CFA; --accent-3:#9A86FF;
+    --grad:linear-gradient(135deg,#6D4DFF,#5B7CFA);
+    --grad-soft:linear-gradient(135deg,rgba(109,77,255,.14),rgba(91,124,250,.10));
+    --app-bg:#FAF9FC; --card:#fff; --card-2:#F7F5FC;
+    --border:#EBE6F4; --hair:#F0EDF7;
+    --text:#241D33; --muted:#6A6086; --dim:#A99FC0;
+    --rail:#1A1330; --rail-soft:#221A3D; --rail-icon:#9D92C4; --rail-line:#2E2548;
+    --shadow:0 10px 34px -18px rgba(60,40,100,.34);
+    --shadow-lg:0 24px 60px -26px rgba(60,40,100,.42);
+    --r:18px;
+    --tip:#5B8F5B; --tip-bg:#EEF7EE; --tip-bd:#D6EAD6;
+    --warn:#C9742B; --warn-bg:#FCF3E8; --warn-bd:#F0DEC4;
+    --note-bg:#F3EFFE; --note-bd:#E2D9FB;
+    /* ---- 앱 컴포넌트 토큰 (정확 복제) ---- */
+    --pill-sel-bg:#F3EFFE; --pill-border:#E7E2F0; --pill-text:#473D63;
+    --seg-bg:#F0ECF8; --seg-sel-bg:#fff; --seg-text:#6A6086; --seg-sel-text:#1A1330; --seg-sh:0 2px 6px rgba(60,40,100,.12);
+    --vtag:#6D4DFF; --strong-bg:#F4F1FB; --strong-fg:#8A7FB0; --chip-bg:#F3EFFE; --chip-fg:#6D4DFF;
+    --heb:#1A1330; --rom:#6D4DFF;
+    --ok-bg:#EEF7EE; --ok-fg:#5B8F5B; --ok-dot:#46C160; --off-bg:#F0ECF8; --off-fg:#6A6086; --off-dot:#A99FC0;
+    --kbd-bd:#E0DAEF; --kbd-sh:#E7E2F0;
+    --font-heb:"SBL Hebrew","Times New Roman","Noto Serif Hebrew",serif;
+  }
+  html[data-theme="dark"]{
+    --grad-soft:linear-gradient(135deg,rgba(154,134,255,.18),rgba(91,124,250,.12));
+    --app-bg:#0E0A19; --card:#16112A; --card-2:#1B1533;
+    --border:#2A2143; --hair:#221B39;
+    --text:#ECE9F5; --muted:#A99FC6; --dim:#7D7399;
+    --shadow:0 10px 34px -18px rgba(0,0,0,.6);
+    --shadow-lg:0 24px 60px -26px rgba(0,0,0,.7);
+    --tip:#7FD08B; --tip-bg:#15301B; --tip-bd:#244a2c;
+    --warn:#E6B679; --warn-bg:#2E2415; --warn-bd:#473718;
+    --note-bg:#211A3C; --note-bd:#322651;
+    --pill-sel-bg:#241A3F; --pill-border:#2A2140; --pill-text:#CFC9E4;
+    --seg-bg:#1D1633; --seg-sel-bg:#2A2140; --seg-text:#A99FC6; --seg-sel-text:#fff; --seg-sh:0 2px 6px rgba(0,0,0,.4);
+    --vtag:#9A86FF; --strong-bg:#241A3F; --strong-fg:#B9AEF0; --chip-bg:#241A3F; --chip-fg:#9A86FF;
+    --heb:#ECE9F5; --rom:#9A86FF;
+    --ok-bg:#14301C; --ok-fg:#7FD08B; --ok-dot:#46C160; --off-bg:#1D1633; --off-fg:#A99FC6; --off-dot:#7D7399;
+    --kbd-bd:#352A52; --kbd-sh:#2A2140;
+  }
+
+  *{box-sizing:border-box}
+  html{scroll-behavior:smooth}
+  body{margin:0;background:var(--app-bg);color:var(--text);
+    font-family:"Pretendard","Apple SD Gothic Neo","Malgun Gothic","Segoe UI","Noto Sans KR",system-ui,sans-serif;
+    line-height:1.7;-webkit-font-smoothing:antialiased;letter-spacing:-.01em}
+  a{color:inherit}
+
+  .wrap{display:grid;grid-template-columns:270px 1fr;min-height:100vh}
+
+  /* ===== Sidebar ===== */
+  .rail{position:sticky;top:0;align-self:start;height:100vh;background:var(--rail);color:#fff;
+    padding:26px 18px;display:flex;flex-direction:column;gap:6px;overflow-y:auto}
+  .rail .logo{display:flex;align-items:center;gap:11px;padding:4px 8px 18px}
+  .rail .mark{width:38px;height:38px;border-radius:11px;background:var(--grad);display:grid;place-items:center;flex:0 0 auto;box-shadow:0 8px 20px -8px rgba(109,77,255,.8)}
+  .rail .mark svg{width:21px;height:21px;stroke:#fff}
+  .rail .logo b{font-size:18px;font-weight:800;letter-spacing:-.02em;display:block}
+  .rail .logo span{font-size:11px;color:var(--rail-icon);font-weight:600}
+  .rail nav{display:flex;flex-direction:column;gap:2px;margin-top:6px}
+  .rail a.navlink{display:flex;align-items:center;gap:11px;padding:9px 11px;border-radius:10px;color:var(--rail-icon);text-decoration:none;font-size:13.5px;font-weight:600;transition:.16s;white-space:nowrap}
+  .rail a.navlink .n{width:19px;height:19px;border-radius:6px;flex:0 0 auto;display:grid;place-items:center;font-size:11px;font-weight:800;background:var(--rail-soft);color:var(--rail-icon)}
+  .rail a.navlink:hover{background:var(--rail-soft);color:#fff}
+  .rail a.navlink.active{background:var(--grad);color:#fff;box-shadow:0 8px 18px -10px rgba(109,77,255,.9)}
+  .rail a.navlink.active .n{background:rgba(255,255,255,.18);color:#fff}
+  .rail .railfoot{margin-top:auto;padding-top:18px;border-top:1px solid var(--rail-line);display:flex;flex-direction:column;gap:10px}
+  .themebtn{display:flex;align-items:center;gap:9px;width:100%;cursor:pointer;background:var(--rail-soft);color:#cfc6ec;border:none;border-radius:10px;padding:10px 12px;font-size:12.5px;font-weight:700;font-family:inherit}
+  .themebtn svg{width:16px;height:16px;stroke:currentColor} .themebtn:hover{color:#fff}
+  .rail .ghlink{color:var(--rail-icon);font-size:11.5px;text-decoration:none;padding:0 4px} .rail .ghlink:hover{color:#fff;text-decoration:underline}
+
+  /* ===== Main ===== */
+  main{max-width:900px;margin:0 auto;padding:0 38px 100px;width:100%}
+  .hero{padding:62px 0 26px}
+  .hero .badge2{display:inline-flex;align-items:center;gap:7px;font-size:12.5px;font-weight:700;color:var(--accent);background:var(--note-bg);border:1px solid var(--note-bd);padding:5px 13px;border-radius:999px;margin-bottom:18px}
+  .hero .badge2 .dot{width:7px;height:7px;border-radius:50%;background:var(--grad)}
+  .hero h1{font-size:46px;line-height:1.12;font-weight:800;letter-spacing:-.035em;margin:0 0 14px}
+  .hero h1 .g{background:var(--grad);-webkit-background-clip:text;background-clip:text;color:transparent}
+  .hero p.lead{font-size:17px;color:var(--muted);margin:0;max-width:620px}
+
+  .feats{display:grid;grid-template-columns:repeat(3,1fr);gap:14px;margin:36px 0 8px}
+  .feat{background:var(--card);border:1px solid var(--border);border-radius:var(--r);padding:18px 17px;box-shadow:var(--shadow);transition:.18s}
+  .feat:hover{transform:translateY(-3px);box-shadow:var(--shadow-lg);border-color:var(--accent)}
+  .feat .ic{width:40px;height:40px;border-radius:11px;background:var(--grad-soft);display:grid;place-items:center;margin-bottom:12px}
+  .feat .ic svg{width:21px;height:21px;stroke:var(--accent)}
+  .feat b{display:block;font-size:14.5px;font-weight:700;margin-bottom:3px}
+  .feat span{font-size:12.8px;color:var(--muted);line-height:1.55}
+  .feat code{font-family:ui-monospace,monospace;font-size:12px;background:var(--note-bg);padding:0 4px;border-radius:4px;color:var(--accent)}
+
+  section.sec{padding:46px 0 8px;scroll-margin-top:24px;border-top:1px solid var(--hair);margin-top:30px}
+  section.sec:first-of-type{border-top:none;margin-top:14px}
+  .sec-head{display:flex;align-items:center;gap:14px;margin-bottom:18px}
+  .sec-head .num{width:42px;height:42px;border-radius:12px;flex:0 0 auto;background:var(--grad);color:#fff;display:grid;place-items:center;font-size:17px;font-weight:800;box-shadow:0 10px 22px -10px rgba(109,77,255,.7)}
+  .sec-head h2{font-size:25px;font-weight:800;letter-spacing:-.025em;margin:0}
+  .sec-head .sub{font-size:13px;color:var(--dim);font-weight:600;margin-top:1px}
+
+  h3{font-size:16px;font-weight:700;margin:24px 0 9px;letter-spacing:-.02em;display:flex;align-items:center;gap:8px}
+  h3 .pin{width:6px;height:18px;border-radius:3px;background:var(--grad);flex:0 0 auto}
+  p{margin:9px 0;color:var(--text)}
+  .muted{color:var(--muted)}
+  ul.clean{margin:9px 0;padding:0;list-style:none}
+  ul.clean li{position:relative;padding:5px 0 5px 24px;color:var(--text)}
+  ul.clean li::before{content:"";position:absolute;left:3px;top:13px;width:7px;height:7px;border-radius:50%;background:var(--accent);opacity:.55}
+  ul.clean li b{font-weight:700}
+
+  .kbd{display:inline-flex;align-items:center;justify-content:center;min-width:26px;padding:2px 8px;font-size:12.5px;font-weight:700;font-family:inherit;background:var(--card);border:1px solid var(--kbd-bd);border-radius:7px;box-shadow:0 2px 0 var(--kbd-sh);color:var(--text);line-height:1.5}
+  .ref{display:inline-flex;align-items:center;gap:6px;font-size:13px;font-weight:700;color:var(--accent);background:var(--note-bg);border:1px solid var(--note-bd);padding:3px 11px;border-radius:8px;white-space:nowrap}
+
+  .call{display:flex;gap:13px;padding:15px 17px;border-radius:14px;margin:16px 0;border:1px solid var(--note-bd);background:var(--note-bg);font-size:13.8px}
+  .call svg{width:19px;height:19px;flex:0 0 auto;margin-top:2px}
+  .call b{font-weight:800}
+  .call.tip{background:var(--tip-bg);border-color:var(--tip-bd)} .call.tip svg{stroke:var(--tip)} .call.tip b{color:var(--tip)}
+  .call.warn{background:var(--warn-bg);border-color:var(--warn-bd)} .call.warn svg{stroke:var(--warn)} .call.warn b{color:var(--warn)}
+  .call.note svg{stroke:var(--accent)} .call.note b{color:var(--accent)}
+
+  /* ===== Demo window (앱 창 재현) ===== */
+  .demo{margin:18px 0 8px}
+  .win{background:var(--card);border:1px solid var(--border);border-radius:16px;overflow:hidden;box-shadow:var(--shadow-lg)}
+  .winbar{display:flex;align-items:center;gap:11px;padding:10px 15px;border-bottom:1px solid var(--hair);background:var(--card-2)}
+  .winbar .dots{display:flex;gap:6px} .winbar .dots i{width:10px;height:10px;border-radius:50%;background:var(--border)}
+  .winbar b{font-size:12.5px;font-weight:800;letter-spacing:-.02em}
+  .winbar .ver{font-size:10px;color:var(--accent);background:var(--note-bg);border:1px solid var(--note-bd);border-radius:999px;padding:2px 8px;font-weight:700}
+  .winbar .sp{flex:1}
+  .winbody{padding:18px}
+  .cap{font-size:12.5px;color:var(--dim);margin-top:9px;text-align:center}
+  .cap b{color:var(--muted)}
+
+  /* 앱 컴포넌트 복제(.ui 네임스페이스) */
+  .ui .badge{display:inline-flex;align-items:center;gap:6px;font-size:11px;font-weight:700;padding:6px 11px;border-radius:999px;background:var(--off-bg);color:var(--off-fg)}
+  .ui .badge::before{content:"";width:6px;height:6px;border-radius:50%;background:var(--off-dot)}
+  .ui .badge.on{background:var(--ok-bg);color:var(--ok-fg)}
+  .ui .badge.on::before{background:var(--ok-dot);box-shadow:0 0 0 3px rgba(70,193,96,.2)}
+  .ui .seg{display:inline-flex;background:var(--seg-bg);border-radius:11px;padding:4px;gap:2px}
+  .ui .seg .opt{font-size:12px;font-weight:600;color:var(--seg-text);padding:6px 13px;border-radius:8px;user-select:none}
+  .ui .seg .opt.on{background:var(--seg-sel-bg);color:var(--seg-sel-text);box-shadow:var(--seg-sh)}
+  .ui .pill{border:1px solid var(--pill-border);border-radius:10px;background:var(--card);color:var(--pill-text);padding:6px 12px;font-size:12px;font-weight:600;display:inline-flex;align-items:center}
+  .ui .pill.sel{border-color:var(--accent);color:var(--accent);background:var(--pill-sel-bg)}
+  .ui .pill.dd::after{content:"▾";color:var(--dim);margin-left:5px}
+  .ui .pill.add{border-style:dashed;color:var(--dim);font-weight:700}
+  .ui .pill.primary{box-shadow:inset 0 0 0 1px var(--accent)}
+  .ui .pill.primary::before{content:"";display:inline-block;width:5px;height:5px;border-radius:50%;background:var(--accent);margin-right:6px}
+  .ui .pill .x{margin-left:7px;opacity:.5;font-weight:700}
+  .ui .chips{display:flex;align-items:center;gap:7px;flex-wrap:wrap}
+  .ui .scripture{font-size:14.5px;line-height:1.9}
+  .ui .scripture .v{margin-bottom:9px;border-radius:8px;padding:3px 6px;cursor:pointer}
+  .ui .scripture .v:hover{background:var(--pill-sel-bg)}
+  .ui .scripture .v.hl{background:var(--pill-sel-bg);box-shadow:inset 0 0 0 1px rgba(109,77,255,.3)}
+  .ui .vnum{color:var(--vtag);font-weight:800;font-size:.7em;vertical-align:super;margin-right:3px}
+  .ui .vline{display:block} .ui .vline+.vline{margin-top:4px}
+  .ui .vver{display:inline-block;font-size:9.5px;font-weight:800;color:var(--chip-fg);background:var(--chip-bg);border-radius:6px;padding:1px 6px;margin-right:6px;vertical-align:middle}
+  .ui .strong{display:inline-block;font-size:9px;font-weight:700;vertical-align:middle;color:var(--strong-fg);background:var(--strong-bg);border-radius:6px;padding:1px 5px;margin:0 1px;cursor:pointer}
+  .ui .strong.hot{color:#fff;background:var(--grad);box-shadow:0 4px 11px -3px rgba(109,77,255,.75)}
+  .ui .interlin{font-size:13.5px;line-height:1.9}
+  .ui .interlin .v{margin-bottom:8px}
+  .ui .interlin .vnum{color:var(--vtag);font-weight:800;margin-right:5px}
+  .ui .lex .chip{display:inline-block;font-size:10.5px;font-weight:700;color:var(--chip-fg);background:var(--chip-bg);border-radius:8px;padding:2px 9px;margin-bottom:9px}
+  .ui .lex .lex-head{display:flex;align-items:baseline;gap:12px;flex-wrap:wrap;margin-bottom:9px}
+  .ui .lex .heb{font-family:var(--font-heb);font-size:40px;line-height:1.1;color:var(--heb)}
+  .ui .lex .rom{color:var(--rom);font-weight:700;font-size:15px}
+  .ui .lex .lex-body{font-size:12.8px;line-height:1.75;color:var(--muted)}
+  .ui .sr{padding:9px 11px;margin-bottom:6px;border-radius:10px;border:1px solid transparent;cursor:pointer}
+  .ui .sr:hover{background:var(--pill-sel-bg);border-color:var(--border)}
+  .ui .sr-ref{font-size:12px;font-weight:700;color:var(--vtag);margin-right:8px}
+  .ui .sr-text{font-size:13px;color:var(--text);line-height:1.7}
+  .ui .toast{display:inline-flex;align-items:center;gap:8px;background:var(--rail);color:#ECE9F5;border-radius:12px;padding:9px 15px;font-size:12.5px;font-weight:600;box-shadow:0 14px 34px -14px rgba(0,0,0,.55)}
+  html[data-theme="dark"] .ui .toast{background:#fff;color:#241D33}
+  .ui .toast::before{content:"";width:7px;height:7px;border-radius:50%;background:var(--ok-dot)}
+  .ui .inp{flex:1;border:1px solid var(--pill-border);background:var(--card);border-radius:10px;padding:8px 13px;font-size:13px;color:var(--text);min-width:0}
+  .ui .btnp{background:var(--grad);color:#fff;border:none;border-radius:10px;padding:8px 15px;font-size:12.5px;font-weight:700;font-family:inherit}
+
+  /* 클립보드 변환 흐름 */
+  .flow{display:grid;grid-template-columns:1fr auto 1fr;gap:14px;align-items:stretch}
+  .flow .box{border:1px solid var(--border);border-radius:13px;padding:13px 15px;background:var(--card-2);display:flex;flex-direction:column}
+  .flow .box .lbl{font-size:10px;font-weight:800;text-transform:uppercase;letter-spacing:.05em;color:var(--dim);margin-bottom:9px;display:flex;align-items:center;gap:7px}
+  .flow .box .lbl svg{width:14px;height:14px;stroke:var(--accent)}
+  .flow .mono{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:14px;font-weight:600;color:var(--text)}
+  .flow .arrow{display:grid;place-items:center;color:var(--accent)}
+  .flow .arrow svg{width:28px;height:28px;stroke:var(--accent);animation:slide 1.6s ease-in-out infinite}
+  @keyframes slide{0%,100%{transform:translateX(-3px);opacity:.55}50%{transform:translateX(3px);opacity:1}}
+  @media(max-width:560px){.flow{grid-template-columns:1fr}.flow .arrow{transform:rotate(90deg);height:34px}}
+
+  /* 카드 레이아웃 스키마 */
+  .mock{position:relative;background:radial-gradient(120% 100% at 0% 0%,rgba(109,77,255,.06),transparent 60%),var(--card-2);border:1px solid var(--border);border-radius:14px;padding:18px;height:248px;overflow:hidden}
+  .mc{position:absolute;background:var(--card);border:1px solid var(--border);border-radius:12px;box-shadow:0 8px 20px -13px rgba(60,40,100,.4);overflow:hidden}
+  html[data-theme="dark"] .mc{box-shadow:0 8px 20px -11px rgba(0,0,0,.6)}
+  .mc .mh{display:flex;align-items:center;gap:4px;padding:6px 8px;border-bottom:1px solid var(--hair)}
+  .mc .grip{color:var(--dim);font-size:10px;letter-spacing:-2px}
+  .mc .ttl{font-size:8px;font-weight:800;color:var(--dim);text-transform:uppercase;letter-spacing:.05em}
+  .mc .nav{font-size:6.5px;color:var(--dim);border:1px solid var(--border);border-radius:4px;width:13px;height:13px;display:grid;place-items:center}
+  .mc .pill{font-size:8px;font-weight:700;color:var(--muted);background:var(--card-2);border:1px solid var(--border);border-radius:5px;padding:1px 5px}
+  .mc .sp{flex:1}
+  .mc .lock{width:13px;height:13px;display:grid;place-items:center;opacity:.3} .mc .lock svg{width:9px;height:9px;stroke:var(--dim)}
+  .mc .x{color:var(--dim);font-size:8px;padding:0 1px}
+  .mc .body{padding:8px 9px;display:flex;flex-direction:column;gap:5px}
+  .mc .ln{height:5px;border-radius:3px;background:var(--hair)}
+  .mc .ln.v{width:10px;height:5px;background:var(--vtag);opacity:.45;border-radius:2px}
+  .mc.body1{left:18px;top:20px;width:178px;height:208px;border-color:var(--accent);box-shadow:0 0 0 1px var(--accent),0 0 15px rgba(109,77,255,.38)}
+  .mc.inter{left:208px;top:20px;width:148px;height:146px}
+  .mc.inter .mh{background:var(--card-2)} .mc.inter .lock{opacity:1} .mc.inter .lock svg{stroke:var(--accent-3)}
+  .mc.lex{left:316px;top:116px;width:184px;height:112px}
+  .mock .tag{position:absolute;font-size:11px;font-weight:700;color:#fff;background:var(--grad);padding:3px 9px;border-radius:7px;box-shadow:0 6px 14px -6px rgba(109,77,255,.8);z-index:5}
+  .mock .tag.t1{left:110px;top:6px} .mock .tag.t2{right:12px;top:90px}
+  .legend{display:flex;flex-wrap:wrap;gap:16px;margin:13px 0 2px;font-size:12.5px;color:var(--muted)}
+  .legend i{display:inline-block;width:13px;height:13px;border-radius:4px;margin-right:6px;vertical-align:-2px}
+  .legend .l1{background:var(--accent)} .legend .l2{background:var(--accent-3)} .legend .l3{background:var(--accent-2)}
+
+  /* 실사 카드(헤더+본문) — 핫스팟 주석 */
+  .realcard{max-width:430px;margin:0 auto}
+  .rc{background:var(--card);border:1px solid var(--accent);border-radius:14px;overflow:hidden;box-shadow:0 0 0 1px var(--accent),0 0 18px rgba(109,77,255,.34),var(--shadow)}
+  .rc .hd{display:flex;align-items:center;gap:7px;padding:9px 11px;border-bottom:1px solid var(--hair)}
+  .rc .grip{color:var(--dim);font-size:13px;letter-spacing:-2px}
+  .rc .ttl{font-size:10px;font-weight:800;color:var(--dim);text-transform:uppercase;letter-spacing:.05em}
+  .rc .hdmini{width:23px;height:23px;border-radius:7px;border:1px solid var(--pill-border);background:var(--card);color:var(--muted);font-size:10px;display:grid;place-items:center;font-weight:700}
+  .rc .hdmini.nav{font-size:8px}
+  .rc .hdmini.dis{opacity:.32}
+  .rc .hdpill{border:1px solid var(--pill-border);background:var(--card);color:var(--pill-text);border-radius:8px;padding:3px 9px;font-size:11px;font-weight:700}
+  .rc .hdpill::after{content:"▾";color:var(--dim);margin-left:4px}
+  .rc .sp{flex:1}
+  .rc .lock{width:23px;height:23px;border-radius:7px;display:grid;place-items:center;color:var(--accent)} .rc .lock svg{width:13px;height:13px;stroke:currentColor}
+  .rc .close{color:var(--dim);font-size:12px;padding:0 3px}
+  .rc .bd{padding:7px 14px 16px;position:relative}
+  .hot{position:relative;display:inline-grid;place-items:center;min-width:17px;height:17px;padding:0 5px;border-radius:999px;background:var(--grad);color:#fff;font-size:10px;font-weight:800;box-shadow:0 4px 9px -3px rgba(109,77,255,.8)}
+  .hotrow{display:grid;grid-template-columns:1fr 1fr;gap:9px 18px;margin:15px 0 2px}
+  .hotrow .it{display:flex;align-items:flex-start;gap:9px;font-size:13px;color:var(--muted)}
+  .hotrow .it .hot{margin-top:1px;flex:0 0 auto}
+  .hotrow .it b{color:var(--text);font-weight:700}
+  @media(max-width:560px){.hotrow{grid-template-columns:1fr}}
+
+  /* 출력 미리보기 */
+  .preview{border:1px dashed var(--note-bd);background:var(--note-bg);border-radius:12px;padding:13px 15px;font-size:13.5px;line-height:1.85}
+  .preview .sep{color:#fff;background:var(--grad);border-radius:6px;padding:1px 7px;font-weight:800;font-size:11.5px;margin:0 3px;vertical-align:1px}
+  .preview .hdr{font-size:10px;font-weight:800;color:var(--chip-fg);background:var(--chip-bg);border-radius:6px;padding:1px 7px;margin-right:6px;vertical-align:1px}
+  .setrow{display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:14px}
+  .setrow .lab{font-size:12px;font-weight:700;color:var(--muted);min-width:74px}
+
+  footer{margin-top:60px;padding:30px 0 10px;border-top:1px solid var(--hair);color:var(--dim);font-size:13px;display:flex;justify-content:space-between;flex-wrap:wrap;gap:12px}
+  footer a{color:var(--accent);text-decoration:none;font-weight:700} footer a:hover{text-decoration:underline}
+
+  .mobnav{display:none}
+  @media(max-width:920px){
+    .wrap{grid-template-columns:1fr} .rail{display:none}
+    .feats{grid-template-columns:1fr 1fr} main{padding:0 22px 80px} .hero h1{font-size:36px}
+    .mobnav{display:flex;gap:8px;overflow-x:auto;padding:12px 0;position:sticky;top:0;background:var(--app-bg);z-index:20;border-bottom:1px solid var(--hair)}
+    .mobnav a{flex:0 0 auto;font-size:12.5px;font-weight:700;color:var(--muted);text-decoration:none;padding:6px 12px;border-radius:999px;background:var(--card);border:1px solid var(--border)}
+  }
+  @media(max-width:520px){.feats{grid-template-columns:1fr}.hero h1{font-size:30px}.mock{height:290px}}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <!-- ===== Sidebar ===== -->
+  <aside class="rail">
+    <div class="logo">
+      <span class="mark"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 5a2 2 0 0 1 2-2h11v16H6a2 2 0 0 0-2 2z"/><path d="M9 7h5M9 10h5"/></svg></span>
+      <span><b>BibleClip</b><span>사용법 가이드</span></span>
+    </div>
+    <nav id="nav">
+      <a class="navlink" href="#install"><span class="n">1</span> 설치 &amp; 실행</a>
+      <a class="navlink" href="#clip"><span class="n">2</span> 클립보드 모니터링</a>
+      <a class="navlink" href="#search"><span class="n">3</span> 키워드 검색</a>
+      <a class="navlink" href="#cards"><span class="n">4</span> 카드 워크스페이스</a>
+      <a class="navlink" href="#lex"><span class="n">5</span> 원어 &amp; 사전</a>
+      <a class="navlink" href="#output"><span class="n">6</span> 출력 설정</a>
+      <a class="navlink" href="#settings"><span class="n">7</span> 앱 설정</a>
+      <a class="navlink" href="#update"><span class="n">8</span> 업데이트</a>
+      <a class="navlink" href="#save"><span class="n">9</span> 저장 &amp; 참고</a>
+      <a class="navlink" href="#trouble"><span class="n">!</span> 문제 해결</a>
+    </nav>
+    <div class="railfoot">
+      <button class="themebtn" id="themebtn">
+        <svg id="themeicon" viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"/></svg>
+        <span id="themelabel">어두운 테마</span>
+      </button>
+      <a class="ghlink" href="https://github.com/tpwns432-maker/BibleClip" target="_blank">github.com/tpwns432-maker/BibleClip</a>
+    </div>
+  </aside>
+
+  <!-- ===== Main ===== -->
+  <main>
+    <nav class="mobnav">
+      <a href="#install">설치</a><a href="#clip">클립보드</a><a href="#search">검색</a>
+      <a href="#cards">카드</a><a href="#lex">원어·사전</a><a href="#output">출력</a>
+      <a href="#settings">앱 설정</a><a href="#update">업데이트</a><a href="#trouble">문제 해결</a>
+    </nav>
+
+    <!-- Hero -->
+    <header class="hero">
+      <span class="badge2"><span class="dot"></span> 버전 v1.0.2 · 웹 UI</span>
+      <h1>복사만 하면 <span class="g">성경 구절</span>이<br>자동으로 변환됩니다.</h1>
+      <p class="lead">BibleClip은 클립보드에 복사한 성경 구절을 자동으로 알아보고, 내가 정한 형식으로 바꿔서 다시 복사해 주는 한국어 데스크톱 앱입니다. 아래 데모는 실제 앱 화면을 그대로 재현한 것입니다.</p>
+      <div class="feats">
+        <div class="feat"><div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="8" y="3" width="8" height="4" rx="1"/><path d="M16 5h2a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2h2"/></svg></div><b>클립보드 자동 변환</b><span>구절을 복사하면 즉시 설정한 형식으로 재복사</span></div>
+        <div class="feat"><div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="8" height="18" rx="2"/><rect x="13" y="3" width="8" height="9" rx="2"/><rect x="13" y="14" width="8" height="7" rx="2"/></svg></div><b>카드 워크스페이스</b><span>본문·원어·사전 카드를 자유 배치·크기 조절</span></div>
+        <div class="feat"><div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19V6a2 2 0 0 1 2-2h6v15H6a2 2 0 0 0-2 2z"/><path d="M20 19V6a2 2 0 0 0-2-2h-6v15h6a2 2 0 0 1 2 2z"/></svg></div><b>다역본 병렬 보기</b><span>여러 역본을 절마다 나란히, 순서는 드래그로</span></div>
+        <div class="feat"><div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 6.5C10.5 5 8 4.5 6 4.5V18c2 0 4.5.5 6 2 1.5-1.5 4-2 6-2V4.5c-2 0-4.5.5-6 2z"/><path d="M12 6.5V20"/></svg></div><b>원어 &amp; 사전</b><span>스트롱 번호 클릭으로 히브리어·헬라어 뜻풀이</span></div>
+        <div class="feat"><div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></svg></div><b>키워드 검색</b><span><code>#키워드</code> 복사 또는 검색 화면으로 찾기</span></div>
+        <div class="feat"><div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-3-6.7L21 8"/><path d="M21 3v5h-5"/></svg></div><b>자동 업데이트</b><span>새 버전을 받아 자동으로 교체·재시작</span></div>
+      </div>
+    </header>
+
+    <!-- 1. 설치 -->
+    <section class="sec" id="install">
+      <div class="sec-head"><div class="num">1</div><div><h2>설치 &amp; 실행</h2><div class="sub">받은 압축을 풀고 더블클릭하면 끝</div></div></div>
+      <ul class="clean">
+        <li>설치 과정이 따로 없습니다. 받은 압축(zip)을 풀고 실행 파일만 더블클릭하세요.</li>
+        <li><b>Windows</b> — 폴더 안의 <span class="ref">BibleClipWeb.exe</span> 실행</li>
+        <li><b>macOS</b> — <span class="ref">BibleClipWeb.app</span> 실행 (또는 dmg를 열어 응용 프로그램으로 드래그)</li>
+        <li>별도 런타임이 필요 없습니다. Windows 11은 WebView2 기본 내장, macOS는 내장 웹엔진 사용.</li>
+      </ul>
+      <div class="call warn">
+        <svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"/><path d="M12 9v4M12 17h.01"/></svg>
+        <div><b>데이터 폴더는 그대로 두세요.</b> 폴더 안의 <span class="ref">bible_versions</span> · <span class="ref">original_lang</span> 는 성경/원어 데이터입니다. 실행 파일과 같은 위치에 두어야 본문이 나옵니다. 압축은 반드시 “폴더째” 풀어 주세요.</div>
+      </div>
+    </section>
+
+    <!-- 2. 클립보드 -->
+    <section class="sec" id="clip">
+      <div class="sec-head"><div class="num">2</div><div><h2>클립보드 모니터링</h2><div class="sub">이 앱의 핵심 기능</div></div></div>
+      <p>다른 프로그램에서 성경 구절을 <b>“복사”</b>만 하면, 자동으로 변환된 본문으로 클립보드를 바꿔 줍니다. 아래는 실제로 일어나는 일입니다.</p>
+
+      <div class="demo ui">
+        <div class="win">
+          <div class="winbar"><span class="dots"><i></i><i></i><i></i></span><b>BibleClip</b><span class="ver">v1.0.2</span><span class="sp"></span><span class="badge on">모니터링 중</span></div>
+          <div class="winbody">
+            <div class="flow">
+              <div class="box">
+                <div class="lbl"><svg viewBox="0 0 24 24" fill="none" stroke-width="2"><rect x="8" y="3" width="8" height="4" rx="1"/><path d="M16 5h2a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2h2"/></svg> 메모장에서 복사</div>
+                <div class="mono">요 3:16</div>
+              </div>
+              <div class="arrow"><svg viewBox="0 0 24 24" fill="none" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 12h15M13 6l6 6-6 6"/></svg></div>
+              <div class="box">
+                <div class="lbl"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg> 클립보드가 이렇게 바뀜</div>
+                <div style="font-size:13.5px;line-height:1.7"><span class="vver" style="margin-right:6px">KRV</span>요 3:16 하나님이 세상을 이처럼 사랑하사 독생자를 주셨으니 이는 저를 믿는 자마다 멸망치 않고 영생을 얻게 하려 하심이니라</div>
+              </div>
+            </div>
+            <div style="text-align:center;margin-top:16px"><span class="toast">구절을 복사했습니다 · 요 3:16</span></div>
+          </div>
+        </div>
+        <div class="cap">상단 <b>[모니터링 시작]</b> → 배지가 초록 “모니터링 중”으로. 이후 어디서든 구절을 복사하면 즉시 변환됩니다.</div>
+      </div>
+
+      <h3><span class="pin"></span>인식하는 표기</h3>
+      <div class="ui" style="display:flex;flex-direction:column;gap:9px;margin:10px 0">
+        <div style="display:flex;align-items:center;gap:12px"><span class="ref" style="min-width:120px;justify-content:center">창 2:1</span><span class="muted">한 절</span></div>
+        <div style="display:flex;align-items:center;gap:12px"><span class="ref" style="min-width:120px;justify-content:center">요 1:1-3</span><span class="muted">여러 절(범위)</span></div>
+        <div style="display:flex;align-items:center;gap:12px"><span class="ref" style="min-width:120px;justify-content:center">시 23:1~6</span><span class="muted">물결표(~)도 가능</span></div>
+        <div style="display:flex;align-items:center;gap:12px"><span class="ref" style="min-width:120px;justify-content:center">요 1:1-2,4-6</span><span class="muted">콤마로 끊은 불연속 구절 — 1·2·4·5·6절을 한 번에 <b style="color:var(--accent)">(v1.0.2 신기능)</b></span></div>
+      </div>
+      <div class="call note">
+        <svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="8" y="3" width="8" height="4" rx="1"/><path d="M16 5h2a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2h2"/></svg>
+        <div><b>활동 로그</b> — 좌측 레일의 “클립보드” 아이콘을 누르면 인식한 구절이 목록으로 쌓입니다. 항목을 클릭하면 그 구절로 다시 이동하고 클립보드에도 다시 복사됩니다.</div>
+      </div>
+    </section>
+
+    <!-- 3. 검색 -->
+    <section class="sec" id="search">
+      <div class="sec-head"><div class="num">3</div><div><h2>키워드 검색</h2><div class="sub">단어가 들어간 구절 찾기</div></div></div>
+      <p>좌측 레일의 <b>돋보기</b> 아이콘으로 검색 화면을 엽니다. 결과 구절을 클릭하면 클립보드에 복사됩니다.</p>
+
+      <div class="demo ui">
+        <div class="win">
+          <div class="winbar"><span class="dots"><i></i><i></i><i></i></span><b>검색</b><span class="sp"></span></div>
+          <div class="winbody">
+            <div class="chips" style="margin-bottom:14px">
+              <input class="inp" value="사랑" readonly>
+              <span class="pill sel dd">KRV</span>
+              <button class="btnp">검색</button>
+            </div>
+            <div class="sr"><span class="sr-ref">요일 4:8</span><span class="sr-text">사랑하지 아니하는 자는 하나님을 알지 못하나니 이는 하나님은 사랑이심이라</span></div>
+            <div class="sr"><span class="sr-ref">요 3:16</span><span class="sr-text">하나님이 세상을 이처럼 사랑하사 독생자를 주셨으니 이는 저를 믿는 자마다…</span></div>
+            <div class="sr"><span class="sr-ref">고전 13:4</span><span class="sr-text">사랑은 오래 참고 사랑은 온유하며 시기하지 아니하며 사랑은 자랑하지 아니하며…</span></div>
+          </div>
+        </div>
+        <div class="cap">입력창 옆 <b>역본 버튼</b>으로 검색 역본 변경 · 결과 클릭 시 복사 · 모니터링 중엔 <b>#사랑</b> 복사로도 자동 검색</div>
+      </div>
+      <div class="call tip">
+        <svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>
+        <div>설정 ⚙에서 <b>“검색 결과 클릭 시 본문으로 이동”</b>을 켜면, 복사와 함께 그 구절의 본문 화면으로도 이동합니다.</div>
+      </div>
+    </section>
+
+    <!-- 4. 카드 -->
+    <section class="sec" id="cards">
+      <div class="sec-head"><div class="num">4</div><div><h2>성경 보기 — 카드 워크스페이스</h2><div class="sub">본문 · 원어 · 사전 카드를 자유 배치</div></div></div>
+      <p>성경 보기 화면은 카드를 원하는 위치에 놓고 크기를 조절하는 작업공간입니다. 아래 <b>본문 카드</b>의 각 부분을 살펴보세요 — 보라색 테두리는 지금 선택된 <b>활성 카드</b>라는 뜻입니다.</p>
+
+      <div class="demo ui">
+        <div class="realcard">
+          <div class="rc">
+            <div class="hd">
+              <span class="grip">⠿</span><span class="hot">1</span>
+              <span class="ttl">본문</span>
+              <span class="hdmini nav dis">◀</span><span class="hdmini nav">▶</span><span class="hot">2</span>
+              <span class="hdpill">창세기</span><span class="hdpill">1장</span>
+              <span class="hdmini">‹</span><span class="hdmini">›</span>
+              <span class="sp"></span>
+              <span class="lock"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg></span><span class="hot">3</span>
+              <span class="close">✕</span>
+            </div>
+            <div class="bd scripture">
+              <div class="v"><span class="vnum">1</span>태초에 하나님이 천지를 창조하시니라</div>
+              <div class="v"><span class="vnum">2</span>땅이 혼돈하고 공허하며 흑암이 깊음 위에 있고 하나님의 신은 수면에 운행하시니라</div>
+              <div class="v"><span class="vnum">3</span>하나님이 가라사대 빛이 있으라 하시매 빛이 있었고</div>
+            </div>
+          </div>
+        </div>
+        <div class="hotrow">
+          <div class="it"><span class="hot">1</span><div><b>머리말(⠿)을 끌어 이동</b> · 가장자리·모서리를 끌어 크기 조절</div></div>
+          <div class="it"><span class="hot">2</span><div><b>◀ ▶ 카드별 뒤로/앞으로</b> — 그 카드만 이전 구절로, 보던 절이 맨 위로</div></div>
+          <div class="it"><span class="hot">3</span><div><b>자물쇠</b>로 조건부 수신 잠금 (점등 시 잠김)</div></div>
+          <div class="it"><span class="hot">4</span><div><b>절을 클릭/드래그</b>하면 그 절(범위)이 바로 복사</div></div>
+        </div>
+      </div>
+
+      <h3><span class="pin"></span>여러 카드 자유 배치 · 활성 · 잠금</h3>
+      <div class="mock" aria-hidden="true">
+        <span class="tag t1">활성 카드 — 보라 네온</span>
+        <span class="tag t2">잠금 — 자물쇠 점등</span>
+        <div class="mc body1">
+          <div class="mh"><span class="grip">⠿</span><span class="ttl">본문</span><span class="nav">◀</span><span class="nav">▶</span><span class="pill">창세기</span><span class="pill">1장</span><span class="sp"></span><span class="lock"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 9.9-1"/></svg></span><span class="x">✕</span></div>
+          <div class="body"><div class="ln v"></div><div class="ln" style="width:92%"></div><div class="ln" style="width:80%"></div><div class="ln v"></div><div class="ln" style="width:88%"></div><div class="ln" style="width:62%"></div><div class="ln v"></div><div class="ln" style="width:84%"></div></div>
+        </div>
+        <div class="mc inter">
+          <div class="mh"><span class="grip">⠿</span><span class="ttl">원어</span><span class="sp"></span><span class="lock"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg></span><span class="x">✕</span></div>
+          <div class="body"><div class="ln" style="width:70%"></div><div class="ln" style="width:88%"></div><div class="ln" style="width:54%"></div><div class="ln" style="width:78%"></div></div>
+        </div>
+        <div class="mc lex">
+          <div class="mh"><span class="grip">⠿</span><span class="ttl">사전</span><span class="pill">연결: 본문</span><span class="sp"></span><span class="x">✕</span></div>
+          <div class="body"><div class="ln" style="width:40%;height:9px;background:var(--accent);opacity:.35"></div><div class="ln" style="width:92%"></div><div class="ln" style="width:70%"></div></div>
+        </div>
+      </div>
+      <div class="legend">
+        <span><i class="l1"></i>활성(선택) 카드 — 클릭한 카드</span>
+        <span><i class="l2"></i>잠긴 카드 — 자물쇠 점등 + 헤더 톤</span>
+        <span><i class="l3"></i>＋ 본문/원어/사전 으로 카드 추가</span>
+      </div>
+      <ul class="clean" style="margin-top:14px">
+        <li>다른 카드·화면 가장자리·2·3·4등분 지점 근처에서 <b>“착” 달라붙고</b> 안내선이 표시됩니다. 붙은 카드 쪽으로 키우면 옆 카드가 <b>밀려납니다</b>.</li>
+        <li>카드는 자유롭게 <b>겹칠 수</b> 있고, 클릭/드래그한 카드가 맨 앞 + 보라 네온으로.</li>
+        <li>키보드 <span class="kbd">←</span> <span class="kbd">→</span> 는 <b>활성(네온) 카드</b>의 장을 넘깁니다. <span class="muted">(v1.0.2)</span></li>
+      </ul>
+
+      <h3><span class="pin"></span>다역본 병렬 보기</h3>
+      <p>상단 역본 칩으로 역본을 여러 개 켜면, 모든 본문 카드에서 절마다 역본이 나란히 표시됩니다. 칩을 <b>드래그</b>하면 순서가 바뀌고 맨 앞 칩이 기준 역본입니다.</p>
+      <div class="demo ui">
+        <div class="win">
+          <div class="winbar"><span class="dots"><i></i><i></i><i></i></span>
+            <span class="chips"><span class="pill sel primary">KRV<span class="x">✕</span></span><span class="pill sel">ESV<span class="x">✕</span></span><span class="pill add">＋ 역본</span></span>
+            <span class="sp"></span><span class="ttl" style="font-size:9px;font-weight:800;color:var(--dim)">요한복음 1장</span>
+          </div>
+          <div class="winbody scripture">
+            <div class="v"><span class="vnum">1</span><span class="vline"><span class="vver">KRV</span>태초에 말씀이 계시니라 이 말씀이 하나님과 함께 계셨으니 이 말씀은 곧 하나님이시니라</span><span class="vline"><span class="vver">ESV</span>In the beginning was the Word, and the Word was with God, and the Word was God.</span></div>
+            <div class="v"><span class="vnum">2</span><span class="vline"><span class="vver">KRV</span>그가 태초에 하나님과 함께 계셨고</span><span class="vline"><span class="vver">ESV</span>He was in the beginning with God.</span></div>
+          </div>
+        </div>
+        <div class="cap">절마다 역본별 줄(<b>KRV</b>/<b>ESV</b> 배지)로 병렬 표시 · 글자 크기 <span class="kbd">A−</span> <span class="kbd">A+</span></div>
+      </div>
+    </section>
+
+    <!-- 5. 원어/사전 -->
+    <section class="sec" id="lex">
+      <div class="sec-head"><div class="num">5</div><div><h2>원어(히브리어/헬라어)와 사전</h2><div class="sub">스트롱 번호 클릭 → 뜻풀이</div></div></div>
+      <p>원어 카드의 단어마다 붙은 <b>스트롱 번호</b>(H/G로 시작)를 클릭하면, 연결된 사전 카드에 뜻풀이가 나타납니다.</p>
+
+      <div class="demo ui">
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px">
+          <div class="win">
+            <div class="winbar"><span class="ttl" style="font-size:10px;font-weight:800;color:var(--dim)">원어 · 창세기 1장</span></div>
+            <div class="winbody interlin">
+              <div class="v"><span class="vnum">1</span>태초에 <span class="strong hot">H7225</span> 하나님이 <span class="strong">H430</span> 천지 <span class="strong">H8064</span> <span class="strong">H776</span> 창조하시니라 <span class="strong">H1254</span></div>
+              <div class="v"><span class="vnum">2</span>땅이 <span class="strong">H776</span> 혼돈하고 <span class="strong">H8414</span> 공허하며 <span class="strong">H922</span> 흑암이 <span class="strong">H2822</span></div>
+            </div>
+          </div>
+          <div class="win">
+            <div class="winbar"><span class="ttl" style="font-size:10px;font-weight:800;color:var(--dim)">사전 · 연결: 원어</span></div>
+            <div class="winbody lex">
+              <span class="chip">H7225 · 히브리어</span>
+              <div class="lex-head"><span class="heb" dir="rtl">רֵאשִׁית</span><span class="rom">레쉬트 · rêʼshîyth</span></div>
+              <div class="lex-body"><b style="color:var(--text)">시작, 처음, 으뜸, 첫 열매.</b> 창세기 1:1 “태초에”에 쓰인 단어로, 시간·순서의 ‘맨 처음’이나 가장 중요한 것을 뜻합니다.</div>
+            </div>
+          </div>
+        </div>
+        <div class="cap"><span class="strong hot" style="font-size:9px">H7225</span> 처럼 스트롱 번호를 <b>클릭</b> → 오른쪽 사전 카드 갱신 · <b>마우스 올리면</b> 미리보기 · <b>우클릭</b>은 별도 창</div>
+      </div>
+      <ul class="clean">
+        <li>원어 카드 머리말의 <b>“연결”</b> 버튼으로 어느 본문 카드를 따라갈지 정합니다.</li>
+        <li>연결된 사전 카드가 없으면 새로 띄웁니다. 상단 <b>한글 / 영어</b> 토글로 사전 언어 전환(영어 데이터가 있을 때).</li>
+      </ul>
+    </section>
+
+    <!-- 6. 출력 설정 -->
+    <section class="sec" id="output">
+      <div class="sec-head"><div class="num">6</div><div><h2>출력 설정</h2><div class="sub">복사되는 형식 바꾸기</div></div></div>
+      <p>좌측 레일의 <b>슬라이더</b> 아이콘으로 출력 설정을 엽니다. 설정을 바꾸면 <b>미리보기</b>가 즉시 갱신됩니다.</p>
+
+      <div class="demo ui">
+        <div class="win">
+          <div class="winbar"><span class="dots"><i></i><i></i><i></i></span><b>출력 설정</b><span class="sp"></span></div>
+          <div class="winbody">
+            <div class="setrow"><span class="lab">장절 표기</span><span class="seg"><span class="opt on">1:1</span><span class="opt">1장 1절</span></span>
+              <span class="lab" style="margin-left:8px">괄호</span><span class="seg"><span class="opt on">[ ]</span><span class="opt">( )</span><span class="opt">없음</span></span></div>
+            <div class="setrow"><span class="lab">출력 방식</span><span class="seg"><span class="opt on">한 줄로</span><span class="opt">줄마다</span></span>
+              <span class="lab" style="margin-left:8px">범위 기호</span><span class="seg"><span class="opt on">-</span><span class="opt">~</span></span></div>
+            <div style="font-size:11px;font-weight:800;color:var(--dim);letter-spacing:.04em;margin:14px 0 7px">미리보기 · 요 1:1-2,4</div>
+            <div class="preview"><span class="hdr">KRV</span>[요 1:1-2,4] 태초에 말씀이 계시니라 이 말씀이 하나님과 함께 계셨으니 이 말씀은 곧 하나님이시니라 그가 태초에 하나님과 함께 계셨고 <span class="sep">//</span> 그 안에 생명이 있었으니 이 생명은 사람들의 빛이라</div>
+          </div>
+        </div>
+        <div class="cap"><b style="color:var(--accent)">//</b> 표시 (v1.0.2) — “한 줄로” 출력일 때 콤마로 끊긴 구절(1-2 / 4) 사이에 자동 삽입. 연속된 절은 띄어쓰기만.</div>
+      </div>
+
+      <h3><span class="pin"></span>표기 옵션 한눈에</h3>
+      <ul class="clean">
+        <li><b>책 이름</b> 한글/영문 · 정식/약칭 &nbsp;·&nbsp; <b>표기 위치</b> 본문 앞/뒤 &nbsp;·&nbsp; <b>구분 기호</b> 하이픈/콜론/띄어쓰기</li>
+        <li><b>토글</b> — 줄마다 장:절 표시 · 버전 헤더 출력 · 장절 표기 숨기기</li>
+      </ul>
+      <h3><span class="pin"></span>출력 순서 &amp; 새 역본 추가</h3>
+      <ul class="clean">
+        <li>복사에 쓸 역본 목록을 <span class="kbd">↑</span> <span class="kbd">↓</span> 로 정렬, <b>✕</b> 제외, <span class="ref">＋ 역본 추가</span>. (여러 역본은 순서대로 함께 복사)</li>
+        <li>새 번역본(MyBible 모듈)은 <a href="https://www.ph4.org/b4_index.php" target="_blank" style="color:var(--accent);font-weight:700">ph4.org</a> 에서 받아 <span class="ref">.SQLite3</span> 를 bible_versions 폴더에 넣고 <span class="ref">DB 새로고침</span>.</li>
+      </ul>
+      <p class="muted">※ 영어 성경(ESV/NKJV 등)은 항상 영어식 표기 + 하이픈으로 출력됩니다.</p>
+    </section>
+
+    <!-- 7. 앱 설정 -->
+    <section class="sec" id="settings">
+      <div class="sec-head"><div class="num">7</div><div><h2>앱 설정 <span style="font-size:18px">⚙</span></h2><div class="sub">앱 동작 설정 (출력 형식과 별개)</div></div></div>
+      <div class="demo ui">
+        <div class="win">
+          <div class="winbar"><span class="dots"><i></i><i></i><i></i></span><b>앱 설정</b><span class="sp"></span></div>
+          <div class="winbody">
+            <div class="setrow"><span class="lab" style="min-width:120px">클립보드 확인 간격</span><span class="seg"><span class="opt">빠름 0.25초</span><span class="opt on">기본 0.5초</span><span class="opt">느림 1초</span></span></div>
+            <div class="setrow"><span class="lab" style="min-width:120px">사전 기본 언어</span><span class="seg"><span class="opt on">한글</span><span class="opt">영어</span></span></div>
+            <div class="setrow"><span class="lab" style="min-width:120px">자동 업데이트 확인</span><span class="seg"><span class="opt on">켜기</span><span class="opt">끄기</span></span></div>
+          </div>
+        </div>
+        <div class="cap">간격은 짧을수록 빨리 알아채지만 CPU를 조금 더 씀 · 모니터링 중 바꿔도 즉시 반영</div>
+      </div>
+      <ul class="clean">
+        <li><b>검색 결과 클릭 시 본문으로 이동</b> 토글 · 버전 정보 · <span class="ref">데이터 폴더 열기</span> · <span class="ref">GitHub 열기</span></li>
+        <li><span class="ref">설정 초기화</span> — 모든 설정을 기본값으로. 실수 방지를 위해 한 번 더 눌러야 실행됩니다.</li>
+      </ul>
+    </section>
+
+    <!-- 8. 업데이트 -->
+    <section class="sec" id="update">
+      <div class="sec-head"><div class="num">8</div><div><h2>업데이트</h2><div class="sub">새 버전 받기</div></div></div>
+      <div class="demo ui">
+        <div class="win">
+          <div class="winbar"><span class="dots"><i></i><i></i><i></i></span><b>BibleClip</b><span class="ver">v1.0.2</span><span class="sp"></span></div>
+          <div class="winbody">
+            <div style="display:flex;align-items:center;gap:12px;padding:11px 14px;border-radius:10px;background:var(--pill-sel-bg);border:1px solid var(--accent)">
+              <svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:20px;height:20px;stroke:var(--accent);flex:0 0 auto"><path d="M21 12a9 9 0 1 1-3-6.7L21 8"/><path d="M21 3v5h-5"/></svg>
+              <span style="flex:1;font-size:12.5px;font-weight:600">새 버전이 있습니다. 지금 업데이트할까요?</span>
+              <button class="btnp">지금 업데이트</button>
+              <span class="pill">릴리스 페이지</span>
+            </div>
+          </div>
+        </div>
+        <div class="cap">상단 <b>[업데이트 확인]</b> 또는 시작 시 자동 확인 → <b>받아서 자동으로 교체·재시작</b></div>
+      </div>
+    </section>
+
+    <!-- 9. 저장 -->
+    <section class="sec" id="save">
+      <div class="sec-head"><div class="num">9</div><div><h2>설정 저장 &amp; 참고</h2><div class="sub">자동 저장 / 백업</div></div></div>
+      <ul class="clean">
+        <li>글자 크기·테마·역본 선택과 순서·출력 형식·<b>카드 배치</b>·마지막으로 본 위치·창 크기/위치 등이 자동 저장되어 다음 실행 때 복원됩니다.</li>
+        <li>설정은 실행 파일과 같은 폴더의 <span class="ref">bibleclip_settings.json</span> 에 저장됩니다. 다른 PC로 옮길 때 이 파일을 함께 복사하면 설정이 따라옵니다.</li>
+      </ul>
+    </section>
+
+    <!-- 10. 문제 해결 -->
+    <section class="sec" id="trouble">
+      <div class="sec-head"><div class="num" style="background:linear-gradient(135deg,#C9742B,#E0A458)">!</div><div><h2>잘 안 될 때</h2><div class="sub">자주 묻는 해결법</div></div></div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px">
+        <div class="feat"><b>모니터링/복사가 안 될 때</b><span style="margin-top:6px">같은 폴더에 <span class="ref">bible_versions</span> · <span class="ref">original_lang</span> 가 있는지, 압축을 “폴더째” 풀었는지 확인.</span></div>
+        <div class="feat"><b>본문이 비어 보일 때</b><span style="margin-top:6px">bible_versions 폴더에 성경 데이터(.SQLite3)가 있는지 확인.</span></div>
+        <div class="feat"><b>창이 안 보일 때</b><span style="margin-top:6px">모니터가 2대 이상이면 보조 모니터에 떠 있을 수 있습니다(이전 위치 기억). 다른 모니터 확인.</span></div>
+        <div class="feat"><b>첫 실행이 느릴 때</b><span style="margin-top:6px">처음 한 번은 조금 느릴 수 있습니다. 잠시 기다려 주세요.</span></div>
+      </div>
+    </section>
+
+    <footer>
+      <span>BibleClip · 클립보드 성경 구절 자동 변환 데스크톱 앱</span>
+      <a href="https://github.com/tpwns432-maker/BibleClip" target="_blank">문의 / 다운로드 → GitHub ↗</a>
+    </footer>
+  </main>
+</div>
+
+<script>
+  (function(){
+    var root=document.documentElement, btn=document.getElementById('themebtn'),
+        label=document.getElementById('themelabel'), icon=document.getElementById('themeicon');
+    var SUN='<circle cx="12" cy="12" r="4.5"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/>';
+    var MOON='<path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"/>';
+    function apply(t){ root.setAttribute('data-theme',t);
+      label.textContent = t==='dark' ? '밝은 테마' : '어두운 테마';
+      icon.innerHTML = t==='dark' ? SUN : MOON; }
+    var saved='light'; try{ saved=localStorage.getItem('bibleclip-guide-theme')||'light'; }catch(e){}
+    apply(saved);
+    btn.addEventListener('click',function(){
+      var t = root.getAttribute('data-theme')==='dark' ? 'light' : 'dark';
+      apply(t); try{ localStorage.setItem('bibleclip-guide-theme',t); }catch(e){}
+    });
+  })();
+  (function(){
+    var links=[].slice.call(document.querySelectorAll('#nav a.navlink'));
+    var map={}; links.forEach(function(a){ map[a.getAttribute('href').slice(1)]=a; });
+    var io=new IntersectionObserver(function(entries){
+      entries.forEach(function(en){
+        if(en.isIntersecting){ links.forEach(function(a){a.classList.remove('active');});
+          var a=map[en.target.id]; if(a)a.classList.add('active'); }
+      });
+    },{rootMargin:'-45% 0px -50% 0px',threshold:0});
+    document.querySelectorAll('section.sec').forEach(function(s){io.observe(s);});
+  })();
+</script>
+</body>
+</html>
