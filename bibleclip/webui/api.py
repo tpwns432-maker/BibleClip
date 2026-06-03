@@ -245,8 +245,17 @@ class Api:
             'auto_update_check': bool(s.get('auto_update_check', True)),
             'lex_lang': 'en' if s.get('lex_lang') == 'en' else 'ko',
             'search_click_navigates': bool(s.get('search_click_navigates', False)),
+            # Persisted modular-card layout (None until the web UI saves one; the
+            # front-end builds a sensible default when this is null).
+            'web_cards_layout': s.get('web_cards_layout'),
             'version': __version__,
         }
+
+    def save_cards_layout(self, layout):
+        """Persist the web viewer's card layout (a JSON-serializable list of card
+        descriptors). Thin convenience wrapper over set_app_setting so the front-
+        end can call ``api.save_cards_layout(layout)`` directly. Returns {ok}."""
+        return self.set_app_setting('web_cards_layout', layout)
 
     # ---- UI preferences (persisted; shared with the desktop app) ----
 
@@ -280,6 +289,10 @@ class Api:
         'search_click_navigates': None,
         'lex_lang': {'ko', 'en'},
         'poll_interval': 'float',
+        # The web card layout is an opaque, front-end-owned blob (a list of card
+        # descriptors). 'any' = store whatever JSON-serializable value JS sends,
+        # no server-side validation. None clears it back to the default.
+        'web_cards_layout': 'any',
     }
 
     def get_app_settings(self):
@@ -290,6 +303,7 @@ class Api:
             'search_click_navigates': bool(s.get('search_click_navigates', False)),
             'lex_lang': 'en' if s.get('lex_lang') == 'en' else 'ko',
             'poll_interval': float(s.get('poll_interval', 0.5) or 0.5),
+            'web_cards_layout': s.get('web_cards_layout'),
             'version': __version__,
             'repo_url': REPO_HOME_URL,
         }
@@ -306,6 +320,13 @@ class Api:
             except (TypeError, ValueError):
                 value = 0.5
             value = round(max(0.1, min(2.0, value)), 2)
+        elif spec == 'any':
+            # Stored verbatim — must be JSON-serializable so it survives a
+            # save/load round-trip; reject anything that isn't.
+            try:
+                json.dumps(value)
+            except (TypeError, ValueError):
+                return {'ok': False, 'error': f'value for {key} is not JSON-serializable'}
         elif spec is None:
             value = bool(value)
         elif value not in spec:
