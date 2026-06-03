@@ -274,11 +274,32 @@ def main():
     assert not api.set_app_setting('no_such_app_key', 1)['ok']
     print("app settings get/set (poll clamp, lex enum, bool) OK")
 
+    # web_cards_layout: 'any' spec — stored verbatim, exposed by get_initial /
+    # get_app_settings, and clearable back to None. Non-serializable rejected.
+    assert 'web_cards_layout' in api.get_initial()
+    layout = [{'id': 'bible-1', 'type': 'bible', 'version': ver,
+               'book': 10, 'chapter': 1, 'locked': False},
+              {'id': 'bible-2', 'type': 'bible', 'version': ver,
+               'book': 10, 'chapter': 2, 'locked': True}]
+    assert api.save_cards_layout(layout)['ok']
+    assert api.lib.settings['web_cards_layout'] == layout
+    assert api.get_initial()['web_cards_layout'] == layout
+    assert api.get_app_settings()['web_cards_layout'] == layout
+    # a non-JSON value is rejected without mutating the stored layout
+    assert not api.set_app_setting('web_cards_layout', {1, 2, 3})['ok']
+    assert api.lib.settings['web_cards_layout'] == layout
+    # None clears it
+    assert api.save_cards_layout(None)['ok']
+    assert api.lib.settings['web_cards_layout'] is None
+    print("web_cards_layout get/set/clear (any spec) OK")
+
     # reset restores every default
+    api.save_cards_layout([{'id': 'bible-1', 'type': 'bible'}])  # dirty it first
     api.reset_settings()
     assert api.lib.settings['poll_interval'] == Library.DEFAULT_SETTINGS['poll_interval']
     assert api.lib.settings['lex_lang'] == 'ko'
     assert api.lib.settings['search_click_navigates'] is False
+    assert api.lib.settings['web_cards_layout'] is None
     print("reset_settings -> defaults restored")
 
     monitor_check()

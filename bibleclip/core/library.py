@@ -55,6 +55,9 @@ class Library:
         'lex_popup_size': '440x480',      # size for new independent dict windows
         'web_geometry': None,             # {w,h,x,y} for the web UI window (web-only;
                                           # kept separate from tk 'geometry')
+        'web_cards_layout': None,         # web-only: serialized card layout for the
+                                          # modular multi-card viewer (list of card
+                                          # descriptors; None until the web UI saves one)
     }
 
     def __init__(self):

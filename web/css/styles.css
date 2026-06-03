@@ -280,15 +280,27 @@ body {
   color: var(--text-muted); white-space: pre-wrap; word-break: break-word; margin: 0;
 }
 
-/* ===== Three-panel grid ===== */
-.panels {
-  flex: 1;
-  display: grid;
-  grid-template-columns: 1.05fr 1.05fr 1fr;
-  gap: 12px;
+/* ===== Modular card workspace (성경 본문 / 원어 분석 / 사전) ===== */
+/* The viewer view hosts a horizontal row of dynamically-added cards. */
+.viewer-view {
+  flex: 1; min-height: 0;
+  display: flex; flex-direction: column;
   padding: 0 20px 18px;
-  min-height: 0;
 }
+/* Free-form workspace: cards are absolutely positioned (% geometry) and can be
+   dragged/resized/overlapped freely. The workspace itself NEVER scrolls — only
+   card bodies do. Percent geometry = window resize scales cards, fonts stay px. */
+.panels-container {
+  flex: 1; min-height: 0;
+  position: relative;
+  overflow: hidden;
+}
+/* Empty-state hint when no cards are open. */
+.panels-empty {
+  flex: 1; display: flex; align-items: center; justify-content: center;
+  color: var(--text-dim); font-size: 13px; text-align: center; line-height: 1.8;
+}
+
 .card {
   background: var(--card-bg);
   border: 1px solid var(--card-border);
@@ -308,6 +320,144 @@ body {
   overflow-y: auto;
   flex: 1;
 }
+
+/* ---- A free-floating card in the workspace ---- */
+/* left/top/width/height/z-index are set inline (%) by CardManager. */
+.mcard {
+  position: absolute;
+  min-width: 0; min-height: 0;
+}
+.mcard.moving {
+  opacity: .92;
+  box-shadow: 0 22px 60px -20px rgba(40, 25, 70, .65);
+  cursor: grabbing;
+}
+.mcard.resizing { user-select: none; }
+.mcard.locked { box-shadow: inset 0 0 0 1px var(--accent); }
+
+/* Card header: grip · title · controls · lock · close.
+   The header itself is the move handle (drag to reposition the card). */
+.card-hd {
+  display: flex; align-items: center; gap: 7px;
+  padding: 9px 10px 8px 8px;
+  border-bottom: 1px solid var(--hairline);
+  cursor: grab;
+}
+.mcard.moving .card-hd { cursor: grabbing; }
+.card-grip {
+  flex: 0 0 auto; cursor: grab;
+  color: var(--text-dim); font-size: 13px; line-height: 1;
+  padding: 2px 3px; border-radius: var(--r-sm); user-select: none;
+  letter-spacing: -2px;
+}
+.card-grip:hover { color: var(--accent); background: var(--seg-bg); }
+.card-grip:active { cursor: grabbing; }
+.card-title {
+  flex: 0 0 auto; font-size: 10.5px; font-weight: 800; letter-spacing: .05em;
+  color: var(--text-dim); text-transform: uppercase; white-space: nowrap;
+}
+.card-hd-ctrls { display: inline-flex; align-items: center; gap: 5px; flex-wrap: nowrap; min-width: 0; }
+.card-hd-spacer { flex: 1; }
+/* compact pills inside the header (version / book / chapter / link) */
+.card-hd .hd-pill {
+  border: 1px solid var(--pill-border); border-radius: var(--r-sm);
+  background: var(--pill-bg); color: var(--pill-text);
+  padding: 3px 8px; font-size: 11px; font-weight: 700;
+  cursor: pointer; white-space: nowrap; user-select: none;
+  transition: border-color .15s, background .15s;
+}
+.card-hd .hd-pill:hover { border-color: var(--accent); }
+.card-hd .hd-pill.dropdown::after { content: " ▾"; color: var(--text-dim); }
+.card-hd .hd-mini {
+  width: 24px; height: 24px; border-radius: 7px; flex: 0 0 auto;
+  border: 1px solid var(--pill-border); background: var(--pill-bg);
+  color: var(--text-muted); font-weight: 700; font-size: 12px;
+  display: inline-flex; align-items: center; justify-content: center;
+  cursor: pointer; transition: border-color .15s;
+}
+.card-hd .hd-mini:hover { border-color: var(--accent); }
+
+/* Close (✕) */
+.card-x {
+  flex: 0 0 auto; cursor: pointer;
+  width: 24px; height: 24px; border-radius: 7px;
+  display: inline-flex; align-items: center; justify-content: center;
+  color: var(--text-dim); font-size: 13px;
+  transition: background .15s, color .15s;
+}
+.card-x:hover { color: var(--danger, #D6456A); background: var(--pill-sel-bg); }
+
+/* Conditional-reception lock toggle (성경 카드 전용). Has a hover tooltip. */
+.card-lock {
+  position: relative; flex: 0 0 auto;
+  width: 24px; height: 24px; border-radius: 7px;
+  display: inline-flex; align-items: center; justify-content: center;
+  color: var(--text-dim); cursor: pointer;
+  transition: background .15s, color .15s;
+}
+.card-lock svg { width: 14px; height: 14px; }
+.card-lock:hover { background: var(--pill-sel-bg); color: var(--accent); }
+.card-lock.on { color: var(--accent); background: var(--pill-sel-bg); }
+/* disabled: only one bible card on screen, or N-1 limit reached for an unlocked
+   card. Greyed and non-interactive (but still shows its tooltip). */
+.card-lock.disabled { opacity: .38; cursor: not-allowed; }
+.card-lock.disabled:hover { background: none; color: var(--text-dim); }
+
+/* ---- 8-direction resize handles (edges + corners) ----
+   Kept inside the card bounds (the card clips overflow for rounded corners). */
+.rs { position: absolute; z-index: 6; }
+.rs-e  { top: 12px; bottom: 12px; right: 0; width: 7px; cursor: ew-resize; }
+.rs-w  { top: 12px; bottom: 12px; left: 0; width: 7px; cursor: ew-resize; }
+.rs-s  { left: 12px; right: 12px; bottom: 0; height: 7px; cursor: ns-resize; }
+.rs-n  { left: 12px; right: 12px; top: 0; height: 7px; cursor: ns-resize; }
+.rs-se { right: 0; bottom: 0; width: 13px; height: 13px; cursor: nwse-resize; }
+.rs-nw { left: 0; top: 0; width: 13px; height: 13px; cursor: nwse-resize; }
+.rs-ne { right: 0; top: 0; width: 13px; height: 13px; cursor: nesw-resize; }
+.rs-sw { left: 0; bottom: 0; width: 13px; height: 13px; cursor: nesw-resize; }
+/* edge affordance on hover */
+.rs-e::after, .rs-w::after {
+  content: ""; position: absolute; top: 50%; left: 50%;
+  width: 3px; height: 34px; transform: translate(-50%, -50%);
+  border-radius: 3px; background: var(--accent);
+  opacity: 0; transition: opacity .15s;
+}
+.rs-s::after, .rs-n::after {
+  content: ""; position: absolute; top: 50%; left: 50%;
+  width: 34px; height: 3px; transform: translate(-50%, -50%);
+  border-radius: 3px; background: var(--accent);
+  opacity: 0; transition: opacity .15s;
+}
+.rs:hover::after { opacity: 1; }
+
+/* ---- PowerPoint-style snap alignment guides ---- */
+/* z-index 500: above all cards (≤ ~50 after renormalization), below menus (1000). */
+.snap-guide {
+  position: absolute; z-index: 500; pointer-events: none;
+  background: var(--accent); opacity: .75;
+}
+.snap-guide.v { width: 1px; top: 0; bottom: 0; }
+.snap-guide.h { height: 1px; left: 0; right: 0; }
+/* Workspace divider guides (2·3·4등분 분할선) — dashed + dimmer, to distinguish
+   from card-to-card snap guides. */
+.snap-guide.div { opacity: .5; }
+.snap-guide.div.v {
+  background: repeating-linear-gradient(to bottom, var(--accent) 0 6px, transparent 6px 13px);
+}
+.snap-guide.div.h {
+  background: repeating-linear-gradient(to right, var(--accent) 0 6px, transparent 6px 13px);
+}
+
+/* ---- Shared hover tooltip (lock icon, and any [data-tip] element) ---- */
+.tooltip {
+  position: fixed; z-index: 400; max-width: 240px;
+  background: var(--toast-bg); color: var(--toast-fg);
+  border-radius: var(--r-sm); padding: 6px 10px;
+  font-size: 11.5px; font-weight: 600; line-height: 1.5;
+  box-shadow: 0 10px 30px -10px rgba(40, 25, 70, .5);
+  pointer-events: none; white-space: normal;
+  animation: tip-in .12s ease-out;
+}
+@keyframes tip-in { from { opacity: 0; transform: translateY(3px); } to { opacity: 1; transform: none; } }
 
 /* ---- Scripture panel (sans-serif body; Strong's codes hidden here) ---- */
 /* font-size scales with the A−/A+ control (--reading-scale). */
@@ -366,8 +516,10 @@ body {
 .card-body::-webkit-scrollbar-thumb:hover { background: var(--text-dim); }
 
 /* ---- Dropdown menu (book / chapter / version pickers) ---- */
+/* z-index 1000: must always float above every card (cards are renormalized to
+   stay under ~50, but keep a wide margin so menus can never be covered). */
 .menu {
-  position: fixed; z-index: 100;
+  position: fixed; z-index: 1000;
   min-width: 120px; max-height: 320px; overflow-y: auto;
   background: var(--card-bg);
   border: 1px solid var(--card-border);
@@ -443,8 +595,10 @@ body {
 .sr-ref { font-size: 12px; font-weight: 700; color: var(--accent-text); margin-right: 8px; }
 .sr-text { font-size: 13px; color: var(--text); line-height: 1.7; }
 
-/* ---- Version chip drag-reorder ---- */
+/* ---- Version chip drag-reorder (live gap while dragging) ---- */
 .pill.sel[draggable="true"] { cursor: grab; }
+.pill.sel .x { cursor: pointer; padding: 0 2px; }  /* ✕ needs pointer, not grab */
+.ver-chips .pill.sel { transition: transform .18s ease; }
 .pill.sel.dragging { opacity: .45; }
 
 /* ---- Loading / empty state ---- */
@@ -531,10 +685,8 @@ body {
 .toast.fade { opacity: 0; transition: opacity .3s; }
 @keyframes toast-in { from { transform: translateY(10px); opacity: 0; } to { transform: none; opacity: 1; } }
 
-/* ---- Responsive: stack panels when narrow ---- */
-@media (max-width: 860px) {
-  .panels { grid-template-columns: 1fr; }
-}
+/* (free-form workspace: cards scale with the window via % geometry — no
+   responsive stacking needed) */
 
 /* ===== App settings modal (⚙ gear) ===== */
 .modal-overlay {
