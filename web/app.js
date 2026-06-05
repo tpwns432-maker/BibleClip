@@ -577,6 +577,40 @@
       if (b2) renderMultiVersesInto(b2, viewerVers, chapDataArr, highlight);
       updateBibleHeader(card);
       updateNavButtons(card);
+      decorateNotes(card);   // 묵상 노트 배지 (Phase 3, async)
+    }
+
+    // Fetch this chapter's notes and stamp a 📄 badge on each noted verse.
+    async function decorateNotes(card) {
+      if (!card || card.type !== "bible") return;
+      let notes = {};
+      try { notes = (await api().get_chapter_notes(card.book, card.chapter)) || {}; }
+      catch (e) { notes = {}; }
+      noteCache[card.id] = notes;
+      const body = bodyEl(card.id);
+      if (!body) return;
+      body.querySelectorAll(".v[data-v]").forEach((el) => {
+        const old = el.querySelector(".note-badge");
+        if (old) old.remove();
+        const txt = notes[el.dataset.v];
+        if (txt) {
+          const b = document.createElement("span");
+          b.className = "note-badge";
+          b.textContent = "📄";
+          b.title = txt.length > 80 ? txt.slice(0, 80) + "…" : txt;  // hover preview
+          b.dataset.v = el.dataset.v;
+          const vnum = el.querySelector(".vnum");
+          if (vnum) vnum.after(b); else el.prepend(b);
+        }
+      });
+    }
+
+    // Ensure an interlinear (원어) card linked to a bible card, then surface it.
+    function ensureInterlinearFor(bibleId) {
+      const ex = cards.find(
+        (c) => c.type === "interlinear" && (linkedBible(c) || {}).id === bibleId);
+      if (ex) { bringToFront(ex); return ex; }
+      return addCardWithLink("interlinear", bibleId);
     }
 
     async function loadInterlinearCard(card) {
@@ -1204,6 +1238,7 @@
 
     let syncRaf = null;
     let scrollTimer = null;   // 500ms debounce for locking the history verse (7차-2)
+    const progScroll = new Set();  // card ids being programmatically scrolled (sync guard)
 
     // The topmost fully-visible verse number in a scripture body (or null).
     function topVerseOf(body) {
@@ -1214,20 +1249,33 @@
       return null;
     }
 
-    // Real-time (every frame): keep linked interlinear cards aligned to the
-    // bible card's top verse. Does NOT touch history — that's debounced (7차-2).
+    // Align another scroll body so verse `n` sits at its top. `markId` (when the
+    // target is a bible card) is flagged in progScroll so the resulting scroll
+    // event is ignored — preventing an A→B→A sync feedback loop.
+    function scrollBodyToVerse(targetBody, n, markId) {
+      const target = targetBody.querySelector(`.v[data-v="${n}"]`);
+      if (!target) return;
+      if (markId) progScroll.add(markId);
+      targetBody.scrollTop += target.getBoundingClientRect().top - targetBody.getBoundingClientRect().top;
+      if (markId) setTimeout(() => progScroll.delete(markId), 150);
+    }
+
+    // Real-time (every frame): keep linked interlinear cards — and OTHER bible
+    // cards showing the same book/chapter (분할 비교 뷰, Phase 3) — aligned to
+    // this card's top verse. Does NOT touch history (that's debounced, 7차-2).
     function syncInterlinFrom(card, body) {
       const n = topVerseOf(body);
       if (!n) return;
-      cards
-        .filter((c) => c.type === "interlinear" && linkedBible(c) === card)
-        .forEach((ic) => {
-          const ib = bodyEl(ic.id);
-          if (!ib) return;
-          const target = ib.querySelector(`.v[data-v="${n}"]`);
-          if (!target) return;
-          ib.scrollTop += target.getBoundingClientRect().top - ib.getBoundingClientRect().top;
-        });
+      cards.forEach((c) => {
+        if (c === card) return;
+        if (c.type === "interlinear" && linkedBible(c) === card) {
+          const ib = bodyEl(c.id);
+          if (ib) scrollBodyToVerse(ib, n, null);
+        } else if (c.type === "bible" && c.book === card.book && c.chapter === card.chapter) {
+          const bb = bodyEl(c.id);
+          if (bb) scrollBodyToVerse(bb, n, c.id);
+        }
+      });
     }
 
     // Debounced (500ms after scrolling stops): lock the settled top verse into
@@ -1285,17 +1333,25 @@
       // Right-click an original-language word / cross-ref → independent window.
       c.addEventListener("contextmenu", (e) => {
         const t = e.target.closest("[data-code]");
-        if (!t) return;
-        e.preventDefault();
-        hideTip();
-        const sec = t.closest(".mcard");
-        let book = lexCur && lexCur.book, chapter = lexCur && lexCur.chapter;
-        if (sec && sec.dataset.type === "interlinear") {
-          const src = linkedBible(cardById(sec.dataset.id));
-          if (src) { book = src.book; chapter = src.chapter; }
+        if (t) {
+          e.preventDefault();
+          hideTip();
+          const sec = t.closest(".mcard");
+          let book = lexCur && lexCur.book, chapter = lexCur && lexCur.chapter;
+          if (sec && sec.dataset.type === "interlinear") {
+            const src = linkedBible(cardById(sec.dataset.id));
+            if (src) { book = src.book; chapter = src.chapter; }
+          }
+          api().open_dict_window(t.dataset.code, lexLang, book, chapter, t.dataset.v || null,
+            root.dataset.theme || "light");
+          return;
         }
-        api().open_dict_window(t.dataset.code, lexLang, book, chapter, t.dataset.v || null,
-          root.dataset.theme || "light");
+        // Right-click a bible verse → context menu (복사 / 묵상 노트 / 원어, Phase 3)
+        const vEl = e.target.closest('.mcard[data-type="bible"] .v[data-v]');
+        if (vEl) {
+          const card = cardById(vEl.closest(".mcard").dataset.id);
+          if (card) { e.preventDefault(); showVerseMenu(card, +vEl.dataset.v, e.clientX, e.clientY); }
+        }
       });
 
       // Hover an interlinear word → delayed preview tooltip.
@@ -1321,6 +1377,7 @@
         if (!sec || sec.dataset.type !== "bible") return;
         const card = cardById(sec.dataset.id);
         if (!card) return;
+        if (progScroll.has(card.id)) return;  // this scroll was programmatic (sibling sync)
         if (syncRaf) cancelAnimationFrame(syncRaf);
         syncRaf = requestAnimationFrame(() => {
           syncRaf = null;
@@ -1409,7 +1466,8 @@
 
     return { init, addCard, addCardWithLink, goToRef, primaryVersion,
              primaryBible, bibleCards, lexiconCards, bodyEl, linkedBibleFor,
-             chapStepPrimary, chapStepActive, reloadAllBible };
+             chapStepPrimary, chapStepActive, reloadAllBible,
+             ensureInterlinearFor, decorateNotesFor: decorateNotes };
   })();
 
   // ---- Scripture / interlinear / lexicon rendering (into a card body) ----
@@ -1598,6 +1656,112 @@
       if (el) { el.classList.add("copied"); setTimeout(() => el.classList.remove("copied"), 700); }
     });
   }
+
+  // ---- 묵상 노트 + verse context menu (Phase 3) ----
+  const noteCache = {};   // cardId -> { "<verse>": text } (string keys from JSON)
+  let verseMenuEl = null;
+
+  function hideVerseMenu() { if (verseMenuEl) { verseMenuEl.remove(); verseMenuEl = null; } }
+
+  function refLabel(card, verse) {
+    const b = (state.primaryBooks || []).find((x) => x.num === card.book);
+    return `${b ? b.long : card.book} ${card.chapter}:${verse}`;
+  }
+
+  function showVerseMenu(card, verse, x, y) {
+    hideVerseMenu();
+    const has = !!(noteCache[card.id] && noteCache[card.id][verse]);
+    const m = document.createElement("div");
+    m.className = "ctx-menu";
+    m.innerHTML =
+      `<div class="ctx-item" data-a="copy">구절 복사</div>` +
+      `<div class="ctx-item" data-a="note">${has ? "묵상 노트 수정" : "묵상 노트 쓰기"}</div>` +
+      `<div class="ctx-item" data-a="orig">원어 코드 조회</div>`;
+    document.body.appendChild(m);
+    const r = m.getBoundingClientRect();
+    m.style.left = Math.min(x, window.innerWidth - r.width - 8) + "px";
+    m.style.top = Math.min(y, window.innerHeight - r.height - 8) + "px";
+    m.addEventListener("mousedown", (e) => {
+      const it = e.target.closest(".ctx-item");
+      if (!it) return;
+      e.preventDefault();
+      const a = it.dataset.a;
+      hideVerseMenu();
+      if (a === "copy") copyVersesFromCard(card, [verse]);
+      else if (a === "note") openNoteEditor(card, verse);
+      else if (a === "orig") openOriginalFor(card, verse);
+    });
+    verseMenuEl = m;
+  }
+  document.addEventListener("mousedown", (e) => {
+    if (verseMenuEl && !e.target.closest(".ctx-menu")) hideVerseMenu();
+  }, true);
+  document.addEventListener("scroll", hideVerseMenu, true);
+  window.addEventListener("resize", hideVerseMenu);
+
+  // Open (or focus) a linked 원어 card for the verse's chapter.
+  function openOriginalFor(card, verse) {
+    CardManager.ensureInterlinearFor(card.id);
+  }
+
+  async function openNoteEditor(card, verse) {
+    hideVerseMenu();
+    let existing = null;
+    try { existing = await api().get_note(card.book, card.chapter, verse); } catch (e) {}
+    const back = document.createElement("div");
+    back.className = "note-modal-back";
+    back.innerHTML =
+      `<div class="note-modal" role="dialog" aria-modal="true">` +
+        `<div class="note-modal-h"><span>📄 묵상 노트</span>` +
+          `<span class="note-modal-ref">${esc(refLabel(card, verse))}</span></div>` +
+        `<textarea class="note-ta" placeholder="이 구절에 대한 묵상을 적어 보세요…"></textarea>` +
+        `<div class="note-modal-foot">` +
+          `<button class="btn note-del" ${existing ? "" : "hidden"}>삭제</button>` +
+          `<span class="note-modal-spacer"></span>` +
+          `<button class="btn note-cancel">취소</button>` +
+          `<button class="btn primary note-save">저장</button>` +
+        `</div>` +
+      `</div>`;
+    document.body.appendChild(back);
+    const ta = back.querySelector(".note-ta");
+    ta.value = (existing && existing.text) || "";
+    setTimeout(() => ta.focus(), 0);
+
+    const close = () => back.remove();
+    const refresh = async () => {
+      // re-decorate the card so the badge appears/disappears immediately
+      await CardManager.decorateNotesFor(card);
+    };
+    back.addEventListener("mousedown", (e) => { if (e.target === back) close(); });
+    back.querySelector(".note-cancel").addEventListener("click", close);
+    back.querySelector(".note-save").addEventListener("click", async () => {
+      await api().set_note(card.book, card.chapter, verse, ta.value);
+      await refresh();
+      toast("묵상 노트 저장됨");
+      close();
+    });
+    const del = back.querySelector(".note-del");
+    if (del) del.addEventListener("click", async () => {
+      await api().delete_note(card.book, card.chapter, verse);
+      await refresh();
+      toast("묵상 노트 삭제됨");
+      close();
+    });
+    back.addEventListener("keydown", (e) => {
+      if (e.key === "Escape") close();
+      else if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) back.querySelector(".note-save").click();
+    });
+  }
+
+  // Clicking a 📄 badge opens its note editor.
+  document.addEventListener("click", (e) => {
+    const b = e.target.closest(".note-badge");
+    if (!b) return;
+    const sec = b.closest('.mcard[data-type="bible"]');
+    if (!sec) return;
+    const card = CardManager.bibleCards().find((c) => c.id === sec.dataset.id);
+    if (card) { e.stopPropagation(); openNoteEditor(card, +b.dataset.v); }
+  }, true);
 
   // ---- Hover tooltip over original-language words ----
 

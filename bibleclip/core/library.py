@@ -75,6 +75,10 @@ class Library:
         self.user_config = load_user_config()
         self.is_premium = bool(self.user_config.get('is_premium', True))
 
+        # 묵상 노트 store (userdata/user_notes.json). Fail-soft.
+        from bibleclip.notes import Notes
+        self.notes = Notes()
+
         self.load_databases()
         self.load_bethlehem()
         self.load_settings()

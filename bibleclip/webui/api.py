@@ -611,6 +611,25 @@ class Api:
         return [{'n': n, 'words': [{'w': w, 'code': c} for (w, c) in words]}
                 for n, words in self.lib.interlinear(int(book), int(chapter))]
 
+    # ---- 묵상 노트 (verse-anchored notes, Phase 3) ----
+
+    def get_chapter_notes(self, book, chapter):
+        """{verse -> text} for one chapter — the UI renders a 📄 badge on each."""
+        return self.lib.notes.for_chapter(int(book), int(chapter))
+
+    def get_note(self, book, chapter, verse):
+        """The note for a verse ({text, ts}) or None."""
+        return self.lib.notes.get(int(book), int(chapter), int(verse))
+
+    def set_note(self, book, chapter, verse, text):
+        """Create/update a verse note (empty text deletes). Returns {ok, note}."""
+        note = self.lib.notes.set(int(book), int(chapter), int(verse), text)
+        return {'ok': True, 'note': note}
+
+    def delete_note(self, book, chapter, verse):
+        self.lib.notes.delete(int(book), int(chapter), int(verse))
+        return {'ok': True}
+
     def resolve_reference(self, text):
         """Parse a free-text reference (창 1:1, 창세기 1장 1절, 요 1:1-2,4) into a
         navigable target, or None. {book_num, short, long, chapter, verses}.
