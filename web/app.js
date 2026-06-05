@@ -262,6 +262,7 @@
     wireUpdate();
     wireAppSettings();
     if (init.auto_update_check) checkUpdate(true); // silent startup check
+    maybePatchModal(); // first-run-after-update patch notes (Phase 4)
   }
 
   // ============================================================
@@ -1806,13 +1807,65 @@
     let r = null;
     try { r = await api().check_update(); } catch (e) { r = null; }
     if (!r || !r.ok) { if (!silent) toast("업데이트 확인 실패"); return; }
-    if (r.has_update && !(silent && r.skipped)) {
+    if (r.has_update && r.mandatory) {
+      // Soft forced update (Phase 4): non-dismissible modal, but app still runs.
+      updateInfo = r;
+      showForcedUpdate(r);
+    } else if (r.has_update && !(silent && r.skipped)) {
       updateInfo = r;
       $("ub-text").textContent = `새 버전 v${r.latest} 사용 가능 — 현재 v${r.current}`;
       $("update-banner").hidden = false;
     } else if (!silent) {
       toast(`최신 버전입니다 (v${r.current})`);
     }
+  }
+
+  // Non-dismissible "update required" modal (Phase 4). Driven by the kill-switch
+  // manifest's recommend_version (soft threshold) — distinct from the hard
+  // min_version block at startup.
+  function showForcedUpdate(r) {
+    if (document.querySelector(".forced-back")) return;
+    const back = document.createElement("div");
+    back.className = "note-modal-back forced-back";
+    back.innerHTML =
+      `<div class="note-modal forced-modal" role="dialog" aria-modal="true">` +
+        `<div class="patch-h forced-h">⚠ 업데이트가 필요합니다</div>` +
+        `<p class="forced-text">현재 <b>v${esc(r.current)}</b> — 새 버전 <b>v${esc(r.latest)}</b>로 업데이트해야 계속 사용할 수 있습니다.</p>` +
+        `<div class="note-modal-foot"><span class="note-modal-spacer"></span>` +
+          `<button class="btn forced-page">릴리스 페이지</button>` +
+          `<button class="btn primary forced-install">지금 업데이트</button></div>` +
+      `</div>`;
+    document.body.appendChild(back);
+    back.querySelector(".forced-page").addEventListener("click", () => api().open_releases_page());
+    back.querySelector(".forced-install").addEventListener("click", async () => {
+      const x = await api().install_update();
+      if (!x || !x.ok) toast(x && x.error ? x.error : "릴리스 페이지에서 받아 주세요");
+    });
+    // intentionally non-dismissible: no backdrop / Escape close.
+  }
+
+  // First-run-after-update patch notes (Phase 4).
+  async function maybePatchModal() {
+    let p = null;
+    try { p = await api().get_patch_notes(); } catch (e) { p = null; }
+    if (!p || !p.show || !(p.notes || []).length) return;
+    const back = document.createElement("div");
+    back.className = "note-modal-back";
+    back.innerHTML =
+      `<div class="note-modal patch-modal" role="dialog" aria-modal="true">` +
+        `<div class="patch-h"><span class="patch-badge">NEW</span> v${esc(p.version)} 업데이트 내역</div>` +
+        `<ul class="patch-list">${p.notes.map((n) => `<li>${esc(n)}</li>`).join("")}</ul>` +
+        `<label class="patch-dismiss"><input type="checkbox" class="patch-cb"> 다시 보지 않기</label>` +
+        `<div class="note-modal-foot"><span class="note-modal-spacer"></span>` +
+          `<button class="btn primary patch-ok">확인</button></div>` +
+      `</div>`;
+    document.body.appendChild(back);
+    const close = () => {
+      try { api().dismiss_patch(!!back.querySelector(".patch-cb").checked); } catch (e) {}
+      back.remove();
+    };
+    back.querySelector(".patch-ok").addEventListener("click", close);
+    back.addEventListener("mousedown", (e) => { if (e.target === back) close(); });
   }
 
   function wireUpdate() {

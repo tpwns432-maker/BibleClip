@@ -386,12 +386,62 @@ class Api:
             return {'ok': False, 'error': error or '응답 없음'}
         self._update = info  # remembered for install_update()
         has = parse_version(info['version']) > parse_version(__version__)
+        # Soft forced-update (Phase 4): when below the manifest's recommend_version
+        # the UI shows a non-dismissible modal (but the app still runs — the hard
+        # block is the kill switch's min_version). Fail-open.
+        mandatory = False
+        if has:
+            try:
+                from bibleclip.killswitch import recommended_version
+                rec = recommended_version()
+                if rec and parse_version(__version__) < parse_version(rec):
+                    mandatory = True
+            except Exception:
+                mandatory = False
         return {
-            'ok': True, 'has_update': has,
+            'ok': True, 'has_update': has, 'mandatory': mandatory,
             'current': __version__, 'latest': info['version'],
             'notes': info.get('body') or '', 'url': info.get('download_url') or '',
             'skipped': self.lib.settings.get('skip_update_version') == info['version'],
         }
+
+    # ---- 패치노트 (first-run-after-update modal, Phase 4) ----
+
+    def _version_changes(self):
+        import json
+        from bibleclip.config import BASE_DIR, get_resource_dir
+        for root in (BASE_DIR, get_resource_dir()):
+            try:
+                with open(os.path.join(root, 'version_changes.json'), 'r',
+                          encoding='utf-8') as f:
+                    d = json.load(f)
+                if isinstance(d, dict):
+                    return d
+            except Exception:
+                continue
+        return {}
+
+    def get_patch_notes(self):
+        """The current version's patch notes + whether to show the modal: shown
+        once after an update unless this version was dismissed with '다시 보지
+        않기'. {version, notes:[...], show}."""
+        notes = self._version_changes().get(__version__, [])
+        seen = self.lib.settings.get('seen_version')
+        dismissed = self.lib.settings.get('dismissed_patches') or []
+        show = bool(notes) and __version__ != seen and __version__ not in dismissed
+        return {'version': __version__, 'notes': notes, 'show': show}
+
+    def dismiss_patch(self, forever=False):
+        """Acknowledge the patch modal. `forever` also adds this version to the
+        '다시 보지 않기' list so it never reappears."""
+        self.lib.settings['seen_version'] = __version__
+        if forever:
+            lst = list(self.lib.settings.get('dismissed_patches') or [])
+            if __version__ not in lst:
+                lst.append(__version__)
+            self.lib.settings['dismissed_patches'] = lst
+        self.lib.save_settings()
+        return {'ok': True}
 
     def open_releases_page(self):
         try:
