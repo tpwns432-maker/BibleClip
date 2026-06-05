@@ -305,6 +305,10 @@
       state.searchClickNav = on;
       api().set_app_setting("search_click_navigates", on);
     });
+    setSwitch($("opt-auto-copy"), s.auto_copy_top_result, (on) => {
+      state.autoCopyTop = on;
+      api().set_app_setting("auto_copy_top_result", on);
+    });
     setSwitch($("opt-auto-update"), s.auto_update_check,
       (on) => api().set_app_setting("auto_update_check", on));
 
@@ -851,18 +855,26 @@
     return (on && on.dataset.mode === "or") ? "or" : "and";
   }
 
-  // Click handler shared by keyword + strong-code results. Each hit carries
-  // {book, chapter, verse, short}.
+  // 검색 히트 1건을 클립보드에 복사하고 활동 로그에 기록(클립보드 모니터와 동일 경로
+  // → 로그 행 클릭 시 재복사도 자동 지원). {book, chapter, verse, short} 사용.
+  async function copyHit(h) {
+    const r = await api().copy_reference(h.book, h.chapter, [h.verse]);
+    if (r && r.ok) {
+      toast(`${h.short} ${h.chapter}:${h.verse} 복사됨`);
+      logReference({ book_num: h.book, chapter: h.chapter, verses: [h.verse],
+        short_name: h.short, n_parts: r.n_parts || 1, text: r.text });
+    }
+    return r;
+  }
+
+  // Click handler shared by keyword + strong-code results.
   function wireSearchHitClicks() {
     $("search-results").querySelectorAll(".sr").forEach((el) => {
       el.addEventListener("click", async () => {
         const h = searchHits[Number(el.dataset.i)];
         if (!h) return;
-        const r = await api().copy_reference(h.book, h.chapter, [h.verse]);
+        const r = await copyHit(h);
         if (r && r.ok) {
-          toast(`${h.short} ${h.chapter}:${h.verse} 복사됨`);
-          logReference({ book_num: h.book, chapter: h.chapter, verses: [h.verse],
-            short_name: h.short, n_parts: r.n_parts || 1, text: r.text });
           el.classList.add("copied");
           setTimeout(() => el.classList.remove("copied"), 700);
         }
@@ -898,6 +910,13 @@
       )
       .join("");
     wireSearchHitClicks();
+    // 옵션: 최고 점수 결과(1위) 자동 복사 + 활동 로그 기록. 결과는 점수 내림차순이라
+    // searchHits[0] 이 최고점. 로그 행 클릭 시 재복사는 기존 동작이 처리.
+    if (state.autoCopyTop && searchHits.length) {
+      copyHit(searchHits[0]);
+      const top = host.querySelector('.sr[data-i="0"]');
+      if (top) { top.classList.add("copied"); setTimeout(() => top.classList.remove("copied"), 900); }
+    }
   }
 
   // 검색 결과 하이라이트. 이미 esc()된 본문에서 매칭 토큰을 <span class="search-highlight">

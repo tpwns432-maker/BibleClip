@@ -62,6 +62,7 @@ class SystemRoutes:
             # writes userdata/config.json with {"is_premium": false}.
             'is_premium': bool(getattr(self.lib, 'is_premium', True)),
             'search_click_navigates': bool(s.get('search_click_navigates', False)),
+            'auto_copy_top_result': bool(s.get('auto_copy_top_result', False)),
             # Persisted modular-card layout (None until the web UI saves one; the
             # front-end builds a sensible default when this is null).
             'web_cards_layout': s.get('web_cards_layout'),
@@ -104,6 +105,7 @@ class SystemRoutes:
     _APP_KEYS = {
         'auto_update_check': None,
         'search_click_navigates': None,
+        'auto_copy_top_result': None,   # 검색 시 최고 점수 결과를 클립보드에 자동 복사
         'lex_lang': {'ko', 'en'},
         'poll_interval': 'float',
         # The web card layout is an opaque, front-end-owned blob (a list of card
@@ -120,6 +122,7 @@ class SystemRoutes:
             'search_click_navigates': bool(s.get('search_click_navigates', False)),
             'lex_lang': 'en' if s.get('lex_lang') == 'en' else 'ko',
             'poll_interval': float(s.get('poll_interval', 0.5) or 0.5),
+            'auto_copy_top_result': bool(s.get('auto_copy_top_result', False)),
             'web_cards_layout': s.get('web_cards_layout'),
             'version': __version__,
             'repo_url': REPO_HOME_URL,
