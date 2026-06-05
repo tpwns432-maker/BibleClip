@@ -45,7 +45,9 @@ jobs:
           New-Item -ItemType Directory -Force dist/BibleClipWeb/bible_versions | Out-Null
           Copy-Item bible_versions/KRV.SQLite3 dist/BibleClipWeb/bible_versions/ -Force
           New-Item -ItemType Directory -Force dist/BibleClipWeb/original_lang | Out-Null
-          Copy-Item original_lang/* dist/BibleClipWeb/original_lang/ -Force
+          # Copyright guard: ship only the copyright-clean 개역한글S (KRV+Strong tags).
+          # English/Korean lexicons are user-supplied modules (not redistributed).
+          Copy-Item "original_lang/개역한글S.sdb" dist/BibleClipWeb/original_lang/ -Force
           Compress-Archive -Path dist/BibleClipWeb/* -DestinationPath "BibleClipWeb-windows-v$v.zip" -Force
 
       - uses: actions/upload-artifact@v4
@@ -92,7 +94,8 @@ jobs:
           # checks the executable dir, so it's found there even after the app moves.
           MACOS="$APP/Contents/MacOS"
           mkdir -p "$MACOS/bible_versions" && cp bible_versions/KRV.SQLite3 "$MACOS/bible_versions/"
-          mkdir -p "$MACOS/original_lang" && cp original_lang/* "$MACOS/original_lang/"
+          # Copyright guard: only the copyright-clean 개역한글S (lexicons are user modules).
+          mkdir -p "$MACOS/original_lang" && cp "original_lang/개역한글S.sdb" "$MACOS/original_lang/"
           # Stamp the real version into Info.plist (PyInstaller leaves 0.0.0)
           PLIST="$APP/Contents/Info.plist"
           /usr/libexec/PlistBuddy -c "Set :CFBundleShortVersionString $V" "$PLIST" 2>/dev/null \

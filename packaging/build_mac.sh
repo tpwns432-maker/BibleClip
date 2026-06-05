@@ -56,13 +56,15 @@ fi
 
 echo "==> Bundling data inside BibleClip.app (survives moving / translocation)"
 MACOS="$APP/Contents/MacOS"
+# Copyright guard: bundle ONLY copyright-clean data — KRV(개역한글, royalty-free)
+# + 개역한글S(KRV+Strong tags). Other bibles and lexicons are user modules.
 if [ -d "bible_versions" ]; then
   mkdir -p "$MACOS/bible_versions"
-  cp bible_versions/*.SQLite3 "$MACOS/bible_versions/" 2>/dev/null || true
+  cp bible_versions/KRV.SQLite3 "$MACOS/bible_versions/" 2>/dev/null || true
 fi
 if [ -d "original_lang" ]; then
   mkdir -p "$MACOS/original_lang"
-  cp original_lang/* "$MACOS/original_lang/" 2>/dev/null || true
+  cp "original_lang/개역한글S.sdb" "$MACOS/original_lang/" 2>/dev/null || true
 fi
 
 # Stamp the real version into Info.plist (PyInstaller leaves 0.0.0)

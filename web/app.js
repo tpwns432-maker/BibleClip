@@ -196,6 +196,7 @@
     searchClickNav: false,  // search hit click also jumps a bible card
     booksCache: {},         // version -> [{num,short,long}]
     chapCache: {},          // "version:book" -> [chapters]
+    lexAvail: { ko: false, en: false },  // installed dictionary modules (original_lang/)
   };
 
   function applyFontScale() {
@@ -240,6 +241,7 @@
     state.fontSize = init.font_size || 11;
     applyFontScale();
     lexLang = init.lex_lang === "en" ? "en" : "ko";
+    if (init.lex) state.lexAvail = init.lex;
     syncLangSeg();
     state.searchClickNav = !!init.search_click_navigates;
     const verLabel = $("app-ver");
@@ -1485,7 +1487,14 @@
 
   function renderLexEntryInto(body, code, res) {
     if (!res) {
-      body.innerHTML = `<span class="chip">${esc(code)}</span><div class="lex-body">사전 항목 없음</div>`;
+      // No entry. Distinguish "no dictionary module installed" (guide the user
+      // to add one — copyright-clean default ships without lexicons) from "this
+      // code simply isn't in the installed dictionary".
+      const noModule = state.lexAvail && !state.lexAvail.ko && !state.lexAvail.en;
+      const msg = noModule
+        ? `원어 사전 모듈이 없습니다.<br>한글/영어 사전 파일(<b>.dct</b>)을 <b>original_lang</b> 폴더에 넣으면 뜻풀이가 표시됩니다.`
+        : `사전 항목 없음`;
+      body.innerHTML = `<span class="chip">${esc(code)}</span><div class="lex-body">${msg}</div>`;
       return;
     }
     const head = res.headword
