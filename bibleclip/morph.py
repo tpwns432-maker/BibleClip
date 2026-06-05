@@ -14,6 +14,7 @@ _CONTENT_TAGS = frozenset({
     'NNG', 'NNP', 'NR', 'XR', 'SL', 'SH', 'VV', 'VA',
 })
 
+import sys
 import threading
 
 _kiwi = None
@@ -22,19 +23,16 @@ _kiwi_lock = threading.Lock()
 
 
 def _get_kiwi():
-    """The shared Kiwi instance, or None if unavailable. Loaded once, lazily —
-    importing/constructing Kiwi is heavy, so it never happens at module import,
-    only on the first real use.
+    """The shared Kiwi instance, or None if unavailable. Loaded once, lazily.
 
-    ⚠️ 스레드 안전성: 프로즌 빌드(pywebview/pythonnet)에서 검색은 .NET/WebView2
-    브리지 스레드에서 호출된다. Kiwi 를 그 외래 스레드에서 '처음 생성'하면 내부
-    워커 스레드풀을 띄우다 네이티브 크래시(즉시 강제 종료)가 났다 — 단일어/문장
-    검색은 exact 매치라 Kiwi 를 안 부르고, 다중 키워드만 이 경로를 처음 타며 죽음.
-    방어 2겹:
-      (1) ``num_workers=1`` 로 내부 스레드풀을 아예 만들지 않는다(인라인 단일 스레드).
-      (2) 락으로 생성을 1회로 직렬화 → 시작 시 ``warmup()`` 데몬이 먼저 잡으면
-          브리지 스레드의 검색은 락에서 대기, 생성은 안전한 스레드에서 끝난다.
-    한 줄 검색어 토큰화에 병렬성은 무의미하므로 단일 스레드가 성능상도 적절."""
+    ⚠️ 프로즌 빌드에서는 Kiwi 를 절대 생성하지 않는다(아래 sys.frozen 가드).
+    kiwipiepy 의 C++ 네이티브 런타임이 PyInstaller 로 동봉된 pywebview
+    (pythonnet/WebView2)와 같은 프로세스에서 공존하면 **네이티브 힙 손상**
+    (STATUS_HEAP_CORRUPTION 0xC0000374)으로 앱이 즉시 강제 종료된다 — 시작 시
+    워밍업하면 launch 크래시, 지연 생성하면 첫 다중 키워드 검색에서 크래시. Python
+    try/except 로 잡을 수 없는 네이티브 크래시이므로, 배포(프로즌)에서는 형태소
+    분석을 끄고 trigram 폴백만 사용한다. 형태소 검색은 소스/개발 실행에서만 동작.
+    (kiwipiepy 도 빌드에서 제외 → 동봉 안 됨. 락은 소스 멀티스레드 생성 1회 보장.)"""
     global _kiwi, _kiwi_tried
     if _kiwi_tried:
         return _kiwi
@@ -42,19 +40,15 @@ def _get_kiwi():
         if _kiwi_tried:                 # double-checked: another thread won the race
             return _kiwi
         try:
-            from kiwipiepy import Kiwi
-            _kiwi = Kiwi(num_workers=1)
+            if getattr(sys, 'frozen', False):
+                _kiwi = None            # 프로즌: pywebview 와 네이티브 충돌 → 비활성
+            else:
+                from kiwipiepy import Kiwi
+                _kiwi = Kiwi(num_workers=1)   # 단일 스레드(검색어 1줄엔 병렬 무의미)
         except Exception:
             _kiwi = None
         _kiwi_tried = True
     return _kiwi
-
-
-def warmup():
-    """Construct the Kiwi singleton ahead of first search. Call from a daemon
-    thread at app startup so the heavy/native init happens on a normal Python
-    thread — never lazily on the pywebview bridge thread (which crashed)."""
-    _get_kiwi()
 
 
 def available():
