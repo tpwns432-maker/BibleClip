@@ -100,14 +100,28 @@ class BibleDB:
         return self._inverted_index
 
     def _score(self, addr, query_tokens):
-        """절 관련도 점수 — 걸러진 결과셋에만 적용(전수조사 아님).
+        """절 관련도 점수 — 걸러진 결과셋에만 적용(전수조사 아님). 3대 가중치:
 
-        Phase 2: **매칭 단어 수**(어간 부분일치 포함). Phase 3 에서 밀집도(proximity)·
-        길이 보너스를 보강한다."""
+        [1] 매칭 단어 수(×10, 지배적 — OR 분별력): 더 많은 질의어를 품을수록 고득점.
+        [2] 밀집도(proximity, 0~6): 매칭 어절들이 한 절 안에서 가까이 모일수록 보너스
+            (사용자가 찾던 '그 구절'을 상단 고정).
+        [3] 길이(0~3): 절이 짧고 명확할수록 소폭 보너스.
+        가중치2+3 최대(9) < 매칭 1개 차이(10)이므로 **매칭 수가 항상 우선**한다.
+        어간 부분일치(`qt in vt`)로 '창조'가 '창조하시니라'에도 매칭된다."""
         vtokens = self._verse_tokens.get(addr, ()) if self._verse_tokens else ()
-        matched = sum(1 for qt in query_tokens
-                      if any(qt in vt for vt in vtokens))
-        return float(matched)
+        if not vtokens:
+            return 0.0
+        firsts = []                       # 매칭된 각 질의어의 첫 등장 위치
+        for qt in query_tokens:
+            for i, vt in enumerate(vtokens):
+                if qt in vt:
+                    firsts.append(i)
+                    break
+        score = len(firsts) * 10.0        # [1] 매칭 단어 수
+        if len(firsts) >= 2:              # [2] 밀집도: 위치 스팬이 좁을수록 +
+            score += max(0.0, 6.0 - (max(firsts) - min(firsts)))
+        score += max(0.0, 3.0 - len(vtokens) * 0.05)  # [3] 짧은 절 보너스
+        return score
 
     def smart_search(self, keyword, mode='and', limit=300):
         """v1.0.5 띄어쓰기 다중 키워드 검색 — 메모리 역색인 집합 연산.

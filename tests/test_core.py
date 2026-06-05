@@ -135,8 +135,24 @@ def main():
         assert (10, 1, 1) not in inv.get('창조', set())
         print(f"KRV 역색인 OK — 고유키 {len(inv)}개, '하나님' {len(inv['하나님'])}절, "
               f"하나님&천지 {len(both)}절")
+
+        # 14) v1.0.5 Phase 3 — 스코어링: smart_search 결과가 점수 내림차순 정렬 +
+        #     밀집도/길이 반영(같은 매칭수면 인접·짧은 절이 상위).
+        db = lib.dbs['KRV']
+        toks = korean.tokenize('하나님 천지')
+        rows = db.smart_search('하나님 천지', mode='and')
+        scores = [db._score((b, c, v), toks) for b, c, v, t in rows]
+        assert scores == sorted(scores, reverse=True), "결과가 점수 내림차순이 아님"
+        # 밀집도+길이 단위검증: 같은 2단어 매칭이라도 인접·짧은 절 > 멀고·긴 절
+        db._verse_tokens[(0, 0, 1)] = ['하나님', '천지']                 # 인접·짧음
+        db._verse_tokens[(0, 0, 2)] = ['하나님'] + ['x'] * 8 + ['천지']   # 멀고·김
+        hi = db._score((0, 0, 1), toks)
+        lo = db._score((0, 0, 2), toks)
+        assert hi > lo, (hi, lo)
+        assert any((b, c, v) == (10, 1, 1) for b, c, v, t in rows[:5]), "창1:1 상위권 아님"
+        print(f"스코어링 OK — 정렬 단조감소, 밀집/길이 {hi:.1f}>{lo:.1f}, 창1:1 상위권")
     else:
-        print("(KRV 없음 — 역색인 검증 스킵)")
+        print("(KRV 없음 — 역색인/스코어링 검증 스킵)")
 
     # 12) Kiwi 형태소 검색 (9차 Phase 2): tokenize_keywords strips 조사/어미 and
     #     keeps content morphemes; a query whose words are non-contiguous (so the
