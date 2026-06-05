@@ -57,10 +57,12 @@ jobs:
           Write-Host "web/**/*.js syntax OK"
 
       - name: Build BibleClipWeb.exe
+        # pwsh 는 문자열 변수를 단어분할 없이 한 인자로 넘기므로(bash 와 다름)
+        # KIWI_EXCLUDE 를 -split 로 배열화해야 PyInstaller 가 개별 플래그로 받는다.
         run: >
           python -m PyInstaller --onedir --windowed --noconfirm --clean
           --collect-submodules bibleclip --hidden-import pyperclip
-          $env:KIWI_EXCLUDE --add-data "web;web"
+          ($env:KIWI_EXCLUDE -split ' ') --add-data "web;web"
           --icon=icon.ico --name BibleClipWeb bibleclip_web.py
 
       - name: Assemble package
