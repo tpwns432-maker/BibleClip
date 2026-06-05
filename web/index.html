@@ -132,11 +132,12 @@
     <!-- Search view (rail 검색 아이콘; 클립보드 #키워드 캡처 시 자동 표시). -->
     <div class="search-view" id="search-view" hidden>
       <div class="search-bar">
-        <input type="text" id="search-input" class="search-input"
-               placeholder="검색어 입력 (예: 사랑) — 다른 앱에서 #사랑 복사 시 자동 검색">
+        <input type="text" id="search-input" class="search-input" autocomplete="off"
+               placeholder="검색어 · 구절 · 원어코드  (예: 사랑 / 창 1:1 / H7225)">
         <span class="pill dropdown" id="search-ver" title="검색할 역본">KRV</span>
         <button class="btn primary" id="search-go">검색</button>
       </div>
+      <div class="search-suggest" id="search-suggest"></div>
       <div class="search-meta" id="search-meta"></div>
       <div class="card search-card">
         <div class="card-body" id="search-results">

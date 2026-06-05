@@ -611,6 +611,17 @@ class Api:
         return [{'n': n, 'words': [{'w': w, 'code': c} for (w, c) in words]}
                 for n, words in self.lib.interlinear(int(book), int(chapter))]
 
+    def resolve_reference(self, text):
+        """Parse a free-text reference (창 1:1, 창세기 1장 1절, 요 1:1-2,4) into a
+        navigable target, or None. {book_num, short, long, chapter, verses}.
+        Powers the unified jump bar (통합 검색바, Phase 2)."""
+        refs = self.lib.parse_reference(text or '')
+        if not refs:
+            return None
+        book_num, short, long_, chapter, verses = refs[0]
+        return {'book_num': book_num, 'short': short, 'long': long_,
+                'chapter': chapter, 'verses': verses}
+
     def search_strong(self, code):
         """Reverse Strong's cross-query: KRV verses containing the original-
         language word with this code. {code, count, hits:[{book_num, ref,

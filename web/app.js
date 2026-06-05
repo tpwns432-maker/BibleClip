@@ -196,6 +196,7 @@
     searchClickNav: false,  // search hit click also jumps a bible card
     booksCache: {},         // version -> [{num,short,long}]
     chapCache: {},          // "version:book" -> [chapters]
+    primaryBooks: [],       // primary version's book list (for search autocomplete)
     lexAvail: { ko: false, en: false },  // installed dictionary modules (original_lang/)
     isPremium: true,        // business guard (Phase 1): false → free-tier limits
   };
@@ -237,6 +238,7 @@
       : [state.primary].filter(Boolean);
     state.lastBook = init.last.book;
     state.lastChapter = init.last.chapter;
+    state.primaryBooks = init.books || [];
     // Restore persisted UI prefs (shared with the desktop app).
     root.dataset.theme = init.dark_mode ? "dark" : "light";
     state.fontSize = init.font_size || 11;
@@ -2234,36 +2236,51 @@
 
   let searchHits = [];
 
+  // Unified search bar (통합 검색바, Phase 2): one input handles three intents.
+  //   1) Strong's code (H7225 / G26) → reverse cross-query over 개역한글S tags
+  //   2) a bible reference (창 1:1, 창세기 1장 1절) → jump straight to the viewer
+  //   3) anything else → keyword search (the original behavior)
+  const STRONG_RE = /^[HGhg]\s*\d+$/;
+
   async function runSearch(kw) {
     const input = $("search-input");
     if (typeof kw === "string") input.value = kw;
     const q = input.value.trim();
     if (!q) return;
+    clearSuggest();
+
+    // 1) Strong's code → original-language reverse search
+    if (STRONG_RE.test(q)) {
+      const code = q.replace(/\s+/g, "").toUpperCase();
+      $("search-meta").textContent = "";
+      $("search-results").innerHTML = `<div class="panel-loading">[${esc(code)}] 원어 역검색 중…</div>`;
+      renderStrongSearch(await api().search_strong(code));
+      return;
+    }
+
+    // 2) Bible reference → jump to the viewer (only when it parses)
+    const ref = await api().resolve_reference(q);
+    if (ref) {
+      const vs = ref.verses && ref.verses.length ? ref.verses : null;
+      showView("viewer");
+      CardManager.goToRef(ref.book_num, ref.chapter, vs);
+      toast(`${ref.short} ${ref.chapter}${vs ? ":" + vs[0] : "장"}으로 이동`);
+      return;
+    }
+
+    // 3) Keyword search (default)
     $("search-meta").textContent = "";
     $("search-results").innerHTML = `<div class="panel-loading">검색 중…</div>`;
     renderSearch(await api().search(q, state.searchVersion || undefined));
   }
 
-  function renderSearch(res) {
-    const host = $("search-results");
-    searchHits = res.hits || [];
-    if (!searchHits.length) {
-      $("search-meta").textContent = `"${res.keyword}" 검색 결과 없음`;
-      host.innerHTML = `<div class="panel-loading">검색 결과가 없습니다.</div>`;
-      return;
-    }
-    $("search-meta").textContent =
-      `"${res.keyword}" 결과 ${searchHits.length}건 · ${res.display} — 구절 클릭 시 ` +
-      (state.searchClickNav ? "복사 + 본문 이동" : "복사");
-    host.innerHTML = searchHits
-      .map(
-        (h, i) =>
-          `<div class="sr" data-i="${i}"><span class="sr-ref">${esc(h.short)} ${h.chapter}:${h.verse}</span><span class="sr-text">${esc(h.text)}</span></div>`
-      )
-      .join("");
-    host.querySelectorAll(".sr").forEach((el) => {
+  // Click handler shared by keyword + strong-code results. Each hit carries
+  // {book, chapter, verse, short}.
+  function wireSearchHitClicks() {
+    $("search-results").querySelectorAll(".sr").forEach((el) => {
       el.addEventListener("click", async () => {
         const h = searchHits[Number(el.dataset.i)];
+        if (!h) return;
         const r = await api().copy_reference(h.book, h.chapter, [h.verse]);
         if (r && r.ok) {
           toast(`${h.short} ${h.chapter}:${h.verse} 복사됨`);
@@ -2274,6 +2291,86 @@
           showView("viewer");
           CardManager.goToRef(h.book, h.chapter, [h.verse]);
         }
+      });
+    });
+  }
+
+  function renderSearch(res) {
+    const host = $("search-results");
+    searchHits = (res.hits || []).map((h) => ({
+      book: h.book, chapter: h.chapter, verse: h.verse, short: h.short,
+    }));
+    if (!searchHits.length) {
+      $("search-meta").textContent = `"${res.keyword}" 검색 결과 없음`;
+      host.innerHTML = `<div class="panel-loading">검색 결과가 없습니다.</div>`;
+      return;
+    }
+    $("search-meta").textContent =
+      `"${res.keyword}" 결과 ${searchHits.length}건 · ${res.display} — 구절 클릭 시 ` +
+      (state.searchClickNav ? "복사 + 본문 이동" : "복사");
+    host.innerHTML = (res.hits || [])
+      .map(
+        (h, i) =>
+          `<div class="sr" data-i="${i}"><span class="sr-ref">${esc(h.short)} ${h.chapter}:${h.verse}</span><span class="sr-text">${esc(h.text)}</span></div>`
+      )
+      .join("");
+    wireSearchHitClicks();
+  }
+
+  // Reverse Strong's search results (구절 목록 — 개역한글S 기준).
+  function renderStrongSearch(res) {
+    const host = $("search-results");
+    const hits = (res && res.hits) || [];
+    searchHits = hits.map((h) => ({
+      book: h.book_num, chapter: h.chapter, verse: h.verse,
+      short: (h.ref || "").split(" ")[0],
+    }));
+    if (!hits.length) {
+      $("search-meta").textContent = `[${res ? res.code : ""}] 원어 역검색 결과 없음`;
+      host.innerHTML = `<div class="panel-loading">이 스트롱 코드를 포함한 구절이 없습니다 (개역한글S 기준).</div>`;
+      return;
+    }
+    $("search-meta").textContent =
+      `원어 역검색 [${res.code}] · ${res.count}건 (개역한글S) — 구절 클릭 시 복사` +
+      (state.searchClickNav ? " + 이동" : "");
+    host.innerHTML = hits
+      .map(
+        (h, i) =>
+          `<div class="sr" data-i="${i}"><span class="sr-ref">${esc(h.ref)}</span><span class="sr-text">${esc(h.text)}</span></div>`
+      )
+      .join("");
+    wireSearchHitClicks();
+  }
+
+  // ---- search-bar autocomplete (book names + intent hints) ----
+  function clearSuggest() { const h = $("search-suggest"); if (h) h.innerHTML = ""; }
+
+  function renderSuggest(q) {
+    const host = $("search-suggest");
+    if (!host) return;
+    const s = (q || "").trim();
+    if (!s) { host.innerHTML = ""; return; }
+    if (STRONG_RE.test(s)) {
+      host.innerHTML = `<span class="sug-hint">↵ 원어 역검색 <b>${esc(s.replace(/\s+/g, "").toUpperCase())}</b></span>`;
+      return;
+    }
+    // leading book token, only while the user hasn't started a chapter yet
+    const m = s.match(/^([가-힣A-Za-z]{1,6})$/);
+    if (!m) { host.innerHTML = ""; return; }
+    const tok = m[1];
+    const matches = (state.primaryBooks || [])
+      .filter((b) => (b.short && b.short.startsWith(tok)) || (b.long && b.long.startsWith(tok)))
+      .slice(0, 8);
+    if (!matches.length) { host.innerHTML = ""; return; }
+    host.innerHTML = matches
+      .map((b) => `<span class="sug" data-b="${esc(b.long)}">${esc(b.long)}</span>`).join("");
+    host.querySelectorAll(".sug").forEach((el) => {
+      el.addEventListener("mousedown", (e) => {   // mousedown beats input blur
+        e.preventDefault();
+        const inp = $("search-input");
+        inp.value = el.dataset.b + " ";
+        inp.focus();
+        clearSuggest();
       });
     });
   }
@@ -2289,7 +2386,10 @@
     if (input) {
       input.addEventListener("keydown", (e) => {
         if (e.key === "Enter") runSearch();
+        else if (e.key === "Escape") clearSuggest();
       });
+      input.addEventListener("input", () => renderSuggest(input.value));
+      input.addEventListener("blur", () => setTimeout(clearSuggest, 150));
     }
     const sv = $("search-ver");
     if (sv) {
