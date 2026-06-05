@@ -1242,22 +1242,40 @@
     const progScroll = new Set();  // card ids being programmatically scrolled (sync guard)
 
     // The topmost fully-visible verse number in a scripture body (or null).
-    function topVerseOf(body) {
-      const bodyTop = body.getBoundingClientRect().top;
+    // 시선 중심선: 스크롤 바디의 위에서 40% 지점. 이 밴드를 품은 절이 앵커.
+    const SIGHT_BAND = 0.4;
+
+    // The anchor verse drives interlinear + split-compare sync. We anchor on the
+    // verse occupying the reader's sight line (a band ~40% down the viewport)
+    // instead of the topmost uncut verse — the latter flipped the instant the
+    // next verse merely peeked in at the bottom (튕김/강제 전환). The verse
+    // straddling the sight line wins; if none does (gaps / short bodies) we fall
+    // back to the verse with the largest visible slice inside the body. Center
+    // anchoring resists jitter: a new verse only takes over once it genuinely
+    // rises into the gaze band.
+    function anchorVerseOf(body) {
+      const br = body.getBoundingClientRect();
+      const sightY = br.top + br.height * SIGHT_BAND;
+      let best = null, bestVis = 0;
       for (const v of body.querySelectorAll(".v[data-v]")) {
-        if (v.getBoundingClientRect().top >= bodyTop - 2) return +v.dataset.v;
+        const r = v.getBoundingClientRect();
+        if (r.top <= sightY && r.bottom >= sightY) return +v.dataset.v;  // straddles the line
+        const vis = Math.min(r.bottom, br.bottom) - Math.max(r.top, br.top);
+        if (vis > bestVis) { bestVis = vis; best = +v.dataset.v; }
       }
-      return null;
+      return best;
     }
 
-    // Align another scroll body so verse `n` sits at its top. `markId` (when the
-    // target is a bible card) is flagged in progScroll so the resulting scroll
-    // event is ignored — preventing an A→B→A sync feedback loop.
-    function scrollBodyToVerse(targetBody, n, markId) {
+    // Align another scroll body so verse `n` sits at fraction `align` down its
+    // viewport (0 = top). `markId` (when the target is a bible card) is flagged
+    // in progScroll so the resulting scroll event is ignored — preventing an
+    // A→B→A sync feedback loop.
+    function scrollBodyToVerse(targetBody, n, markId, align = 0) {
       const target = targetBody.querySelector(`.v[data-v="${n}"]`);
       if (!target) return;
       if (markId) progScroll.add(markId);
-      targetBody.scrollTop += target.getBoundingClientRect().top - targetBody.getBoundingClientRect().top;
+      const br = targetBody.getBoundingClientRect();
+      targetBody.scrollTop += target.getBoundingClientRect().top - br.top - br.height * align;
       if (markId) setTimeout(() => progScroll.delete(markId), 150);
     }
 
@@ -1265,16 +1283,16 @@
     // cards showing the same book/chapter (분할 비교 뷰, Phase 3) — aligned to
     // this card's top verse. Does NOT touch history (that's debounced, 7차-2).
     function syncInterlinFrom(card, body) {
-      const n = topVerseOf(body);
+      const n = anchorVerseOf(body);
       if (!n) return;
       cards.forEach((c) => {
         if (c === card) return;
         if (c.type === "interlinear" && linkedBible(c) === card) {
           const ib = bodyEl(c.id);
-          if (ib) scrollBodyToVerse(ib, n, null);
+          if (ib) scrollBodyToVerse(ib, n, null);  // 원어 카드는 절을 상단 정렬(단어 분해 가독성)
         } else if (c.type === "bible" && c.book === card.book && c.chapter === card.chapter) {
           const bb = bodyEl(c.id);
-          if (bb) scrollBodyToVerse(bb, n, c.id);
+          if (bb) scrollBodyToVerse(bb, n, c.id, SIGHT_BAND);  // 분할 비교: 동일 시선 밴드로 정렬
         }
       });
     }
@@ -1283,7 +1301,7 @@
     // the card's current history entry so ◀ ▶ restore the scroll position. While
     // the wheel is moving, history writes are held off entirely (7차-2).
     function lockHistoryVerse(card, body) {
-      const n = topVerseOf(body);
+      const n = anchorVerseOf(body);
       if (!n) return;
       card.verse = n;
       if (Array.isArray(card.history) && card.history[card.historyIndex]) {
