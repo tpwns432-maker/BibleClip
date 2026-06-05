@@ -14,6 +14,19 @@ on:
 permissions:
   contents: write
 
+# kiwipiepy(형태소 검색) 동봉 시 PyInstaller가 kiwipiepy의 선택적 서브모듈을 통해
+# torch/transformers/cv2 등 거대 ML 스택까지 끌어와 빌드가 ~1GB로 폭증한다. 우리는
+# 기본 tokenize만 쓰므로(ML 의존 없음) 전부 제외 → ~900MB 절감. 미동봉이어도 앱은
+# trigram 폴백으로 동작. (win/mac PyInstaller 명령에서 $KIWI_EXCLUDE 로 참조)
+env:
+  KIWI_EXCLUDE: >-
+    --exclude-module torch --exclude-module transformers --exclude-module cv2
+    --exclude-module scipy --exclude-module sklearn --exclude-module numba
+    --exclude-module llvmlite --exclude-module pandas --exclude-module matplotlib
+    --exclude-module PIL --exclude-module tokenizers --exclude-module numpy
+    --exclude-module lxml --exclude-module safetensors --exclude-module huggingface_hub
+    --exclude-module sympy --exclude-module networkx
+
 jobs:
   # -------------------------------------------------------------------
   build-windows:
@@ -44,7 +57,7 @@ jobs:
         run: >
           python -m PyInstaller --onedir --windowed --noconfirm --clean
           --collect-submodules bibleclip --hidden-import pyperclip
-          --collect-all kiwipiepy --collect-all kiwipiepy_model --add-data "web;web"
+          --collect-all kiwipiepy --collect-all kiwipiepy_model $env:KIWI_EXCLUDE --add-data "web;web"
           --icon=icon.ico --name BibleClipWeb bibleclip_web.py
 
       - name: Assemble package
@@ -100,9 +113,9 @@ jobs:
       - name: Build BibleClipWeb.app
         run: |
           if [ -f icon.icns ]; then
-            python -m PyInstaller --onedir --windowed --noconfirm --clean --collect-submodules bibleclip --hidden-import pyperclip --collect-all kiwipiepy --collect-all kiwipiepy_model --add-data "web:web" --icon=icon.icns --name BibleClipWeb bibleclip_web.py
+            python -m PyInstaller --onedir --windowed --noconfirm --clean --collect-submodules bibleclip --hidden-import pyperclip --collect-all kiwipiepy --collect-all kiwipiepy_model $KIWI_EXCLUDE --add-data "web:web" --icon=icon.icns --name BibleClipWeb bibleclip_web.py
           else
-            python -m PyInstaller --onedir --windowed --noconfirm --clean --collect-submodules bibleclip --hidden-import pyperclip --collect-all kiwipiepy --collect-all kiwipiepy_model --add-data "web:web" --name BibleClipWeb bibleclip_web.py
+            python -m PyInstaller --onedir --windowed --noconfirm --clean --collect-submodules bibleclip --hidden-import pyperclip --collect-all kiwipiepy --collect-all kiwipiepy_model $KIWI_EXCLUDE --add-data "web:web" --name BibleClipWeb bibleclip_web.py
           fi
 
       - name: Assemble package
