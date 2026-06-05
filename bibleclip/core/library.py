@@ -17,6 +17,7 @@ from bibleclip.config import (
 )
 from bibleclip.core.engine import Engine
 from bibleclip.core.formatter import Formatter
+from bibleclip.userconfig import load_user_config
 from bibleclip.core.clipboard_monitor import ClipboardMonitor
 from bibleclip.data.bible_db import BibleDB
 from bibleclip.data.original_lang import (
@@ -69,9 +70,21 @@ class Library:
         self.settings = dict(self.DEFAULT_SETTINGS)
         self._monitor = None
 
+        # Per-install business config (premium flag etc.). Fail-soft; default
+        # permissive (full features) until a licensing backend exists.
+        self.user_config = load_user_config()
+        self.is_premium = bool(self.user_config.get('is_premium', True))
+
         self.load_databases()
         self.load_bethlehem()
         self.load_settings()
+
+    def reload_user_config(self):
+        """Re-read userdata/config.json (e.g. after a backend writes it) and
+        refresh the premium flag. Returns the new is_premium value."""
+        self.user_config = load_user_config()
+        self.is_premium = bool(self.user_config.get('is_premium', True))
+        return self.is_premium
 
     # ---- Database loading ----
 
