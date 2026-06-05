@@ -63,7 +63,13 @@ class Engine:
         return None
 
     @classmethod
-    def parse_reference(cls, text):
+    def parse_reference(cls, text, extra_books=None):
+        """Parse a reference. ``extra_books`` is an optional
+        ``{normalized_name: book_num}`` map of per-version book names (built by
+        Library from loaded versions) so a version's OWN abbreviations are
+        recognized (e.g. ESV '1Ths'). It is consulted only on the English path —
+        where the leading book number is captured as part of the name — to avoid
+        the Korean/VERSE path stripping a leading digit ("1 John" → "John")."""
         text = text.strip()
         if not text:
             return []
@@ -95,11 +101,25 @@ class Engine:
             book_str, chapter = m.group(1).strip(), int(m.group(2))
             verse_str = m.group(3)
             verses = cls.parse_verses(verse_str) if verse_str else []
-            book_info = cls._lookup_english_book(book_str)
+            book_info = cls._lookup_english_book(book_str, extra_books)
             if book_info:
                 results.append((*book_info, chapter, verses))
                 return results
         return results
+
+    @staticmethod
+    def _norm_book(s):
+        """Normalize a book name/abbrev for alias matching: lowercase, no spaces
+        or dots. ('1 Ths.' / '1Ths' / '1ths' all collapse to '1ths'.)"""
+        return (s or '').strip().lower().replace(' ', '').replace('.', '')
+
+    @classmethod
+    def _canon(cls, book_num):
+        """Canonical (book_num, short, long) tuple for a book number, or None."""
+        for v in KOREAN_BOOK_MAP.values():
+            if v[0] == book_num:
+                return v
+        return None
 
     @classmethod
     def _lookup_book(cls, book_str, has_verse_separator=True):
@@ -113,11 +133,9 @@ class Engine:
         return None
 
     @classmethod
-    def _lookup_english_book(cls, book_str):
-        key = book_str.lower().replace(' ', '')
-        if key in ENGLISH_BOOK_MAP:
-            bn = ENGLISH_BOOK_MAP[key]
-            for v in KOREAN_BOOK_MAP.values():
-                if v[0] == bn:
-                    return v
-        return None
+    def _lookup_english_book(cls, book_str, extra_books=None):
+        key = cls._norm_book(book_str)
+        bn = ENGLISH_BOOK_MAP.get(key)
+        if bn is None and extra_books:        # version's own abbrev (e.g. ESV '1Ths')
+            bn = extra_books.get(key)
+        return cls._canon(bn) if bn is not None else None

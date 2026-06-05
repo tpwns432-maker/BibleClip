@@ -13,6 +13,7 @@ import tempfile
 import subprocess
 import webbrowser
 
+from bibleclip import i18n
 from bibleclip.config import (
     __version__, RELEASES_PAGE_URL, IS_WINDOWS, get_base_dir,
     GITHUB_OWNER, GITHUB_REPO,
@@ -52,6 +53,8 @@ class SystemRoutes:
             'font_size': int(s.get('viewer_font_size', 11)),
             'auto_update_check': bool(s.get('auto_update_check', True)),
             'lex_lang': 'en' if s.get('lex_lang') == 'en' else 'ko',
+            'ui_lang': s.get('ui_lang') or 'ko',  # i18n: front-end syncs on boot
+            'reading_font': s.get('reading_font') or '',
             # Which original-language dictionaries are installed (user-supplied
             # modules in original_lang/). When both are false the UI guides the
             # user to add a module instead of showing an empty lexicon panel.
@@ -75,6 +78,63 @@ class SystemRoutes:
         end can call ``api.save_cards_layout(layout)`` directly. Returns {ok}."""
         return self.set_app_setting('web_cards_layout', layout)
 
+    def get_locale(self, lang):
+        """UI string table for ``lang``, read from web/locales/<lang>.json.
+
+        The front-end runs from file://, where WebView2 blocks fetch() of local
+        JSON — so the bridge reads the locale file and hands JS the dict (i18n.js
+        registers it). Returns {} on any failure (the front-end then falls back
+        to the authored Korean text). Frozen-safe via get_resource_dir(); ``lang``
+        is validated to a short locale code so it can't escape the locales/ dir."""
+        import re
+        from bibleclip.config import get_resource_dir
+        if not isinstance(lang, str) or not re.fullmatch(
+                r'[a-z]{2,3}(?:-[A-Za-z]{2,4})?', lang):
+            return {}
+        path = os.path.join(get_resource_dir(), 'web', 'locales', lang + '.json')
+        try:
+            with open(path, 'r', encoding='utf-8') as f:
+                data = json.load(f)
+            return data if isinstance(data, dict) else {}
+        except Exception:
+            return {}
+
+    # ---- Custom reading fonts (the 'fonts' folder next to bible_versions) ----
+
+    def list_fonts(self):
+        """User reading fonts in the 'fonts' folder next to the data dir (the same
+        folder 'Open data folder' reveals, alongside bible_versions/). Names only —
+        bytes are fetched on demand via get_font. .ttf/.otf/.woff2/.woff."""
+        d = os.path.join(get_base_dir(), 'fonts')
+        out = []
+        try:
+            for f in sorted(os.listdir(d)):
+                if os.path.splitext(f)[1].lower() in ('.ttf', '.otf', '.woff2', '.woff'):
+                    out.append({'family': os.path.splitext(f)[0], 'file': f})
+        except Exception:
+            pass
+        return out
+
+    def get_font(self, file):
+        """Base64 bytes for one font file so JS can inject a dynamic @font-face
+        (a file:// page can't reliably @font-face an arbitrary local path). The
+        name is validated to a bare filename in the fonts folder. Returns
+        {'b64','mime'} or None."""
+        import base64
+        if not isinstance(file, str) or '/' in file or '\\' in file or '..' in file:
+            return None
+        ext = os.path.splitext(file)[1].lower()
+        mime = {'.ttf': 'font/ttf', '.otf': 'font/otf',
+                '.woff2': 'font/woff2', '.woff': 'font/woff'}.get(ext)
+        if not mime:
+            return None
+        try:
+            with open(os.path.join(get_base_dir(), 'fonts', file), 'rb') as fh:
+                data = fh.read()
+            return {'b64': base64.b64encode(data).decode('ascii'), 'mime': mime}
+        except Exception:
+            return None
+
     # ---- UI preferences (persisted; shared with the desktop app) ----
 
     def set_dark_mode(self, on):
@@ -87,7 +147,7 @@ class SystemRoutes:
             size = int(size)
         except (TypeError, ValueError):
             size = 11
-        size = max(8, min(30, size))
+        size = max(8, min(400, size))   # Max 제한 해제(대형 스크린/방송 송출용)
         self.lib.settings['viewer_font_size'] = size
         self.lib.save_settings()
         return size
@@ -107,6 +167,10 @@ class SystemRoutes:
         'search_click_navigates': None,
         'auto_copy_top_result': None,   # 검색 시 최고 점수 결과를 클립보드에 자동 복사
         'lex_lang': {'ko', 'en'},
+        # UI 표시 언어 (i18n). 프론트가 전환 시 기록 → Python-렌더 표면(킬스위치·사전
+        # 팝업·미리보기)이 같은 언어로 출력. 새 언어 추가 시 프론트 SUPPORTED 와 동반 확장.
+        'ui_lang': {'ko', 'en'},
+        'reading_font': 'any',   # 읽기 글꼴 family 이름('' = 기본 Pretendard)
         'poll_interval': 'float',
         # The web card layout is an opaque, front-end-owned blob (a list of card
         # descriptors). 'any' = store whatever JSON-serializable value JS sends,
@@ -121,6 +185,8 @@ class SystemRoutes:
             'auto_update_check': bool(s.get('auto_update_check', True)),
             'search_click_navigates': bool(s.get('search_click_navigates', False)),
             'lex_lang': 'en' if s.get('lex_lang') == 'en' else 'ko',
+            'ui_lang': s.get('ui_lang') or 'ko',
+            'reading_font': s.get('reading_font') or '',
             'poll_interval': float(s.get('poll_interval', 0.5) or 0.5),
             'auto_copy_top_result': bool(s.get('auto_copy_top_result', False)),
             'web_cards_layout': s.get('web_cards_layout'),
@@ -194,7 +260,9 @@ class SystemRoutes:
         a frozen build is deferred to packaging — see HANDOFF.)"""
         info, error = fetch_latest_release()
         if error or not info:
-            return {'ok': False, 'error': error or '응답 없음'}
+            # Front-end translates via t(error_code); 'error' kept as ko fallback.
+            return {'ok': False, 'error_code': 'err.update_no_response',
+                    'error': error or '응답 없음'}
         self._update = info  # remembered for install_update()
         has = parse_version(info['version']) > parse_version(__version__)
         # Soft forced-update (Phase 4): when below the manifest's recommend_version
@@ -272,12 +340,15 @@ class SystemRoutes:
         as window.bibleclip.onUpdateProgress / onUpdateReady / onUpdateError.
         Only works in a frozen build on Windows/macOS."""
         if not getattr(sys, 'frozen', False):
-            return {'ok': False, 'error': '소스 실행 모드에서는 자동 설치가 안 됩니다. 릴리스 페이지를 이용하세요.'}
+            return {'ok': False, 'error_code': 'err.install_source_mode',
+                    'error': '소스 실행 모드에서는 자동 설치가 안 됩니다. 릴리스 페이지를 이용하세요.'}
         info = self._update
         if not info or not info.get('download_url'):
-            return {'ok': False, 'error': '업데이트 정보가 없습니다. 먼저 업데이트 확인을 해주세요.'}
+            return {'ok': False, 'error_code': 'err.install_no_info',
+                    'error': '업데이트 정보가 없습니다. 먼저 업데이트 확인을 해주세요.'}
         if not (IS_WINDOWS or sys.platform == 'darwin'):
-            return {'ok': False, 'error': '이 OS에서는 자동 설치가 지원되지 않습니다.'}
+            return {'ok': False, 'error_code': 'err.install_unsupported_os',
+                    'error': '이 OS에서는 자동 설치가 지원되지 않습니다.'}
         threading.Thread(target=self._run_install, args=(info,), daemon=True).start()
         return {'ok': True, 'started': True}
 
@@ -441,6 +512,7 @@ class SystemRoutes:
         r = self.lib.build_output('요 1:1-3')
         if r and r.get('kind') == 'reference':
             return r['text']
+        lang = i18n.resolve_ui_lang(self.lib.settings)
         if not self.lib.settings.get('output_order'):
-            return '(출력할 성경 버전을 추가하세요)'
-        return '(데이터를 찾을 수 없습니다)'
+            return i18n.t('preview.noVersions', lang)
+        return i18n.t('preview.noData', lang)

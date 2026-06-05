@@ -16,33 +16,38 @@
   <!-- Left rail -->
   <nav class="rail">
     <div class="logo-tile">B</div>
-    <div class="nav-icon on" id="nav-viewer" title="성경 보기" aria-label="성경 보기">
+    <div class="nav-icon on" id="nav-viewer" title="성경 보기" aria-label="성경 보기" data-i18n-title="nav.viewer" data-i18n-aria="nav.viewer">
       <!-- book -->
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 5a2 2 0 0 1 2-2h12v18H6a2 2 0 0 1-2-2z"/><path d="M18 3v18"/><path d="M8 7h6M8 11h6"/></svg>
     </div>
-    <div class="nav-icon" id="nav-settings" title="출력 설정" aria-label="출력 설정">
+    <div class="nav-icon" id="nav-settings" title="출력 설정" aria-label="출력 설정" data-i18n-title="nav.settings" data-i18n-aria="nav.settings">
       <!-- sliders -->
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><line x1="4" y1="21" x2="4" y2="14"/><line x1="4" y1="10" x2="4" y2="3"/><line x1="12" y1="21" x2="12" y2="12"/><line x1="12" y1="8" x2="12" y2="3"/><line x1="20" y1="21" x2="20" y2="16"/><line x1="20" y1="12" x2="20" y2="3"/><line x1="1" y1="14" x2="7" y2="14"/><line x1="9" y1="8" x2="15" y2="8"/><line x1="17" y1="16" x2="23" y2="16"/></svg>
     </div>
-    <div class="nav-icon" id="nav-search" title="검색" aria-label="검색">
+    <div class="nav-icon" id="nav-search" title="검색" aria-label="검색" data-i18n-title="nav.search" data-i18n-aria="nav.search">
       <!-- search -->
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.2-3.2"/></svg>
     </div>
-    <div class="nav-icon" id="log-toggle" title="클립보드 로그" aria-label="클립보드 로그">
+    <div class="nav-icon" id="log-toggle" title="클립보드 로그" aria-label="클립보드 로그" data-i18n-title="nav.log" data-i18n-aria="nav.log">
       <!-- clipboard -->
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="8" y="3" width="8" height="4" rx="1"/><path d="M16 5h2a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2h2"/></svg>
       <span class="nav-dot" id="log-dot" hidden></span>
     </div>
-    <div class="nav-icon" title="역본 순서" aria-label="역본 순서">
+    <div class="nav-icon" id="cart-toggle" title="설교 장바구니" aria-label="설교 장바구니" data-i18n-title="nav.cart" data-i18n-aria="nav.cart">
+      <!-- cue sheet -->
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M6 4h11l3 3v12a2 2 0 0 1-2 2H6a1 1 0 0 1-1-1V5a1 1 0 0 1 1-1z"/><path d="M9 10h7M9 14h7M9 18h4"/></svg>
+      <span class="nav-dot" id="cart-dot" hidden></span>
+    </div>
+    <div class="nav-icon" title="역본 순서" aria-label="역본 순서" data-i18n-title="nav.order" data-i18n-aria="nav.order">
       <!-- list -->
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M8 6h12M8 12h12M8 18h12"/><circle cx="4" cy="6" r="1"/><circle cx="4" cy="12" r="1"/><circle cx="4" cy="18" r="1"/></svg>
     </div>
     <div class="spacer"></div>
-    <div class="nav-icon" id="theme-toggle" title="테마 전환" aria-label="테마 전환">
+    <div class="nav-icon" id="theme-toggle" title="테마 전환" aria-label="테마 전환" data-i18n-title="nav.theme" data-i18n-aria="nav.theme">
       <!-- moon -->
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"/></svg>
     </div>
-    <div class="nav-icon" id="nav-app-settings" title="설정" aria-label="설정">
+    <div class="nav-icon" id="nav-app-settings" title="설정" aria-label="설정" data-i18n-title="nav.appSettings" data-i18n-aria="nav.appSettings">
       <!-- gear -->
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.6 1.6 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.6 1.6 0 0 0-1.8-.3 1.6 1.6 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.6 1.6 0 0 0-1-1.5 1.6 1.6 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.6 1.6 0 0 0 .3-1.8 1.6 1.6 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.6 1.6 0 0 0 1.5-1 1.6 1.6 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.6 1.6 0 0 0 1.8.3H9a1.6 1.6 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.6 1.6 0 0 0 1 1.5 1.6 1.6 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.6 1.6 0 0 0-.3 1.8V9a1.6 1.6 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.6 1.6 0 0 0-1.5 1z"/></svg>
     </div>
@@ -56,19 +61,19 @@
       <span class="brand">BibleClip</span>
       <span class="ver" id="app-ver">v1.0.5</span>
       <span class="spacer"></span>
-      <button class="btn primary" id="monitor-btn">모니터링 시작</button>
-      <span class="badge" id="status-badge">대기 중</span>
-      <button class="btn" id="update-btn">업데이트 확인</button>
+      <button class="btn primary" id="monitor-btn" data-i18n="topbar.monitorStart">모니터링 시작</button>
+      <span class="badge" id="status-badge" data-i18n="topbar.statusIdle">대기 중</span>
+      <button class="btn" id="update-btn" data-i18n="topbar.updateCheck">업데이트 확인</button>
     </header>
 
     <!-- Update-available banner (hidden until a newer release is found). -->
     <div class="update-banner" id="update-banner" hidden>
       <span class="ub-text" id="ub-text"></span>
       <span class="ub-actions">
-        <button class="btn primary" id="ub-install">지금 업데이트</button>
-        <button class="btn" id="ub-open">릴리스 페이지</button>
-        <button class="btn" id="ub-skip">이 버전 건너뛰기</button>
-        <button class="btn" id="ub-close" title="닫기">✕</button>
+        <button class="btn primary" id="ub-install" data-i18n="ub.install">지금 업데이트</button>
+        <button class="btn" id="ub-open" data-i18n="ub.releases">릴리스 페이지</button>
+        <button class="btn" id="ub-skip" data-i18n="ub.skip">이 버전 건너뛰기</button>
+        <button class="btn" id="ub-close" title="닫기" data-i18n-title="common.close">✕</button>
       </span>
     </div>
 
@@ -80,19 +85,19 @@
         <!-- Global version chips (first = primary; drag to reorder). Clicking ✕
              removes that version; ＋ adds one. All bible cards show these versions. -->
         <span class="ver-chips" id="ver-chips"></span>
-        <span class="pill add" id="ver-add" title="역본 추가·관리">＋</span>
+        <span class="pill add" id="ver-add" title="역본 추가·관리" data-i18n-title="ctrl.verAddTitle">＋</span>
         <span class="spacer"></span>
         <!-- Card-add buttons: new cards appear at the workspace center, on top. -->
-        <span class="pill add" id="add-bible" title="성경 본문 카드 추가">＋ 본문</span>
-        <span class="pill add" id="add-inter" title="원어 분석 카드 추가">＋ 원어</span>
-        <span class="pill add" id="add-lex" title="사전 카드 추가">＋ 사전</span>
+        <span class="pill add" id="add-bible" title="성경 본문 카드 추가" data-i18n-title="ctrl.addBibleTitle" data-i18n="ctrl.addBible">＋ 본문</span>
+        <span class="pill add" id="add-inter" title="원어 분석 카드 추가" data-i18n-title="ctrl.addInterTitle" data-i18n="ctrl.addInter">＋ 원어</span>
+        <span class="pill add" id="add-lex" title="사전 카드 추가" data-i18n-title="ctrl.addLexTitle" data-i18n="ctrl.addLex">＋ 사전</span>
         <span class="vsep"></span>
-        <div class="seg" data-seg="lang" title="사전 기본 언어">
-          <div class="opt on">한글</div>
-          <div class="opt">영어</div>
+        <div class="seg" data-seg="lang" title="사전 기본 언어" data-i18n-title="ctrl.lexLangTitle">
+          <div class="opt on" data-i18n="common.korean">한글</div>
+          <div class="opt" data-i18n="common.english">영어</div>
         </div>
-        <span class="mini" id="font-dec" title="글자 작게">A−</span>
-        <span class="mini" id="font-inc" title="글자 크게">A+</span>
+        <span class="mini" id="font-dec" title="글자 작게" data-i18n-title="ctrl.fontDecTitle">A−</span>
+        <span class="mini" id="font-inc" title="글자 크게" data-i18n-title="ctrl.fontIncTitle">A+</span>
       </span>
     </div>
 
@@ -110,21 +115,21 @@
          would put on the clipboard. -->
     <div class="settings-view" id="settings-view" hidden>
       <section class="card set-card">
-        <div class="card-head">표기 설정 · 한국어 역본</div>
+        <div class="card-head" data-i18n="setview.formatHead">표기 설정 · 한국어 역본</div>
         <div class="card-body">
-          <p class="set-note">※ 영어 역본(ESV/NKJV 등)은 항상 영어식+하이픈으로 출력됩니다.</p>
+          <p class="set-note" data-i18n="setview.formatNote">※ 영어 역본(ESV/NKJV 등)은 항상 영어식+하이픈으로 출력됩니다.</p>
           <div id="set-format"></div>
         </div>
       </section>
       <section class="card set-card">
         <div class="card-head set-head">
-          <span>출력 순서 · 복사에 사용할 역본</span>
-          <button class="set-mini" id="db-refresh" title="bible_versions 폴더 다시 스캔">DB 새로고침</button>
+          <span data-i18n="setview.orderHead">출력 순서 · 복사에 사용할 역본</span>
+          <button class="set-mini" id="db-refresh" title="bible_versions 폴더 다시 스캔" data-i18n-title="setview.dbRefreshTitle" data-i18n="setview.dbRefresh">DB 새로고침</button>
         </div>
         <div class="card-body" id="set-order"></div>
       </section>
       <section class="card set-card">
-        <div class="card-head">미리보기 · 요 1:1-3</div>
+        <div class="card-head" data-i18n="setview.previewHead">미리보기 · 요 1:1-3</div>
         <div class="card-body"><pre class="preview" id="set-preview">…</pre></div>
       </section>
     </div>
@@ -133,20 +138,21 @@
     <div class="search-view" id="search-view" hidden>
       <div class="search-bar">
         <input type="text" id="search-input" class="search-input" autocomplete="off"
-               placeholder="검색어 · 구절 · 원어코드  (예: 사랑 / 창 1:1 / H7225)">
-        <span class="pill dropdown" id="search-ver" title="검색할 역본">KRV</span>
+               placeholder="검색어 · 구절 · 원어코드  (예: 사랑 / 창 1:1 / H7225)"
+               data-i18n-placeholder="search.placeholder">
+        <span class="pill dropdown" id="search-ver" title="검색할 역본" data-i18n-title="search.verTitle">KRV</span>
         <!-- v1.0.5: 여러 단어 검색 방식 (띄어쓰기 다중 키워드). 기본 AND. -->
-        <span class="seg search-mode" id="search-mode" title="여러 단어 검색: AND=모두 포함 / OR=하나라도">
+        <span class="seg search-mode" id="search-mode" title="여러 단어 검색: AND=모두 포함 / OR=하나라도" data-i18n-title="search.modeTitle">
           <span class="opt on" data-mode="and">AND</span>
           <span class="opt" data-mode="or">OR</span>
         </span>
-        <button class="btn primary" id="search-go">검색</button>
+        <button class="btn primary" id="search-go" data-i18n="search.go">검색</button>
       </div>
       <div class="search-suggest" id="search-suggest"></div>
       <div class="search-meta" id="search-meta"></div>
       <div class="card search-card">
         <div class="card-body" id="search-results">
-          <div class="panel-loading">검색어를 입력하거나, 다른 앱에서 <b>#키워드</b>를 복사하세요.</div>
+          <div class="panel-loading" data-i18n-html="search.empty">검색어를 입력하거나, 다른 앱에서 <b>#키워드</b>를 복사하세요.</div>
         </div>
       </div>
     </div>
@@ -157,11 +163,27 @@
        each row re-navigates the viewer when clicked. -->
   <aside class="drawer" id="log-drawer" hidden>
     <div class="drawer-head">
-      <span>클립보드 로그</span>
-      <span class="drawer-close" id="log-close" title="닫기">✕</span>
+      <span data-i18n="drawer.logHead">클립보드 로그</span>
+      <span class="drawer-close" id="log-close" title="닫기" data-i18n-title="common.close">✕</span>
     </div>
     <div class="drawer-body" id="log-list">
-      <div class="log-empty">모니터링 중 인식한 구절이 여기에 쌓입니다.</div>
+      <div class="log-empty" data-i18n="drawer.logEmpty">모니터링 중 인식한 구절이 여기에 쌓입니다.</div>
+    </div>
+  </aside>
+
+  <!-- Sermon cart / cue sheet (오늘의 설교 성구). Toggled by the rail cue-sheet
+       icon; mutually exclusive with the activity-log drawer. Items persist in
+       localStorage; clicking one re-copies it to the clipboard. -->
+  <aside class="drawer" id="cart-drawer" hidden>
+    <div class="drawer-head">
+      <span data-i18n="cart.title">오늘의 설교 성구</span>
+      <span class="cart-head-actions">
+        <span class="drawer-mini" id="cart-clear" title="비우기" data-i18n="cart.clear" data-i18n-title="cart.clear">비우기</span>
+        <span class="drawer-close" id="cart-close" title="닫기" data-i18n-title="common.close">✕</span>
+      </span>
+    </div>
+    <div class="drawer-body" id="cart-list">
+      <div class="log-empty" data-i18n="cart.empty">담은 성구가 여기에 쌓입니다. 검색 결과나 활동 로그에서 ＋ 로 추가하세요.</div>
     </div>
   </aside>
 
@@ -171,62 +193,84 @@
      these are app-level preferences. Controls are populated from
      api.get_app_settings() and written back via api.set_app_setting(). -->
 <div class="modal-overlay" id="settings-modal" hidden>
-  <div class="modal" role="dialog" aria-label="설정">
+  <div class="modal" role="dialog" aria-label="설정" data-i18n-aria="modal.title">
     <div class="modal-head">
-      <span>설정</span>
-      <span class="modal-close" id="settings-close" title="닫기">✕</span>
+      <span data-i18n="modal.title">설정</span>
+      <span class="modal-close" id="settings-close" title="닫기" data-i18n-title="common.close">✕</span>
     </div>
     <div class="modal-body">
       <div class="set-group">
-        <div class="set-group-h">클립보드</div>
+        <div class="set-group-h" data-i18n="modal.grpLang">언어</div>
         <div class="set-row">
-          <span class="set-label">확인 간격</span>
+          <span class="set-label" data-i18n="modal.uiLangLabel">표시 언어</span>
+          <!-- 표시 언어는 각 언어 자기 표기로 둔다(번역 안 함) — 관례. -->
+          <div class="seg" id="opt-ui-lang">
+            <div class="opt" data-val="ko">한국어</div>
+            <div class="opt" data-val="en">English</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="set-group">
+        <div class="set-group-h" data-i18n="modal.grpReading">읽기</div>
+        <div class="set-row">
+          <span class="set-label" data-i18n="modal.readingFont">읽기 글꼴</span>
+          <!-- 선택된 family 이름은 JS가 채움(데이터-i18n 미부착 — 언어전환이 family명을 덮지 않도록). -->
+          <span class="pill dropdown" id="opt-reading-font">기본</span>
+        </div>
+        <p class="set-note" data-i18n-html="modal.readingFontNote">데이터 폴더의 <b>fonts</b> 폴더에 .ttf/.otf 글꼴을 넣으면 목록에 나타납니다.</p>
+      </div>
+
+      <div class="set-group">
+        <div class="set-group-h" data-i18n="modal.grpClipboard">클립보드</div>
+        <div class="set-row">
+          <span class="set-label" data-i18n="modal.pollLabel">확인 간격</span>
           <div class="seg" id="opt-poll">
-            <div class="opt" data-val="0.25">빠름 · 0.25초</div>
-            <div class="opt" data-val="0.5">기본 · 0.5초</div>
-            <div class="opt" data-val="1.0">느림 · 1초</div>
+            <div class="opt" data-val="0.25" data-i18n="modal.pollFast">빠름 · 0.25초</div>
+            <div class="opt" data-val="0.5" data-i18n="modal.pollDefault">기본 · 0.5초</div>
+            <div class="opt" data-val="1.0" data-i18n="modal.pollSlow">느림 · 1초</div>
           </div>
         </div>
-        <p class="set-note">간격이 짧을수록 빠르게 인식하지만 CPU를 조금 더 씁니다.</p>
+        <p class="set-note" data-i18n="modal.pollNote">간격이 짧을수록 빠르게 인식하지만 CPU를 조금 더 씁니다.</p>
       </div>
 
       <div class="set-group">
-        <div class="set-group-h">사전</div>
+        <div class="set-group-h" data-i18n="modal.grpLex">사전</div>
         <div class="set-row">
-          <span class="set-label">기본 언어</span>
+          <span class="set-label" data-i18n="modal.lexLabel">기본 언어</span>
           <div class="seg" id="opt-lex-lang">
-            <div class="opt" data-val="ko">한글</div>
-            <div class="opt" data-val="en">영어</div>
+            <div class="opt" data-val="ko" data-i18n="common.korean">한글</div>
+            <div class="opt" data-val="en" data-i18n="common.english">영어</div>
           </div>
         </div>
       </div>
 
       <div class="set-group">
-        <div class="set-group-h">검색 · 업데이트</div>
+        <div class="set-group-h" data-i18n="modal.grpSearch">검색 · 업데이트</div>
         <div class="set-toggle" id="opt-search-nav">
-          <span class="set-label">검색 결과 클릭 시 본문으로 이동</span>
+          <span class="set-label" data-i18n="modal.searchNav">검색 결과 클릭 시 본문으로 이동</span>
           <span class="switch"><span class="knob"></span></span>
         </div>
         <div class="set-toggle" id="opt-auto-copy">
-          <span class="set-label">검색 시 최고 점수 결과 자동 복사 (클립보드 + 활동 로그)</span>
+          <span class="set-label" data-i18n="modal.autoCopy">검색 시 최고 점수 결과 자동 복사 (클립보드 + 활동 로그)</span>
           <span class="switch"><span class="knob"></span></span>
         </div>
         <div class="set-toggle" id="opt-auto-update">
-          <span class="set-label">시작 시 자동으로 업데이트 확인</span>
+          <span class="set-label" data-i18n="modal.autoUpdate">시작 시 자동으로 업데이트 확인</span>
           <span class="switch"><span class="knob"></span></span>
         </div>
       </div>
 
       <div class="set-group">
-        <div class="set-group-h">정보 · 관리</div>
+        <div class="set-group-h" data-i18n="modal.grpInfo">정보 · 관리</div>
         <div class="set-row info-row">
-          <span class="set-label">버전</span>
+          <span class="set-label" data-i18n="modal.versionLabel">버전</span>
           <span class="set-info" id="set-version">—</span>
         </div>
         <div class="modal-actions">
-          <button class="btn" id="act-data-folder">데이터 폴더 열기</button>
-          <button class="btn" id="act-github">GitHub 열기</button>
-          <button class="btn danger" id="act-reset">설정 초기화</button>
+          <button class="btn" id="act-data-folder" data-i18n="modal.actDataFolder">데이터 폴더 열기</button>
+          <button class="btn" id="act-github" data-i18n="modal.actGithub">GitHub 열기</button>
+          <button class="btn danger" id="act-reset" data-i18n="modal.actReset">설정 초기화</button>
         </div>
       </div>
     </div>
@@ -237,7 +281,9 @@
 <div class="toast-wrap" id="toast-wrap"></div>
 
 <!-- 9차 모듈화: app.js → core/cards/search-notes 3분할(클래식 스크립트, 순서 로드,
-     전역 스코프 공유). file:// 에서 ESM CORS 차단을 피하려 type=module 미사용. -->
+     전역 스코프 공유). file:// 에서 ESM CORS 차단을 피하려 type=module 미사용.
+     v1.0.6: i18n.js 를 가장 먼저 로드 → window.I18N 이 이후 모듈에 준비됨. -->
+<script src="js/i18n.js"></script>
 <script src="js/core.js"></script>
 <script src="js/cards.js"></script>
 <script src="js/search-notes.js"></script>

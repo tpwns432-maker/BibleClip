@@ -482,7 +482,7 @@ body {
 
 /* ---- Scripture panel (sans-serif body; Strong's codes hidden here) ---- */
 /* font-size scales with the A−/A+ control (--reading-scale). */
-.scripture { font-family: var(--font-ui); font-size: calc(var(--fs-scripture) * var(--reading-scale)); line-height: var(--lh-scripture); color: var(--text); }
+.scripture { font-family: var(--reading-font, var(--font-ui)); font-size: calc(var(--fs-scripture) * var(--reading-scale)); line-height: var(--lh-scripture); color: var(--text); }
 .scripture .v { margin-bottom: 11px; cursor: pointer; border-radius: var(--r-sm); }
 .scripture .v:hover { background: var(--pill-sel-bg); box-shadow: 0 0 0 6px var(--pill-sel-bg); }
 .scripture .v.multi { margin-bottom: 15px; }
@@ -774,6 +774,62 @@ html[data-theme="dark"] .note-modal-back { background: rgba(0,0,0,.55); }
 .log-ref { font-size: 13px; font-weight: 700; color: var(--text); }
 .log-meta { font-size: 11px; color: var(--text-dim); margin-top: 3px; display: flex; gap: 8px; }
 .log-count { color: var(--accent-text); font-weight: 700; }
+
+/* ---- Sermon cart / cue sheet (오늘의 설교 성구) ---- */
+.cart-head-actions { display: flex; align-items: center; gap: 10px; }
+.drawer-mini {
+  cursor: pointer; font-size: 11px; font-weight: 700; color: var(--text-dim);
+  padding: 3px 9px; border-radius: var(--r-sm); border: 1px solid var(--card-border);
+}
+.drawer-mini:hover { color: var(--accent); border-color: var(--accent); }
+/* hover-revealed action buttons on log / search rows + cart items */
+.log-row, .sr { position: relative; }
+.cart-add-btn, .cart-del-btn {
+  position: absolute; top: 6px; right: 6px; cursor: pointer;
+  color: var(--text-dim); font-size: 13px; line-height: 1;
+  padding: 2px 6px; border-radius: var(--r-sm);
+  opacity: 0; transition: opacity .12s, color .12s, background .12s;
+}
+.log-row:hover .cart-add-btn, .sr:hover .cart-add-btn,
+.cart-item:hover .cart-del-btn { opacity: 1; }
+.cart-add-btn:hover { color: var(--accent); background: var(--seg-bg); }
+.cart-del-btn:hover { color: var(--danger, #e5484d); background: var(--seg-bg); }
+
+/* ---- F11 presentation (fullscreen card) + F2 quick search ---- */
+.mcard:fullscreen {
+  width: 100% !important; height: 100% !important;
+  left: 0 !important; top: 0 !important;
+  border-radius: 0; border: none; background: var(--bg);
+  display: flex; flex-direction: column;
+}
+.mcard:fullscreen .card-hd,
+.mcard:fullscreen .rs,
+.mcard:fullscreen .card-grip { display: none !important; }
+.mcard:fullscreen .card-body {
+  flex: 1; overflow-y: auto;
+  padding: 6vh 9vw;
+  font-size: clamp(26px, 3.4vw, 60px); line-height: 1.7;
+}
+.mcard:fullscreen .card-body .v { margin-bottom: .5em; }
+.present-hint {
+  position: absolute; bottom: 16px; left: 50%; transform: translateX(-50%);
+  font-size: 13px; color: var(--text-dim);
+  background: var(--card-bg); border: 1px solid var(--card-border);
+  border-radius: 999px; padding: 5px 14px; opacity: .72;
+  pointer-events: none; z-index: 10;
+}
+.qs-overlay {
+  position: fixed; inset: 0; z-index: 320;
+  display: flex; align-items: flex-start; justify-content: center;
+  padding-top: 16vh; background: rgba(10, 8, 18, .45);
+}
+.qs-input {
+  width: min(640px, 82%); font-size: 21px; padding: 15px 20px;
+  border-radius: 14px; border: 1px solid var(--card-border);
+  background: var(--card-bg); color: var(--text); outline: none;
+  box-shadow: 0 22px 64px -16px rgba(40, 25, 70, .6);
+}
+.qs-input:focus { border-color: var(--accent); }
 
 /* ---- Toast ---- */
 .toast-wrap {

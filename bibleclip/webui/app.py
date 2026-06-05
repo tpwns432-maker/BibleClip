@@ -7,6 +7,7 @@ Library core to JavaScript via the Api bridge. The CustomTkinter app
 import html as _html
 import os
 
+from bibleclip import i18n
 from bibleclip.config import __version__, get_resource_dir
 from bibleclip.core.library import Library
 from bibleclip.killswitch import check_killswitch
@@ -45,9 +46,13 @@ def main():
     # (False, '') so a network outage never blocks startup.
     blocked, message = check_killswitch()
     if blocked:
+        # No Library yet on this path → resolve the UI language from the settings
+        # file directly. A maintainer-supplied `message` is shown verbatim (any
+        # language); only our default fallback is localized.
+        lang = i18n.resolve_ui_lang()
         webview.create_window(
             "BibleClip",
-            html=_blocked_html(message or "이 버전은 더 이상 사용할 수 없습니다."),
+            html=_blocked_html(message or i18n.t('killswitch.blocked', lang)),
             width=520, height=360, min_size=(420, 300),
         )
         webview.start()

@@ -43,9 +43,14 @@ image.jpg
 BethlehemWin/
 bible_versions/*
 !bible_versions/KRV.SQLite3
+!bible_versions/aliases_override.example.json
 original_lang/*
 !original_lang/개역한글S.sdb
 !original_lang/HebGrkEn.dct
+
+# 사용자 읽기 글꼴 폴더 — 사용자가 넣는 .ttf/.otf 는 추적하지 않고 안내만 동봉
+fonts/*
+!fonts/README.txt
 
 # Mac source package (assembled artifact, contains data)
 AutoBible-mac-source.zip

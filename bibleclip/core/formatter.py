@@ -8,13 +8,6 @@ class Formatter:
         self.s = settings  # dict of all settings
         self.dbs = dbs or {}
 
-    def _foreign_book_name(self, book_num, want_english):
-        """Find a (short, long) name pair from a loaded DB matching the requested language."""
-        for db in self.dbs.values():
-            if db.is_english == want_english and book_num in db.books:
-                return db.books[book_num]
-        return None
-
     def format_version_output(self, db, book_num, chapter, verses, all_verse_data):
         """Format output for a single bible version.
 
@@ -28,33 +21,16 @@ class Formatter:
             formatted string
         """
         s = self.s
-        is_eng = db.is_english
 
-        # --- Determine book display name (apply same setting to all versions) ---
+        # --- Determine book display name ---
+        # 각 역본은 *자기 DB*의 책이름을 쓴다. KRV+ESV 동시 출력이면 [룻기 …] / [Ruth …]
+        # 처럼 역본별 모국 표기가 나온다(한 언어를 전 역본에 강제하지 않음). 설정의
+        # short/long 만 적용; ko/en 구분은 역본 자체 언어가 결정하므로 길이에만 관여한다.
         db_short, db_long = db.books.get(book_num, ('?', '?'))
-        style = s['book_name']
-        if style in ('long_ko', 'short_ko'):
-            if is_eng:
-                foreign = self._foreign_book_name(book_num, want_english=False)
-                if foreign:
-                    f_short, f_long = foreign
-                    book_display = f_long if style == 'long_ko' else f_short
-                else:
-                    book_display = db_long if style == 'long_ko' else db_short
-            else:
-                book_display = db_long if style == 'long_ko' else db_short
-        elif style in ('long_en', 'short_en'):
-            if is_eng:
-                book_display = db_long if style == 'long_en' else db_short
-            else:
-                foreign = self._foreign_book_name(book_num, want_english=True)
-                if foreign:
-                    f_short, f_long = foreign
-                    book_display = f_long if style == 'long_en' else f_short
-                else:
-                    book_display = db_long if style == 'long_en' else db_short
-        else:
-            book_display = db_short
+        # 'long'/'long_ko'/'long_en' → 정식(long), 그 외(short*) → 약칭(short).
+        # 구 설정값(long_ko/short_en 등)도 prefix 로 호환 흡수.
+        use_long = str(s.get('book_name', 'short')).startswith('long')
+        book_display = db_long if use_long else db_short
 
         # --- Build reference string ---
         range_sym = s.get('range_symbol', '-')
