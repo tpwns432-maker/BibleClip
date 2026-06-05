@@ -2,7 +2,7 @@
 import os
 import sqlite3
 
-from bibleclip import morph
+from bibleclip import korean, morph
 from bibleclip.constants import ENGLISH_VERSIONS
 from bibleclip.text_utils import clean_text, despace, trigrams
 
@@ -14,6 +14,7 @@ class BibleDB:
         self.conn = sqlite3.connect(db_path, check_same_thread=False)
         self.is_english = self.name.upper() in ENGLISH_VERSIONS
         self._search_index = None   # built lazily on first search
+        self._inverted_index = None  # {원형토큰: set((b,c,v))}, lazy (v1.0.5 스마트 검색)
         self._load_info()
         self._load_books()
 
@@ -67,6 +68,31 @@ class BibleDB:
             dt = despace(ct)
             idx.append((b, c, v, ct, dt, trigrams(dt)))
         self._search_index = idx
+
+    def _build_inverted_index(self):
+        """원형토큰 → set((book,chapter,verse)) 역색인을 1회 빌드(lazy, 캐시).
+
+        v1.0.5 스마트 검색(띄어쓰기 AND/OR + 스코어링)의 메모리 인프라. 본문을
+        ``korean.tokenize`` 로 정규화(조사 제거)해 키로 삼는다. 순수 ``dict``/``set``
+        이라 프로즌 환경에서도 네이티브 크래시가 없다. (Korean 본문 전용 — 영어
+        역본에 빌드해도 무해하나 Phase 2 가 한국어 역본에만 사용한다.)
+        """
+        if self._inverted_index is not None:
+            return
+        idx = {}
+        cur = self.conn.cursor()
+        cur.execute("SELECT book_number, chapter, verse, text FROM verses "
+                    "ORDER BY book_number, chapter, verse")
+        for b, c, v, t in cur.fetchall():
+            addr = (b, c, v)
+            for tok in korean.tokenize(clean_text(t)):
+                idx.setdefault(tok, set()).add(addr)
+        self._inverted_index = idx
+
+    def inverted_index(self):
+        """The {원형토큰 -> set((b,c,v))} index, building it on first access."""
+        self._build_inverted_index()
+        return self._inverted_index
 
     def search(self, keyword, limit=300, fuzzy_threshold=0.7):
         """Whitespace-insensitive verse search with morpheme + fuzzy fallbacks.
