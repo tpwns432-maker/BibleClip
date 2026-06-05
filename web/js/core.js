@@ -128,6 +128,7 @@ window.BC = window.BC || {};
   const drawer = $("log-drawer");
   function openDrawer() {
     if (!drawer) return;
+    if (typeof closeCart === "function") closeCart();  // 상호배타: 장바구니 드로어 닫기
     drawer.hidden = false;
     $("log-toggle").classList.add("on");
     const dot = $("log-dot");
@@ -181,6 +182,7 @@ window.BC = window.BC || {};
     lastBook: null, lastChapter: null,  // last viewed position (bootstrap default)
     monitoring: false,
     fontSize: 11,
+    readingFont: "",        // custom reading font family ('' = 기본 Pretendard)
     searchVersion: null,    // version used for keyword search (default = primary)
     searchClickNav: false,  // search hit click also jumps a bible card
     autoCopyTop: false,     // 검색 시 최고 점수 결과를 클립보드에 자동 복사
@@ -219,7 +221,15 @@ window.BC = window.BC || {};
   }
 
   async function boot() {
+    // i18n: load ko(fallback)+active locale via the bridge, then sweep the page.
+    // Runs first so static UI is translated before the data-driven render starts.
+    if (window.I18N) { try { await I18N.boot(); } catch (_) {} }
     const init = await api().get_initial();
+    // Keep the backend's ui_lang aligned with the front-end's saved choice, so
+    // Python-rendered surfaces (kill-switch, dict popups, preview) match the UI.
+    if (window.I18N && init.ui_lang !== I18N.getLang()) {
+      try { api().set_app_setting("ui_lang", I18N.getLang()); } catch (_) {}
+    }
     state.versions = init.versions;
     state.versionsNames = init.versions.map((v) => v.name);
     state.primary = init.primary || (state.versionsNames[0] || null);
@@ -233,6 +243,7 @@ window.BC = window.BC || {};
     root.dataset.theme = init.dark_mode ? "dark" : "light";
     state.fontSize = init.font_size || 11;
     applyFontScale();
+    bootReadingFont(init.reading_font || "");   // inject+apply saved custom reading font
     lexLang = init.lex_lang === "en" ? "en" : "ko";
     if (init.lex) state.lexAvail = init.lex;
     state.isPremium = init.is_premium !== false;  // default premium unless backend says false
@@ -247,11 +258,19 @@ window.BC = window.BC || {};
     state.searchVersion = CardManager.primaryVersion();
     renderVerChips();
 
+    // 라이브 UI 언어 전환: I18N.setLang 이 data-i18n* 를 전역 재스윕하고, 추가로 카드의
+    // JS-렌더 부분(락 툴팁·장/연결 라벨)만 무브릿지로 다시 라벨링한다.
+    window.addEventListener("i18n:changed", () => {
+      try { CardManager.relabel(); } catch (_) {}
+    });
+
     wireGlobalControls();
     wireMonitor();
+    wireCart();
     wireTabs();
     wireUpdate();
     wireAppSettings();
+    wireReadingFontMenu();
     if (init.auto_update_check) checkUpdate(true); // silent startup check
     maybePatchModal(); // first-run-after-update patch notes (Phase 4)
   }
@@ -261,7 +280,13 @@ window.BC = window.BC || {};
   // ============================================================
 
   const MAX_BIBLE = 4;
+  // 카드 타입 라벨. TYPE_LABEL은 ko 베이스(= i18n 폴백), typeLabel()은 렌더 시점의
+  // 현재 언어 문자열을 돌려준다. card-title span은 data-i18n도 달아 언어 전환 시
+  // apply() 재스윕으로 즉시 갱신된다(카드 재렌더 불필요).
   const TYPE_LABEL = { bible: "성경 본문", interlinear: "원어 분석", lexicon: "사전" };
+  function typeLabel(type) {
+    return window.I18N ? I18N.t("card.type." + type, TYPE_LABEL[type]) : TYPE_LABEL[type];
+  }
   const ID_PREFIX = { bible: "bible", interlinear: "inter", lexicon: "lex" };
   const BODY_CLASS = { bible: "scripture", interlinear: "interlin", lexicon: "lex" };
 

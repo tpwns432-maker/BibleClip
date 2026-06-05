@@ -20,9 +20,9 @@
     const m = document.createElement("div");
     m.className = "ctx-menu";
     m.innerHTML =
-      `<div class="ctx-item" data-a="copy">구절 복사</div>` +
-      `<div class="ctx-item" data-a="note">${has ? "묵상 노트 수정" : "묵상 노트 쓰기"}</div>` +
-      `<div class="ctx-item" data-a="orig">원어 코드 조회</div>`;
+      `<div class="ctx-item" data-a="copy">${I18N.t("ctx.copyVerse")}</div>` +
+      `<div class="ctx-item" data-a="note">${has ? I18N.t("ctx.noteEdit") : I18N.t("ctx.noteNew")}</div>` +
+      `<div class="ctx-item" data-a="orig">${I18N.t("ctx.lookupOriginal")}</div>`;
     document.body.appendChild(m);
     const r = m.getBoundingClientRect();
     m.style.left = Math.min(x, window.innerWidth - r.width - 8) + "px";
@@ -58,14 +58,14 @@
     back.className = "note-modal-back";
     back.innerHTML =
       `<div class="note-modal" role="dialog" aria-modal="true">` +
-        `<div class="note-modal-h"><span>📄 묵상 노트</span>` +
+        `<div class="note-modal-h"><span>📄 ${I18N.t("note.title")}</span>` +
           `<span class="note-modal-ref">${esc(refLabel(card, verse))}</span></div>` +
-        `<textarea class="note-ta" placeholder="이 구절에 대한 묵상을 적어 보세요…"></textarea>` +
+        `<textarea class="note-ta" placeholder="${esc(I18N.t("note.placeholder"))}"></textarea>` +
         `<div class="note-modal-foot">` +
-          `<button class="btn note-del" ${existing ? "" : "hidden"}>삭제</button>` +
+          `<button class="btn note-del" ${existing ? "" : "hidden"}>${I18N.t("common.delete")}</button>` +
           `<span class="note-modal-spacer"></span>` +
-          `<button class="btn note-cancel">취소</button>` +
-          `<button class="btn primary note-save">저장</button>` +
+          `<button class="btn note-cancel">${I18N.t("common.cancel")}</button>` +
+          `<button class="btn primary note-save">${I18N.t("common.save")}</button>` +
         `</div>` +
       `</div>`;
     document.body.appendChild(back);
@@ -83,14 +83,14 @@
     back.querySelector(".note-save").addEventListener("click", async () => {
       await api().set_note(card.book, card.chapter, verse, ta.value);
       await refresh();
-      toast("묵상 노트 저장됨");
+      toast(I18N.t("note.saved"));
       close();
     });
     const del = back.querySelector(".note-del");
     if (del) del.addEventListener("click", async () => {
       await api().delete_note(card.book, card.chapter, verse);
       await refresh();
-      toast("묵상 노트 삭제됨");
+      toast(I18N.t("note.deleted"));
       close();
     });
     back.addEventListener("keydown", (e) => {
@@ -147,21 +147,30 @@
 
   let updateInfo = null;
 
+  // Translate a bridge error: prefer the stable error_code via t(); fall back to
+  // the Korean 'error' the backend still ships, then a keyed default. (Backend
+  // 1-B: user-facing messages are returned as error_code, translated here.)
+  function bridgeErr(r, fallbackKey) {
+    if (r && r.error_code && window.I18N) return I18N.t(r.error_code, r.error || "");
+    if (r && r.error) return r.error;
+    return window.I18N ? I18N.t(fallbackKey) : "";
+  }
+
   async function checkUpdate(silent) {
-    if (!silent) toast("업데이트 확인 중…");
+    if (!silent) toast(I18N.t("update.checking"));
     let r = null;
     try { r = await api().check_update(); } catch (e) { r = null; }
-    if (!r || !r.ok) { if (!silent) toast("업데이트 확인 실패"); return; }
+    if (!r || !r.ok) { if (!silent) toast(I18N.t("update.checkFailed")); return; }
     if (r.has_update && r.mandatory) {
       // Soft forced update (Phase 4): non-dismissible modal, but app still runs.
       updateInfo = r;
       showForcedUpdate(r);
     } else if (r.has_update && !(silent && r.skipped)) {
       updateInfo = r;
-      $("ub-text").textContent = `새 버전 v${r.latest} 사용 가능 — 현재 v${r.current}`;
+      $("ub-text").textContent = I18N.t("update.available", { latest: r.latest, current: r.current });
       $("update-banner").hidden = false;
     } else if (!silent) {
-      toast(`최신 버전입니다 (v${r.current})`);
+      toast(I18N.t("update.upToDate", { current: r.current }));
     }
   }
 
@@ -174,17 +183,17 @@
     back.className = "note-modal-back forced-back";
     back.innerHTML =
       `<div class="note-modal forced-modal" role="dialog" aria-modal="true">` +
-        `<div class="patch-h forced-h">⚠ 업데이트가 필요합니다</div>` +
-        `<p class="forced-text">현재 <b>v${esc(r.current)}</b> — 새 버전 <b>v${esc(r.latest)}</b>로 업데이트해야 계속 사용할 수 있습니다.</p>` +
+        `<div class="patch-h forced-h">⚠ ${I18N.t("update.requiredTitle")}</div>` +
+        `<p class="forced-text">${I18N.t("update.requiredBody", { current: esc(r.current), latest: esc(r.latest) })}</p>` +
         `<div class="note-modal-foot"><span class="note-modal-spacer"></span>` +
-          `<button class="btn forced-page">릴리스 페이지</button>` +
-          `<button class="btn primary forced-install">지금 업데이트</button></div>` +
+          `<button class="btn forced-page">${I18N.t("ub.releases")}</button>` +
+          `<button class="btn primary forced-install">${I18N.t("ub.install")}</button></div>` +
       `</div>`;
     document.body.appendChild(back);
     back.querySelector(".forced-page").addEventListener("click", () => api().open_releases_page());
     back.querySelector(".forced-install").addEventListener("click", async () => {
       const x = await api().install_update();
-      if (!x || !x.ok) toast(x && x.error ? x.error : "릴리스 페이지에서 받아 주세요");
+      if (!x || !x.ok) toast(bridgeErr(x, "toast.installUseReleases"));
     });
     // intentionally non-dismissible: no backdrop / Escape close.
   }
@@ -198,11 +207,11 @@
     back.className = "note-modal-back";
     back.innerHTML =
       `<div class="note-modal patch-modal" role="dialog" aria-modal="true">` +
-        `<div class="patch-h"><span class="patch-badge">NEW</span> v${esc(p.version)} 업데이트 내역</div>` +
+        `<div class="patch-h"><span class="patch-badge">NEW</span> ${I18N.t("update.notesTitle", { version: esc(p.version) })}</div>` +
         `<ul class="patch-list">${p.notes.map((n) => `<li>${esc(n)}</li>`).join("")}</ul>` +
-        `<label class="patch-dismiss"><input type="checkbox" class="patch-cb"> 다시 보지 않기</label>` +
+        `<label class="patch-dismiss"><input type="checkbox" class="patch-cb"> ${I18N.t("update.dontShowAgain")}</label>` +
         `<div class="note-modal-foot"><span class="note-modal-spacer"></span>` +
-          `<button class="btn primary patch-ok">확인</button></div>` +
+          `<button class="btn primary patch-ok">${I18N.t("common.confirm")}</button></div>` +
       `</div>`;
     document.body.appendChild(back);
     const close = () => {
@@ -223,23 +232,23 @@
     if ($("ub-close")) $("ub-close").addEventListener("click", () => { $("update-banner").hidden = true; });
     if ($("ub-install")) $("ub-install").addEventListener("click", async () => {
       const r = await api().install_update();
-      if (!r || !r.ok) { toast(r && r.error ? r.error : "자동 설치를 시작할 수 없습니다"); return; }
-      $("ub-text").textContent = "업데이트 다운로드 준비 중…";
+      if (!r || !r.ok) { toast(bridgeErr(r, "toast.installCannotStart")); return; }
+      $("ub-text").textContent = I18N.t("update.preparing");
       $("ub-install").disabled = true;
     });
   }
 
   function onUpdateProgress(pct, kb, total) {
     const t = $("ub-text");
-    if (t) t.textContent = total ? `다운로드 중… ${pct}% (${kb.toLocaleString()} / ${total.toLocaleString()} KB)`
-                                 : `다운로드 중… ${kb.toLocaleString()} KB`;
+    if (t) t.textContent = total ? `${I18N.t("update.downloading")} ${pct}% (${kb.toLocaleString()} / ${total.toLocaleString()} KB)`
+                                 : `${I18N.t("update.downloading")} ${kb.toLocaleString()} KB`;
   }
   function onUpdateReady() {
     const t = $("ub-text");
-    if (t) t.textContent = "설치 적용 중… 앱이 곧 재시작됩니다.";
+    if (t) t.textContent = I18N.t("update.applying");
   }
   function onUpdateError(msg) {
-    toast("업데이트 실패: " + msg);
+    toast(I18N.t("update.failedPrefix") + msg);
     const b = $("ub-install");
     if (b) b.disabled = false;
   }
@@ -278,9 +287,18 @@
     };
   }
 
+  // UI 언어가 토글로 바뀌었는지 표시. 백엔드 동기화(디스크 쓰기)는 토글마다 하지 않고
+  // 모달을 닫을 때 1회만 — 빠른 연속 토글이 pywebview 브릿지/OneDrive 파일잠금과 겹쳐
+  // UI가 멈추던 문제 방지. 화면 전환 자체는 순수 프론트(localStorage+DOM)라 영향 없음.
+  let _uiLangDirty = false;
+
   function closeAppSettings() {
     const m = $("settings-modal");
     if (m) m.hidden = true;
+    if (_uiLangDirty && window.I18N) {
+      _uiLangDirty = false;
+      try { api().set_app_setting("ui_lang", I18N.getLang()); } catch (_) {}
+    }
   }
 
   async function openAppSettings() {
@@ -289,6 +307,17 @@
     const s = await api().get_app_settings();
     const ver = $("set-version");
     if (ver) ver.textContent = "v" + s.version;
+
+    // UI 표시 언어 (i18n) — 재시작 없이 즉시 전환. 화면 전환은 순수 프론트(localStorage+DOM).
+    // 백엔드 ui_lang 기록(Python-렌더 표면용)은 토글마다가 아니라 모달 닫을 때 1회만 한다.
+    if (window.I18N) {
+      setSeg($("opt-ui-lang"), I18N.getLang(), (val) => {
+        I18N.setLang(val);
+        _uiLangDirty = true;
+      });
+    }
+    const fontPill = $("opt-reading-font");
+    if (fontPill) fontPill.textContent = state.readingFont || I18N.t("font.default");
 
     setSeg($("opt-poll"), s.poll_interval,
       (val) => api().set_app_setting("poll_interval", parseFloat(val)),
@@ -320,16 +349,16 @@
     const df = $("act-data-folder");
     if (df) df.onclick = async () => {
       const r = await api().open_data_folder();
-      if (!r || !r.ok) toast("폴더를 열 수 없습니다");
+      if (!r || !r.ok) toast(I18N.t("toast.folderOpenFail"));
     };
     const gh = $("act-github");
     if (gh) gh.onclick = () => api().open_github();
     const rs = $("act-reset");
     if (rs) {
-      rs.textContent = "설정 초기화";
+      rs.textContent = I18N.t("modal.actReset");
       let armed = false;
       rs.onclick = async () => {
-        if (!armed) { armed = true; rs.textContent = "한 번 더 누르면 초기화"; return; }
+        if (!armed) { armed = true; rs.textContent = I18N.t("settings.resetArm"); return; }
         await api().reset_settings();
         location.reload();   // re-read the fresh defaults
       };
@@ -367,7 +396,7 @@
       x.addEventListener("click", async (e) => {
         e.stopPropagation();
         const name = e.currentTarget.closest("[data-ver]").dataset.ver;
-        if (state.viewer.length <= 1) { toast("최소 한 개의 역본은 유지해야 합니다"); return; }
+        if (state.viewer.length <= 1) { toast(I18N.t("toast.keepOneVersion")); return; }
         await updateViewerVersions(state.viewer.filter((v) => v !== name));
       });
     });
@@ -511,16 +540,16 @@
     const badge = $("status-badge");
     const btn = $("monitor-btn");
     if (badge) {
-      badge.textContent = active ? "모니터링 중" : "대기 중";
+      badge.textContent = active ? I18N.t("monitor.active") : I18N.t("topbar.statusIdle");
       badge.classList.toggle("on", active);
     }
-    if (btn) btn.textContent = active ? "모니터링 중지" : "모니터링 시작";
+    if (btn) btn.textContent = active ? I18N.t("monitor.stop") : I18N.t("topbar.monitorStart");
   }
 
   const refLog = [];  // caught references, newest last (index === log row order)
 
   function vlist(verses) {
-    if (!verses || !verses.length) return "전체";
+    if (!verses || !verses.length) return I18N.t("ref.whole");
     return verses.join(", ");
   }
 
@@ -537,25 +566,33 @@
     const list = $("log-list");
     if (!list) return;
     if (!refLog.length) {
-      list.innerHTML = `<div class="log-empty">모니터링 중 인식한 구절이 여기에 쌓입니다.</div>`;
+      list.innerHTML = `<div class="log-empty">${I18N.t("drawer.logEmpty")}</div>`;
       return;
     }
     list.innerHTML = refLog
       .map((e, i) => {
         if (e.kind === "keyword") {
-          return `<div class="log-row keyword"><div class="log-ref"># ${esc(e.keyword)}</div><div class="log-meta">키워드 검색</div></div>`;
+          return `<div class="log-row keyword"><div class="log-ref"># ${esc(e.keyword)}</div><div class="log-meta">${I18N.t("log.keywordSearch")}</div></div>`;
         }
-        return `<div class="log-row" data-log="${i}"><div class="log-ref">${esc(e.short_name)} ${e.chapter}:${esc(vlist(e.verses))}</div><div class="log-meta"><span class="log-count">${e.n_parts}개 역본</span></div></div>`;
+        return `<div class="log-row" data-log="${i}"><div class="log-ref">${esc(e.short_name)} ${e.chapter}:${esc(vlist(e.verses))}</div><div class="log-meta"><span class="log-count">${I18N.t("log.nVersions", { n: e.n_parts })}</span></div><span class="cart-add-btn" data-cart-add-log="${i}" title="${esc(I18N.t("cart.add"))}">＋</span></div>`;
       })
       .reverse()
       .join("");
     list.querySelectorAll("[data-log]").forEach((row) => {
-      row.addEventListener("click", async () => {
+      row.addEventListener("click", async (ev) => {
+        if (ev.target.closest("[data-cart-add-log]")) return;  // ＋ 는 장바구니 담기 전용
         const e = refLog[Number(row.dataset.log)];
         if (!e) return;
         CardManager.goToRef(e.book_num, e.chapter, e.verses);
         const r = await api().copy_reference(e.book_num, e.chapter, e.verses || []);
-        if (r && r.ok) toast(`${e.short_name} ${e.chapter}:${vlist(e.verses)} 다시 복사됨`);
+        if (r && r.ok) toast(I18N.t("toast.recopiedRef", { ref: `${e.short_name} ${e.chapter}:${vlist(e.verses)}` }));
+      });
+    });
+    list.querySelectorAll("[data-cart-add-log]").forEach((btn) => {
+      btn.addEventListener("click", (ev) => {
+        ev.stopPropagation();
+        const e = refLog[Number(btn.dataset.cartAddLog)];
+        if (e) addToCart({ book_num: e.book_num, chapter: e.chapter, verses: e.verses, short_name: e.short_name });
       });
     });
   }
@@ -574,7 +611,7 @@
             state.monitoring = true;
             setStatus(true);
           } else {
-            toast("클립보드 모니터링을 시작할 수 없습니다");
+            toast(I18N.t("toast.monitorStartFail"));
           }
         } else {
           await api().stop_monitoring();
@@ -592,7 +629,7 @@
         refLog.push({ kind: "reference", ...r });
         renderLog();
         flagUnread();
-        toast(`${r.short_name} ${r.chapter}:${vlist(r.verses)} 변환·복사됨`);
+        toast(I18N.t("toast.convertedCopied", { ref: `${r.short_name} ${r.chapter}:${vlist(r.verses)}` }));
         showView("viewer"); // a caught reference always returns to the bible view
         CardManager.goToRef(r.book_num, r.chapter, r.verses);
       },
@@ -600,7 +637,7 @@
         refLog.push({ kind: "keyword", keyword });
         renderLog();
         flagUnread();
-        toast(`키워드 "${keyword}" 검색`);
+        toast(I18N.t("toast.keywordSearch", { keyword }));
         showView("search");
         runSearch(keyword);
       },
@@ -610,28 +647,214 @@
     };
   }
 
+  // ---- Sermon cart / cue sheet (오늘의 설교 성구, 2순위) ----
+  // Items persist in localStorage; clicking one re-copies it (same path as a log
+  // row). Added via the hover ＋ on search results / activity-log rows. The cart
+  // drawer is mutually exclusive with the activity-log drawer.
+  const CART_KEY = "bibleclip_cart";
+  let cart = [];
+  try { cart = JSON.parse(localStorage.getItem(CART_KEY) || "[]"); if (!Array.isArray(cart)) cart = []; } catch (_) { cart = []; }
+
+  function saveCart() { try { localStorage.setItem(CART_KEY, JSON.stringify(cart)); } catch (_) {} }
+  function cartKey(it) { return `${it.book_num}|${it.chapter}|${(it.verses || []).join(",")}`; }
+
+  function addToCart(item) {
+    const it = {
+      book_num: item.book_num, chapter: item.chapter,
+      verses: (item.verses || []).slice(), short_name: item.short_name || "",
+    };
+    if (!it.book_num) return;
+    if (cart.some((c) => cartKey(c) === cartKey(it))) { toast(I18N.t("cart.dup")); return; }
+    cart.push(it);
+    saveCart();
+    renderCart();
+    if ($("cart-drawer") && $("cart-drawer").hidden) {
+      const dot = $("cart-dot"); if (dot) dot.hidden = false;  // unread badge
+    }
+    toast(I18N.t("cart.added"));
+  }
+  function removeFromCart(i) { cart.splice(i, 1); saveCart(); renderCart(); }
+  function clearCart() { cart = []; saveCart(); renderCart(); }
+
+  function renderCart() {
+    const list = $("cart-list");
+    if (!list) return;
+    if (!cart.length) {
+      list.innerHTML = `<div class="log-empty" data-i18n="cart.empty">${I18N.t("cart.empty")}</div>`;
+      return;
+    }
+    list.innerHTML = cart.map((e, i) =>
+      `<div class="log-row cart-item" data-cart="${i}">` +
+        `<div class="log-ref">${esc(e.short_name)} ${e.chapter}:${esc(vlist(e.verses))}</div>` +
+        `<span class="cart-del-btn" data-del="${i}" title="${esc(I18N.t("cart.remove"))}">✕</span>` +
+      `</div>`
+    ).join("");
+    list.querySelectorAll("[data-cart]").forEach((row) => {
+      row.addEventListener("click", async (ev) => {
+        if (ev.target.closest("[data-del]")) return;
+        const e = cart[Number(row.dataset.cart)];
+        if (!e) return;
+        const r = await api().copy_reference(e.book_num, e.chapter, e.verses || []);
+        if (r && r.ok) {
+          row.classList.add("copied");
+          setTimeout(() => row.classList.remove("copied"), 600);
+          toast(I18N.t("toast.copiedRef", { ref: `${e.short_name} ${e.chapter}:${vlist(e.verses)}` }));
+        }
+      });
+    });
+    list.querySelectorAll("[data-del]").forEach((x) => {
+      x.addEventListener("click", (ev) => { ev.stopPropagation(); removeFromCart(Number(x.dataset.del)); });
+    });
+  }
+
+  function openCart() {
+    const cd = $("cart-drawer");
+    if (!cd) return;
+    if (typeof closeDrawer === "function") closeDrawer();   // 상호배타: 로그 드로어 닫기
+    cd.hidden = false;
+    $("cart-toggle").classList.add("on");
+    const dot = $("cart-dot"); if (dot) dot.hidden = true;
+    renderCart();
+  }
+  function closeCart() {
+    const cd = $("cart-drawer");
+    if (cd) cd.hidden = true;
+    const t = $("cart-toggle"); if (t) t.classList.remove("on");
+  }
+  function wireCart() {
+    const tog = $("cart-toggle");
+    if (tog) tog.addEventListener("click", () => $("cart-drawer").hidden ? openCart() : closeCart());
+    const cl = $("cart-close"); if (cl) cl.addEventListener("click", closeCart);
+    const clr = $("cart-clear"); if (clr) clr.addEventListener("click", clearCart);
+    renderCart();
+  }
+
+  // ---- F2 quick search (presentation jump, 3순위) ----
+  // Type a reference (창 1:1 / Gen 1:1 / 1Ths 1:1) or keyword → jump the active /
+  // fullscreen bible card to it. Appended INSIDE the fullscreen card when
+  // presenting (else covers the window), so it shows over a fullscreen slide.
+  function closeQuickSearch() {
+    document.querySelectorAll(".qs-overlay").forEach((o) => o.remove());
+  }
+  function openQuickSearch() {
+    closeQuickSearch();
+    const host = document.fullscreenElement || document.body;
+    const box = document.createElement("div");
+    box.className = "qs-overlay";
+    box.innerHTML = `<input type="text" class="qs-input" autocomplete="off" placeholder="${esc(I18N.t("present.qsPlaceholder"))}">`;
+    host.appendChild(box);
+    const input = box.querySelector(".qs-input");
+    setTimeout(() => input.focus(), 0);
+    box.addEventListener("mousedown", (e) => { if (e.target === box) closeQuickSearch(); });
+    input.addEventListener("keydown", async (e) => {
+      e.stopPropagation();
+      if (e.key === "Escape") { closeQuickSearch(); }
+      else if (e.key === "Enter") {
+        const q = input.value.trim();
+        closeQuickSearch();
+        if (q) await quickJump(q);
+      }
+    });
+  }
+  async function quickJump(q) {
+    // Reference first; fall back to a keyword search and jump to the top hit.
+    let ref = null;
+    try { ref = await api().resolve_reference(q); } catch (_) {}
+    if (ref) {
+      const vs = ref.verses && ref.verses.length ? ref.verses : null;
+      CardManager.goToRef(ref.book_num, ref.chapter, vs);
+      return;
+    }
+    try {
+      const res = await api().search(q, state.searchVersion || undefined, 1, searchMode());
+      const h = (res.hits || [])[0];
+      if (h) CardManager.goToRef(h.book, h.chapter, [h.verse]);
+    } catch (_) {}
+  }
+
+  // F11 = present the active card fullscreen; F2 = quick jump.
+  document.addEventListener("keydown", (e) => {
+    if (e.key === "F11") { e.preventDefault(); CardManager.presentToggle(); }
+    else if (e.key === "F2") { e.preventDefault(); openQuickSearch(); }
+  });
+
+  // ---- Custom reading fonts (fonts/ 폴더 → 동적 @font-face, 4순위) ----
+  // The backend lists/serves user .ttf/.otf placed in the data 'fonts' folder;
+  // we inject an @font-face from base64 and drive the scripture via --reading-font.
+  let fontsList = [];                 // [{family, file}]
+  const injectedFonts = new Set();
+  async function loadFontsList() {
+    try { fontsList = await api().list_fonts(); } catch (_) { fontsList = []; }
+    if (!Array.isArray(fontsList)) fontsList = [];
+    return fontsList;
+  }
+  async function injectFont(family, file) {
+    if (injectedFonts.has(family)) return true;
+    let info = null;
+    try { info = await api().get_font(file); } catch (_) {}
+    if (!info || !info.b64) return false;
+    const st = document.createElement("style");
+    st.textContent = `@font-face{font-family:"${family}";font-display:swap;` +
+      `src:url(data:${info.mime};base64,${info.b64});}`;
+    document.head.appendChild(st);
+    injectedFonts.add(family);
+    return true;
+  }
+  function applyReadingFont(family) {
+    if (family) root.style.setProperty("--reading-font", `"${family}", var(--font-ui)`);
+    else root.style.removeProperty("--reading-font");
+    state.readingFont = family || "";
+  }
+  async function selectReadingFont(family, file) {
+    if (family && file && !(await injectFont(family, file))) { toast(I18N.t("font.loadFail")); return; }
+    applyReadingFont(family);
+    if (hasBridge()) api().set_app_setting("reading_font", family || "");
+  }
+  async function bootReadingFont(family) {        // boot: inject+apply saved font (no re-save)
+    if (!family) return;
+    await loadFontsList();
+    const f = fontsList.find((x) => x.family === family);
+    if (f && await injectFont(family, f.file)) applyReadingFont(family);
+  }
+  function wireReadingFontMenu() {
+    const pill = $("opt-reading-font");
+    if (!pill) return;
+    pill.addEventListener("click", async () => {
+      await loadFontsList();
+      const items = [{ label: I18N.t("font.default"), value: "", on: !state.readingFont }]
+        .concat(fontsList.map((f) => ({ label: f.family, value: f.family, on: state.readingFont === f.family })));
+      openMenu(pill, items, async (family) => {
+        const f = fontsList.find((x) => x.family === family);
+        await selectReadingFont(family, f ? f.file : null);
+        pill.textContent = family || I18N.t("font.default");
+      });
+    });
+  }
+
   // ---- Output settings tab (출력 설정) ----
 
+  // label / opt label 은 i18n 키. 렌더 시 I18N.t 로 번역 → 언어 전환 시 재렌더로 갱신.
+  // 포맷 샘플(1:1 · [ ] · - 등)은 ko/en 동일 값으로 로케일에 둔다(uniform 렌더).
   const FORMAT_ROWS = [
-    { key: "book_name", label: "책 이름",
-      opts: [["long_ko", "한글 정식"], ["short_ko", "한글 약칭"], ["long_en", "영문 정식"], ["short_en", "영문 약칭"]] },
-    { key: "chapter_verse_format", label: "장절 표기",
-      opts: [["colon", "1:1"], ["korean", "1장 1절"]] },
-    { key: "bracket_style", label: "괄호",
-      opts: [["none", "없음"], ["[]", "[ ]"], ["()", "( )"]] },
-    { key: "ref_position", label: "표기 위치",
-      opts: [["before", "본문 앞"], ["after", "본문 뒤"]] },
-    { key: "range_symbol", label: "범위 기호",
-      opts: [["-", "-"], ["~", "~"]] },
-    { key: "ref_body_separator", label: "구분 기호",
-      opts: [[" - ", "하이픈"], [": ", "콜론"], [" ", "띄어쓰기"]] },
-    { key: "output_mode", label: "출력 방식",
-      opts: [["inline", "한 줄로"], ["newline", "줄마다"]] },
+    { key: "book_name", label: "fmt.bookName",
+      opts: [["long_ko", "fmt.bookLong"], ["short_ko", "fmt.bookShort"]] },
+    { key: "chapter_verse_format", label: "fmt.cvFormat",
+      opts: [["colon", "fmt.cvColon"], ["korean", "fmt.cvKorean"]] },
+    { key: "bracket_style", label: "fmt.bracket",
+      opts: [["none", "fmt.bracketNone"], ["[]", "fmt.bracketSquare"], ["()", "fmt.bracketParen"]] },
+    { key: "ref_position", label: "fmt.position",
+      opts: [["before", "fmt.posBefore"], ["after", "fmt.posAfter"]] },
+    { key: "range_symbol", label: "fmt.rangeSymbol",
+      opts: [["-", "fmt.rangeHyphen"], ["~", "fmt.rangeTilde"]] },
+    { key: "ref_body_separator", label: "fmt.separator",
+      opts: [[" - ", "fmt.sepHyphen"], [": ", "fmt.sepColon"], [" ", "fmt.sepSpace"]] },
+    { key: "output_mode", label: "fmt.outputMode",
+      opts: [["inline", "fmt.inline"], ["newline", "fmt.newline"]] },
   ];
   const TOGGLE_ROWS = [
-    { key: "newline_show_cv", label: "줄마다 장:절 표시" },
-    { key: "show_version_header", label: "버전 헤더 출력" },
-    { key: "hide_reference", label: "장절 표기 숨기기 (본문만)" },
+    { key: "newline_show_cv", label: "fmt.newlineShowCv" },
+    { key: "show_version_header", label: "fmt.showVersionHeader" },
+    { key: "hide_reference", label: "fmt.hideReference" },
   ];
 
   let settingsLoaded = false;
@@ -655,13 +878,13 @@
       r.className = "set-row";
       const lab = document.createElement("span");
       lab.className = "set-label";
-      lab.textContent = row.label;
+      lab.textContent = I18N.t(row.label);
       const seg = document.createElement("div");
       seg.className = "seg";
       row.opts.forEach(([val, label]) => {
         const opt = document.createElement("div");
         opt.className = "opt" + (setState.format[row.key] === val ? " on" : "");
-        opt.textContent = label;
+        opt.textContent = I18N.t(label);
         opt.addEventListener("click", async () => {
           seg.querySelectorAll(".opt").forEach((o) => o.classList.remove("on"));
           opt.classList.add("on");
@@ -680,7 +903,7 @@
       t.className = "set-toggle";
       const lab = document.createElement("span");
       lab.className = "set-label";
-      lab.textContent = row.label;
+      lab.textContent = I18N.t(row.label);
       const sw = document.createElement("span");
       sw.className = "switch" + (setState.format[row.key] ? " on" : "");
       sw.innerHTML = `<span class="knob"></span>`;
@@ -755,7 +978,7 @@
     if (!order.length) {
       const e = document.createElement("div");
       e.className = "order-empty";
-      e.textContent = "복사 시 사용할 역본이 없습니다. 아래에서 추가하세요.";
+      e.textContent = I18N.t("order.empty");
       host.appendChild(e);
     } else {
       order.forEach((name, i) => {
@@ -775,7 +998,7 @@
     if (avail.length) {
       const add = document.createElement("button");
       add.className = "set-add";
-      add.textContent = "＋ 역본 추가";
+      add.textContent = I18N.t("order.addVersion");
       add.addEventListener("click", () => {
         openMenu(
           add,
@@ -828,7 +1051,7 @@
     if (STRONG_RE.test(q)) {
       const code = q.replace(/\s+/g, "").toUpperCase();
       $("search-meta").textContent = "";
-      $("search-results").innerHTML = `<div class="panel-loading">[${esc(code)}] 원어 역검색 중…</div>`;
+      $("search-results").innerHTML = `<div class="panel-loading">${I18N.t("search.strongSearching", { code: esc(code) })}</div>`;
       renderStrongSearch(await api().search_strong(code));
       return;
     }
@@ -839,13 +1062,14 @@
       const vs = ref.verses && ref.verses.length ? ref.verses : null;
       showView("viewer");
       CardManager.goToRef(ref.book_num, ref.chapter, vs);
-      toast(`${ref.short} ${ref.chapter}${vs ? ":" + vs[0] : "장"}으로 이동`);
+      const jref = `${ref.short} ${ref.chapter}${vs ? ":" + vs[0] : I18N.t("ref.chapterMark")}`;
+      toast(I18N.t("toast.jumpedTo", { ref: jref }));
       return;
     }
 
     // 3) Keyword search (default). v1.0.5: 띄어쓰기 다중 키워드면 AND/OR 모드 적용.
     $("search-meta").textContent = "";
-    $("search-results").innerHTML = `<div class="panel-loading">검색 중…</div>`;
+    $("search-results").innerHTML = `<div class="panel-loading">${I18N.t("search.searching")}</div>`;
     renderSearch(await api().search(q, state.searchVersion || undefined, 200, searchMode()));
   }
 
@@ -860,7 +1084,7 @@
   async function copyHit(h) {
     const r = await api().copy_reference(h.book, h.chapter, [h.verse]);
     if (r && r.ok) {
-      toast(`${h.short} ${h.chapter}:${h.verse} 복사됨`);
+      toast(I18N.t("toast.copiedRef", { ref: `${h.short} ${h.chapter}:${h.verse}` }));
       logReference({ book_num: h.book, chapter: h.chapter, verses: [h.verse],
         short_name: h.short, n_parts: r.n_parts || 1, text: r.text });
     }
@@ -869,8 +1093,10 @@
 
   // Click handler shared by keyword + strong-code results.
   function wireSearchHitClicks() {
-    $("search-results").querySelectorAll(".sr").forEach((el) => {
-      el.addEventListener("click", async () => {
+    const host = $("search-results");
+    host.querySelectorAll(".sr").forEach((el) => {
+      el.addEventListener("click", async (ev) => {
+        if (ev.target.closest("[data-cart-add]")) return;  // ＋ 는 장바구니 담기 전용
         const h = searchHits[Number(el.dataset.i)];
         if (!h) return;
         const r = await copyHit(h);
@@ -884,6 +1110,13 @@
         }
       });
     });
+    host.querySelectorAll("[data-cart-add]").forEach((btn) => {
+      btn.addEventListener("click", (ev) => {
+        ev.stopPropagation();
+        const h = searchHits[Number(btn.dataset.cartAdd)];
+        if (h) addToCart({ book_num: h.book, chapter: h.chapter, verses: [h.verse], short_name: h.short });
+      });
+    });
   }
 
   function renderSearch(res) {
@@ -892,21 +1125,21 @@
       book: h.book, chapter: h.chapter, verse: h.verse, short: h.short,
     }));
     if (!searchHits.length) {
-      $("search-meta").textContent = `"${res.keyword}" 검색 결과 없음`;
-      host.innerHTML = `<div class="panel-loading">검색 결과가 없습니다.</div>`;
+      $("search-meta").textContent = I18N.t("search.noResultMeta", { keyword: res.keyword });
+      host.innerHTML = `<div class="panel-loading">${I18N.t("search.noResults")}</div>`;
       return;
     }
     // 띄어쓰기 다중 키워드일 때만 AND/OR 모드 표기(단일어는 모드 무관 폴백).
     const multi = res.keyword.trim().includes(" ");
     const modeTag = multi && res.mode ? ` · ${res.mode.toUpperCase()}` : "";
     $("search-meta").textContent =
-      `"${res.keyword}" 결과 ${searchHits.length}건 · ${res.display}${modeTag} — 구절 클릭 시 ` +
-      (state.searchClickNav ? "복사 + 본문 이동" : "복사");
+      I18N.t("search.resultMeta", { keyword: res.keyword, count: searchHits.length, display: res.display, mode: modeTag }) +
+      (state.searchClickNav ? I18N.t("search.actionCopyNav") : I18N.t("search.actionCopy"));
     const toks = res.matched_tokens || [];
     host.innerHTML = (res.hits || [])
       .map(
         (h, i) =>
-          `<div class="sr" data-i="${i}"><span class="sr-ref">${esc(h.short)} ${h.chapter}:${h.verse}</span><span class="sr-text">${highlightHtml(esc(h.text), toks)}</span></div>`
+          `<div class="sr" data-i="${i}"><span class="sr-ref">${esc(h.short)} ${h.chapter}:${h.verse}</span><span class="sr-text">${highlightHtml(esc(h.text), toks)}</span><span class="cart-add-btn" data-cart-add="${i}" title="${esc(I18N.t("cart.add"))}">＋</span></div>`
       )
       .join("");
     wireSearchHitClicks();
@@ -943,17 +1176,17 @@
       short: (h.ref || "").split(" ")[0],
     }));
     if (!hits.length) {
-      $("search-meta").textContent = `[${res ? res.code : ""}] 원어 역검색 결과 없음`;
-      host.innerHTML = `<div class="panel-loading">이 스트롱 코드를 포함한 구절이 없습니다 (개역한글S 기준).</div>`;
+      $("search-meta").textContent = I18N.t("search.strongNoResultMeta", { code: res ? res.code : "" });
+      host.innerHTML = `<div class="panel-loading">${I18N.t("search.strongNoResults")}</div>`;
       return;
     }
     $("search-meta").textContent =
-      `원어 역검색 [${res.code}] · ${res.count}건 (개역한글S) — 구절 클릭 시 복사` +
-      (state.searchClickNav ? " + 이동" : "");
+      I18N.t("search.strongResultMeta", { code: res.code, count: res.count }) +
+      (state.searchClickNav ? I18N.t("search.strongNavSuffix") : "");
     host.innerHTML = hits
       .map(
         (h, i) =>
-          `<div class="sr" data-i="${i}"><span class="sr-ref">${esc(h.ref)}</span><span class="sr-text">${esc(h.text)}</span></div>`
+          `<div class="sr" data-i="${i}"><span class="sr-ref">${esc(h.ref)}</span><span class="sr-text">${esc(h.text)}</span><span class="cart-add-btn" data-cart-add="${i}" title="${esc(I18N.t("cart.add"))}">＋</span></div>`
       )
       .join("");
     wireSearchHitClicks();
@@ -968,7 +1201,7 @@
     const s = (q || "").trim();
     if (!s) { host.innerHTML = ""; return; }
     if (STRONG_RE.test(s)) {
-      host.innerHTML = `<span class="sug-hint">↵ 원어 역검색 <b>${esc(s.replace(/\s+/g, "").toUpperCase())}</b></span>`;
+      host.innerHTML = `<span class="sug-hint">${I18N.t("search.strongSuggest", { code: esc(s.replace(/\s+/g, "").toUpperCase()) })}</span>`;
       return;
     }
     // leading book token, only while the user hasn't started a chapter yet
@@ -1069,7 +1302,7 @@
     if (verAdd) {
       verAdd.addEventListener("click", () => {
         const avail = state.versions.filter((v) => !state.viewer.includes(v.name));
-        if (!avail.length) { toast("모든 역본이 이미 선택되어 있습니다"); return; }
+        if (!avail.length) { toast(I18N.t("toast.allVersionsSelected")); return; }
         openMenu(
           verAdd,
           avail.map((v) => ({ label: v.display, value: v.name })),
@@ -1100,7 +1333,9 @@
 
     // Font size A− / A+ (persisted as viewer_font_size).
     const changeFont = (d) => {
-      const n = Math.max(8, Math.min(30, state.fontSize + d));
+      // 비례 스텝: 큰 글자일수록 큰 폭으로(대형 스크린 극대화). Max 제한 사실상 해제(400).
+      const step = Math.max(1, Math.round(state.fontSize * 0.12));
+      const n = Math.max(8, Math.min(400, state.fontSize + d * step));
       if (n === state.fontSize) return;
       state.fontSize = n;
       applyFontScale();
@@ -1129,8 +1364,21 @@
     state.versions = res.versions;
     state.versionsNames = res.versions.map((v) => v.name);
     if (setState) { setState.versions = res.versions; renderOrder(); }
-    toast(res.added && res.added.length ? `${res.added.length}개 역본 추가됨` : "새 역본 없음");
+    toast(res.added && res.added.length ? I18N.t("toast.versionsAdded", { n: res.added.length }) : I18N.t("toast.noNewVersions"));
   }
+
+  // 라이브 UI 언어 전환 시 지속 렌더 영역을 현재 언어로 다시 그린다. 전부 메모리/DOM
+  // 기반(브릿지 호출 없음)이라 빠른 토글에도 안전. (검색 결과 메타는 다음 검색 때 갱신.)
+  function relabelDynamic() {
+    try { setStatus(state.monitoring); } catch (_) {}
+    try { renderLog(); } catch (_) {}
+    try { renderCart(); } catch (_) {}
+    if (settingsLoaded && setState) {
+      try { renderFormat(); } catch (_) {}
+      try { renderOrder(); } catch (_) {}
+    }
+  }
+  window.addEventListener("i18n:changed", relabelDynamic);
 
   // Shared namespace (classic scripts, file:// safe). The three app scripts
   // share global scope; BC surfaces the principal handles for debugging.

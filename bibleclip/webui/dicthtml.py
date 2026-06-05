@@ -11,6 +11,8 @@ mixins). api.py re-exports the public names for backwards compatibility.
 """
 import re
 
+from bibleclip import i18n
+
 _NUM_RE = re.compile(r'<\s*num\s*>(.*?)<\s*/\s*num\s*>', re.S | re.I)
 # A lexicon entry starts: HEADWORD^<font ...>reading</font><br>... The first
 # font holds the romanization/Korean reading; the rest is the gloss + body.
@@ -47,7 +49,7 @@ def parse_entry(markup):
     return {'headword': headword, 'reading': reading, 'html': markup_to_html(rest)}
 
 
-def _morph_html(morph):
+def _morph_html(morph, lang='ko'):
     """Render a morphology list (Library.morphology) to the 형태소 분석 block."""
     if not morph:
         return ''
@@ -61,7 +63,7 @@ def _morph_html(morph):
         if w.get('gloss') and w['gloss'] != '_':
             seg += f" · {w['gloss']}"
         rows.append(seg)
-    return ('<div class="morph"><div class="morph-h">형태소 분석</div>'
+    return (f'<div class="morph"><div class="morph-h">{i18n.t("dict.morphHeading", lang)}</div>'
             + '<br>'.join(rows) + '</div>')
 
 
@@ -78,7 +80,7 @@ _DICT_THEMES = {
 }
 
 
-def _dict_page_html(code, entry, theme='light'):
+def _dict_page_html(code, entry, theme='light', lang='ko'):
     t = _DICT_THEMES.get(theme, _DICT_THEMES['light'])
     if not entry:
         head = body = ''
@@ -87,8 +89,8 @@ def _dict_page_html(code, entry, theme='light'):
     else:
         head = entry.get('headword', '')
         reading = entry.get('reading', '')
-        body = entry.get('html', '') or '사전 항목 없음'
-        morph = _morph_html(entry.get('morph'))
+        body = entry.get('html', '') or i18n.t('dict.noEntry', lang)
+        morph = _morph_html(entry.get('morph'), lang)
     head_block = ''
     if head:
         head_block = (f'<div class="head"><span class="heb">{head}</span>'
@@ -96,9 +98,9 @@ def _dict_page_html(code, entry, theme='light'):
     font_ui = ('"Pretendard","Apple SD Gothic Neo","Malgun Gothic",'
                '"Segoe UI","Noto Sans KR",system-ui,sans-serif')
     font_heb = '"SBL Hebrew","Times New Roman","Noto Serif Hebrew",serif'
-    return f"""<!DOCTYPE html><html lang="ko" data-theme="{theme}"><head>
+    return f"""<!DOCTYPE html><html lang="{lang}" data-theme="{theme}"><head>
 <meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>사전 · {code}</title><style>
+<title>{i18n.t('dict.popupTitle', lang, code=code)}</title><style>
 *{{box-sizing:border-box;margin:0;padding:0}}
 body{{font-family:{font_ui};background:{t['bg']};color:{t['text']};
  padding:20px;line-height:1.8;-webkit-font-smoothing:antialiased}}

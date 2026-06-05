@@ -254,8 +254,69 @@ class Library:
                 return n
         return next(iter(self.dbs), None)
 
+    def book_aliases(self):
+        """``{normalized_name: book_num}`` gathered from EVERY loaded version's own
+        book list (short + long names). Lets the reference parser recognize a
+        version's OWN abbreviations (e.g. ESV '1Ths', which isn't in the static
+        English map) — and, as more language modules drop into bible_versions/,
+        their book names too, with zero hardcoding. Built from whatever .SQLite3
+        files are present and cached; auto-rebuilt when the loaded set changes."""
+        names = frozenset(self.dbs)
+        if getattr(self, '_alias_key', None) != names:
+            amap = {}
+            for db in self.dbs.values():
+                for bn, short, long_ in getattr(db, 'book_list', []):
+                    for nm in (short, long_):
+                        k = Engine._norm_book(nm)
+                        if k and k != '?' and k not in amap:
+                            amap[k] = bn
+            self._merge_alias_overrides(amap)
+            self._book_aliases = amap
+            self._alias_key = names
+        return self._book_aliases
+
+    def _merge_alias_overrides(self, amap):
+        """Merge user fixes from ``bible_versions/aliases_override.json`` on top of
+        the auto-built map (manual entries WIN). For odd DBs whose book names are
+        wrong/blank, a human can map a name → a book number OR a known abbrev:
+
+            { "1 Ths": "1thess",  "ルツ記": "ruth",  "創世記": 10 }
+
+        Keys starting with '_' are treated as comments. Picked up on (re)build —
+        i.e. after a restart or a DB rescan. Fail-soft: any error → no overrides."""
+        try:
+            path = os.path.join(resolve_data_dir(BIBLE_DIR), 'aliases_override.json')
+            with open(path, 'r', encoding='utf-8') as f:
+                overrides = json.load(f)
+        except Exception:
+            return
+        if not isinstance(overrides, dict):
+            return
+        from bibleclip.constants import ENGLISH_BOOK_MAP
+        for raw, val in overrides.items():
+            if not isinstance(raw, str) or raw.startswith('_'):
+                continue
+            key = Engine._norm_book(raw)
+            if not key:
+                continue
+            # value: a book number, or a known name/abbrev to resolve to one.
+            bn = None
+            if isinstance(val, bool):
+                bn = None
+            elif isinstance(val, int):
+                bn = val
+            elif isinstance(val, str):
+                v = val.strip()
+                if v.isdigit():
+                    bn = int(v)
+                else:
+                    vk = Engine._norm_book(v)
+                    bn = amap.get(vk) or ENGLISH_BOOK_MAP.get(vk)
+            if bn is not None:
+                amap[key] = bn   # manual override wins
+
     def parse_reference(self, text):
-        return Engine.parse_reference(text)
+        return Engine.parse_reference(text, self.book_aliases())
 
     def get_chapters(self, version, book_num):
         db = self.dbs.get(version)
@@ -337,7 +398,7 @@ class Library:
                 return {'kind': 'keyword', 'keyword': keyword}
             return None
 
-        refs = Engine.parse_reference(text)
+        refs = Engine.parse_reference(text, self.book_aliases())
         if not refs:
             return None
         book_num, short_name, long_name, chapter, verses = refs[0]
@@ -345,15 +406,33 @@ class Library:
         text_out, n_parts = self.format_reference(book_num, chapter, verses)
         if not text_out:
             return None
+        # 토스트/활동로그 라벨은 주 출력 역본의 *자기* 책이름으로(본문과 일치). 영어
+        # 역본이면 'Ruth'처럼 나오고, 파서가 돌려준 한국어 정식맵 값은 폴백으로만 쓴다.
+        display_name = self._display_book_name(book_num) or short_name
         return {
             'kind': 'reference',
             'book_num': book_num,
             'chapter': chapter,
             'verses': verses,
-            'short_name': short_name,
+            'short_name': display_name,
             'text': text_out,
             'n_parts': n_parts,
         }
+
+    def _display_book_name(self, book_num):
+        """Book name for toast/log labels — taken from the PRIMARY output version's
+        own book list so it matches the copied text's language (ESV → 'Ruth', not
+        the parser's canonical Korean). Honors the 정식/약칭 (long/short) setting.
+        None when no version supplies a usable name."""
+        order = self.settings.get('output_order') or []
+        primary = order[0] if order else self.primary_version()
+        db = self.dbs.get(primary)
+        if db and book_num in db.books:
+            short, long_ = db.books[book_num]
+            name = long_ if str(self.settings.get('book_name', 'short')).startswith('long') else short
+            if name and name != '?':
+                return name
+        return None
 
     def format_reference(self, book_num, chapter, verses, order=None):
         """Format one reference across a list of versions.

@@ -7,7 +7,7 @@ Mixed into webui.api.Api. Uses ``self.lib`` and ``self._popup_factory``.
 """
 import re
 
-from bibleclip import korean
+from bibleclip import i18n, korean
 from bibleclip.webui.dicthtml import _TAGS_RE, _dict_page_html, parse_entry
 
 
@@ -165,9 +165,12 @@ class BibleRoutes:
         if self._popup_factory is None:
             return {'ok': False}
         entry = self.lookup_strong(code, lang, book, chapter, verse)
-        html = _dict_page_html(code, entry, theme)
+        # `lang` above is the dictionary (lexicon) language; the popup chrome
+        # (title, headings) uses the separate UI language.
+        ui = i18n.resolve_ui_lang(self.lib.settings)
+        html = _dict_page_html(code, entry, theme, ui)
         try:
-            self._popup_factory(f"사전 · {code}", html)
+            self._popup_factory(i18n.t('dict.popupTitle', ui, code=code), html)
         except Exception:
             return {'ok': False}
         return {'ok': True}

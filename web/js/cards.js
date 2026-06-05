@@ -10,6 +10,7 @@
     let zTop = 1;            // highest z-index in use (click-to-front counter)
     let cascadeN = 0;        // cascade offset counter for newly added cards
     let activeId = null;     // id of the focused card (neon stroke + keyboard target)
+    let fsCardId = null;     // id of the card currently presented fullscreen (F11)
 
     const SAVE_DEBOUNCE_MS = 300;  // layout autosave debounce (Phase 2)
 
@@ -187,15 +188,15 @@
         let disabled = false, tip;
         if (N < 2) {
           disabled = true;
-          tip = "성경 카드가 2개 이상일 때만 잠글 수 있습니다";
+          tip = I18N.t("card.lock.needTwo");
         } else if (!card.locked && lockedN >= N - 1) {
           // The last receiving card can't be locked (N-1 rule).
           disabled = true;
-          tip = "최소 한 개의 성경 카드는 클립보드 구절을 수신해야 합니다";
+          tip = I18N.t("card.lock.needReceiver");
         } else if (card.locked) {
-          tip = "잠금 해제 — 이 카드도 클립보드 구절을 수신합니다";
+          tip = I18N.t("card.lock.unlockHint");
         } else {
-          tip = "잠금 — 이 카드는 클립보드 구절을 수신하지 않습니다";
+          tip = I18N.t("card.lock.lockHint");
         }
         el.classList.toggle("disabled", disabled);
         el.dataset.tip = tip;
@@ -211,7 +212,7 @@
       } else {
         const lockedN = bibles.filter((c) => c.locked).length;
         if (lockedN >= N - 1) {
-          toast("최소 한 개의 성경 카드는 클립보드 구절을 수신해야 합니다");
+          toast(I18N.t("card.lock.needReceiver"));
           return;
         }
         card.locked = true;
@@ -223,28 +224,28 @@
     // ---- DOM building ----
 
     function headerHTML(card) {
-      const grip = `<span class="card-grip" data-tip="드래그하여 이동">⠿</span>`;
+      const grip = `<span class="card-grip" data-tip="드래그하여 이동" data-i18n-tip="card.tip.move">⠿</span>`;
       if (card.type === "bible") {
-        return `<div class="card-hd">${grip}<span class="card-title">${TYPE_LABEL.bible}</span>` +
-          `<span class="hd-mini hd-nav disabled" data-act="back" data-tip="이전 구절로">◀</span>` +
-          `<span class="hd-mini hd-nav disabled" data-act="forward" data-tip="다음 구절로">▶</span>` +
+        return `<div class="card-hd">${grip}<span class="card-title" data-i18n="card.type.bible">${typeLabel("bible")}</span>` +
+          `<span class="hd-mini hd-nav disabled" data-act="back" data-tip="이전 구절로" data-i18n-tip="card.tip.prevVerse">◀</span>` +
+          `<span class="hd-mini hd-nav disabled" data-act="forward" data-tip="다음 구절로" data-i18n-tip="card.tip.nextVerse">▶</span>` +
           `<span class="card-hd-ctrls">` +
             `<span class="hd-pill dropdown" data-act="book">…</span>` +
-            `<span class="hd-pill dropdown" data-act="chapter">${card.chapter || 1}장</span>` +
-            `<span class="hd-mini" data-act="prev" data-tip="이전 장">‹</span>` +
-            `<span class="hd-mini" data-act="next" data-tip="다음 장">›</span>` +
+            `<span class="hd-pill dropdown" data-act="chapter">${I18N.t("card.chapterLabel", { n: card.chapter || 1 })}</span>` +
+            `<span class="hd-mini" data-act="prev" data-tip="이전 장" data-i18n-tip="card.tip.prevChapter">‹</span>` +
+            `<span class="hd-mini" data-act="next" data-tip="다음 장" data-i18n-tip="card.tip.nextChapter">›</span>` +
           `</span>` +
           `<span class="card-hd-spacer"></span>` +
           `<span class="card-lock" data-act="lock">${LOCK_OPEN}</span>` +
-          `<span class="card-x" data-act="close" data-tip="카드 닫기">✕</span>` +
+          `<span class="card-x" data-act="close" data-tip="카드 닫기" data-i18n-tip="card.tip.close">✕</span>` +
         `</div>`;
       }
-      return `<div class="card-hd">${grip}<span class="card-title">${TYPE_LABEL[card.type]}</span>` +
+      return `<div class="card-hd">${grip}<span class="card-title" data-i18n="card.type.${card.type}">${typeLabel(card.type)}</span>` +
         `<span class="card-hd-ctrls">` +
-          `<span class="hd-pill dropdown" data-act="link" data-tip="연결할 성경 카드 선택">${esc(card.link || "연결 없음")}</span>` +
+          `<span class="hd-pill dropdown" data-act="link" data-tip="연결할 성경 카드 선택" data-i18n-tip="card.tip.linkSelect">${esc(card.link || I18N.t("card.linkNone"))}</span>` +
         `</span>` +
         `<span class="card-hd-spacer"></span>` +
-        `<span class="card-x" data-act="close" data-tip="카드 닫기">✕</span>` +
+        `<span class="card-x" data-act="close" data-tip="카드 닫기" data-i18n-tip="card.tip.close">✕</span>` +
       `</div>`;
     }
 
@@ -259,7 +260,7 @@
         .map((d) => `<span class="rs rs-${d}" data-rs="${d}"></span>`).join("");
       return `<section class="card mcard${locked}" data-id="${card.id}" data-type="${card.type}" style="${geomStyle(card)}">` +
         headerHTML(card) +
-        `<div class="card-body ${BODY_CLASS[card.type]}"><div class="panel-loading">불러오는 중…</div></div>` +
+        `<div class="card-body ${BODY_CLASS[card.type]}"><div class="panel-loading">${I18N.t("card.loading")}</div></div>` +
         handles +
       `</section>`;
     }
@@ -268,10 +269,12 @@
       const c = container();
       if (!c) return;
       if (!cards.length) {
-        c.innerHTML = `<div class="panels-empty">카드가 없습니다.<br>우측 상단의 <b>＋ 본문 · ＋ 원어 · ＋ 사전</b> 버튼으로 카드를 추가하세요.</div>`;
+        c.innerHTML = `<div class="panels-empty" data-i18n-html="card.empty">카드가 없습니다.<br>우측 상단의 <b>＋ 본문 · ＋ 원어 · ＋ 사전</b> 버튼으로 카드를 추가하세요.</div>`;
+        if (window.I18N) I18N.apply(c);
         return;
       }
       c.innerHTML = cards.map(skeleton).join("");
+      if (window.I18N) I18N.apply(c);   // 갓 렌더된 카드 헤더 번역(data-i18n / -tip)
       normalizeLocks();
       refreshLockStates();
       // Re-apply the active highlight (innerHTML rebuild dropped the class).
@@ -290,7 +293,7 @@
     async function loadBibleCard(card, highlight) {
       const body = bodyEl(card.id);
       if (!body) return;
-      body.innerHTML = `<div class="panel-loading">불러오는 중…</div>`;
+      body.innerHTML = `<div class="panel-loading">${I18N.t("card.loading")}</div>`;
       const navVer = state.viewer[0] || state.primary;
       await booksFor(navVer);
       const chs = await chaptersFor(navVer, card.book);
@@ -346,10 +349,10 @@
       const src = linkedBible(card);
       updateLinkHeader(card);
       if (!src) {
-        body.innerHTML = `<div class="panel-loading">연결된 성경 카드가 없습니다</div>`;
+        body.innerHTML = `<div class="panel-loading">${I18N.t("card.noLinkedBible")}</div>`;
         return;
       }
-      body.innerHTML = `<div class="panel-loading">불러오는 중…</div>`;
+      body.innerHTML = `<div class="panel-loading">${I18N.t("card.loading")}</div>`;
       const data = await api().get_interlinear(src.book, src.chapter);
       const b2 = bodyEl(card.id);
       if (b2) renderInterlinearInto(b2, data);
@@ -363,11 +366,11 @@
       const lb = linkedBible(card);
       const cur = (lb && lexCurMap.get(lb.id)) || lexCur;
       if (cur) {
-        body.innerHTML = `<div class="panel-loading">[${esc(cur.code)}] 불러오는 중…</div>`;
+        body.innerHTML = `<div class="panel-loading">${I18N.t("card.loadingCode", { code: esc(cur.code) })}</div>`;
         api().lookup_strong(cur.code, lexLang, cur.book, cur.chapter, cur.verse || null)
           .then((res) => { const b = bodyEl(card.id); if (b) renderLexEntryInto(b, cur.code, res); });
       } else {
-        body.innerHTML = `<div class="panel-loading">원어 단어의 스트롱 번호를 클릭하세요</div>`;
+        body.innerHTML = `<div class="panel-loading">${I18N.t("card.clickStrong")}</div>`;
       }
     }
 
@@ -376,14 +379,14 @@
       if (!s) return;
       const navVer = state.viewer[0] || state.primary;
       const bp = s.querySelector('[data-act="book"]'); if (bp) bp.textContent = bookShortFor(navVer, card.book) || "…";
-      const cp = s.querySelector('[data-act="chapter"]'); if (cp) cp.textContent = card.chapter + "장";
+      const cp = s.querySelector('[data-act="chapter"]'); if (cp) cp.textContent = I18N.t("card.chapterLabel", { n: card.chapter });
     }
     function updateLinkHeader(card) {
       const s = sectionEl(card.id);
       if (!s) return;
       const lp = s.querySelector('[data-act="link"]');
       const src = linkedBible(card);
-      if (lp) lp.textContent = src ? src.id : "연결 없음";
+      if (lp) lp.textContent = src ? src.id : I18N.t("card.linkNone");
     }
 
     // Reload interlinear cards that follow the given bible card (its book/chapter
@@ -401,11 +404,11 @@
     function addCard(type) {
       // Free tier (Phase 1): a single card only. Premium unlocks the workspace.
       if (!state.isPremium && cards.length >= 1) {
-        toast("무료 버전은 카드를 1개만 사용할 수 있습니다 (프리미엄에서 자유 배치 해제)");
+        toast(I18N.t("card.toast.freeOnePlace"));
         return;
       }
       if (type === "bible" && bibleCards().length >= MAX_BIBLE) {
-        toast(`성경 카드는 최대 ${MAX_BIBLE}개까지 추가할 수 있습니다`);
+        toast(I18N.t("card.toast.maxBible", { max: MAX_BIBLE }));
         return;
       }
       const id = nextId(type);
@@ -554,16 +557,20 @@
 
     async function goToRef(book, chapter, verses) {
       const bibles = bibleCards();
+      // Priority 0: the fullscreen-presented card (F2 jump during a presentation)
+      // — it always navigates in place, even if locked, so the slide follows.
+      const fsCard = (fsCardId && document.fullscreenElement)
+        ? bibles.find((c) => c.id === fsCardId) : null;
       // Priority 1: locked card that already shows this book+chapter.
       const matchedLocked = bibles.find(
         (c) => c.locked && c.book === book && c.chapter === chapter
       );
       // Priority 2: first unlocked card.
       const firstUnlocked = bibles.find((c) => !c.locked);
-      const target = matchedLocked || firstUnlocked;
+      const target = fsCard || matchedLocked || firstUnlocked;
       if (!target) return;
 
-      if (!target.locked) {
+      if (target === fsCard || !target.locked) {
         // Navigate to the incoming position.
         target.book = book;
         const chs = await chaptersFor(state.viewer[0] || state.primary, book);
@@ -689,6 +696,29 @@
       const c = activeId && cardById(activeId);
       return (c && c.type === "bible") ? c : primaryBible();
     }
+
+    // ---- F11 presentation: fullscreen the active bible card (성구만 가득) ----
+    function presentToggle() {
+      if (document.fullscreenElement) { document.exitFullscreen().catch(() => {}); return; }
+      const card = activeBibleCard();
+      if (!card) return;
+      const el = sectionEl(card.id);
+      if (!el || !el.requestFullscreen) return;
+      fsCardId = card.id;
+      el.requestFullscreen().then(() => {
+        const hint = document.createElement("div");
+        hint.className = "present-hint";
+        hint.textContent = window.I18N ? I18N.t("present.hint") : "F2 검색 · ESC 나가기";
+        el.appendChild(hint);
+      }).catch(() => { fsCardId = null; });
+    }
+    // Exiting fullscreen (ESC / F11): drop the hint + tracking.
+    document.addEventListener("fullscreenchange", () => {
+      if (!document.fullscreenElement) {
+        document.querySelectorAll(".present-hint").forEach((h) => h.remove());
+        fsCardId = null;
+      }
+    });
 
     // PowerPoint-style alignment guides (shown while a snap is active).
     // g.kind (optional, e.g. "div" for workspace dividers) becomes an extra class.
@@ -1190,7 +1220,7 @@
     // lexicon card pre-linked to the source bible).
     function addCardWithLink(type, linkId) {
       if (!state.isPremium && cards.length >= 1) {
-        toast("무료 버전은 카드를 1개만 사용할 수 있습니다 (프리미엄에서 해제)");
+        toast(I18N.t("card.toast.freeOne"));
         return null;
       }
       const id = nextId(type);
@@ -1209,17 +1239,29 @@
       return card;
     }
 
+    // Re-label the JS-rendered header bits (chapter/link pills) + lock tooltips
+    // in the current UI language. Called on i18n:changed. Pure DOM / cache reads —
+    // NO backend round-trip, so a rapid language toggle can't flood the bridge.
+    // (Tooltips/titles via data-i18n* are handled by the global I18N.apply.)
+    function relabel() {
+      refreshLockStates();
+      cards.forEach((card) => {
+        if (card.type === "bible") updateBibleHeader(card);
+        else updateLinkHeader(card);
+      });
+    }
+
     return { init, addCard, addCardWithLink, goToRef, primaryVersion,
              primaryBible, bibleCards, lexiconCards, bodyEl, linkedBibleFor,
-             chapStepPrimary, chapStepActive, reloadAllBible,
-             ensureInterlinearFor, decorateNotesFor: decorateNotes };
+             chapStepPrimary, chapStepActive, reloadAllBible, relabel,
+             presentToggle, ensureInterlinearFor, decorateNotesFor: decorateNotes };
   })();
 
   // ---- Scripture / interlinear / lexicon rendering (into a card body) ----
 
   function renderVersesInto(body, verses, highlight) {
     if (!verses || !verses.length) {
-      body.innerHTML = `<div class="panel-loading">본문 없음</div>`;
+      body.innerHTML = `<div class="panel-loading">${I18N.t("card.noText")}</div>`;
       return;
     }
     const hl = new Set(highlight || []);
@@ -1242,7 +1284,7 @@
         verseMap.get(v.n).texts[versions[vi]] = v.text;
       });
     });
-    if (!verseMap.size) { body.innerHTML = `<div class="panel-loading">본문 없음</div>`; return; }
+    if (!verseMap.size) { body.innerHTML = `<div class="panel-loading">${I18N.t("card.noText")}</div>`; return; }
     const hl = new Set(highlight || []);
     const multi = versions.length > 1;
     body.innerHTML = [...verseMap.values()]
@@ -1269,7 +1311,7 @@
 
   function renderInterlinearInto(body, data) {
     if (!data || !data.length) {
-      body.innerHTML = `<div class="panel-loading">원어 데이터 없음</div>`;
+      body.innerHTML = `<div class="panel-loading">${I18N.t("card.noOriginalData")}</div>`;
       return;
     }
     body.innerHTML = data
@@ -1304,7 +1346,7 @@
         return s;
       })
       .join("<br>");
-    return `<div class="morph"><div class="morph-h">형태소 분석</div>${rows}</div>`;
+    return `<div class="morph"><div class="morph-h">${I18N.t("dict.morphHeading")}</div>${rows}</div>`;
   }
 
   function renderLexEntryInto(body, code, res) {
@@ -1314,8 +1356,8 @@
       // code simply isn't in the installed dictionary".
       const noModule = state.lexAvail && !state.lexAvail.ko && !state.lexAvail.en;
       const msg = noModule
-        ? `원어 사전 모듈이 없습니다.<br>한글/영어 사전 파일(<b>.dct</b>)을 <b>original_lang</b> 폴더에 넣으면 뜻풀이가 표시됩니다.`
-        : `사전 항목 없음`;
+        ? I18N.t("card.noLexModule")
+        : I18N.t("dict.noEntry");
       body.innerHTML = `<span class="chip">${esc(code)}</span><div class="lex-body">${msg}</div>`;
       return;
     }
@@ -1325,7 +1367,7 @@
       : "";
     body.innerHTML =
       `<span class="chip">${esc(res.code)}</span>${head}${renderMorph(res.morph)}` +
-      `<div class="lex-body">${res.html || "사전 항목 없음"}</div>`;
+      `<div class="lex-body">${res.html || I18N.t("dict.noEntry")}</div>`;
   }
 
   // Look up a Strong's code and render it into the lexicon card(s) linked to
@@ -1354,7 +1396,7 @@
 
     targets.forEach((c) => {
       const b = CardManager.bodyEl(c.id);
-      if (b) b.innerHTML = `<div class="panel-loading">[${esc(code)}] 불러오는 중…</div>`;
+      if (b) b.innerHTML = `<div class="panel-loading">${I18N.t("card.loadingCode", { code: esc(code) })}</div>`;
     });
     const res = await api().lookup_strong(code, lexLang, cur.book, cur.chapter, cur.verse);
     // Re-query in case a new card was just created and re-rendered.
@@ -1391,10 +1433,17 @@
 
   async function copyVersesFromCard(card, verses) {
     if (!verses.length) return;
-    const r = await api().copy_reference(card.book, card.chapter, verses, [card.version]);
+    // Copy the versions the card is actually SHOWING (state.viewer), per
+    // copy_reference's contract ("the viewer passes its displayed versions").
+    // A stale per-card card.version would copy the wrong text AND miss the book-
+    // name cache → "?" (e.g. card.version='KRV' left over while viewer=['ESV']).
+    const versions = state.viewer.length ? state.viewer.slice() : [card.version].filter(Boolean);
+    const r = await api().copy_reference(card.book, card.chapter, verses, versions);
     if (!r || !r.ok) return;
-    const short = bookShortFor(card.version, card.book);
-    toast(`${short} ${card.chapter}:${verses.join(",")} 복사됨`);
+    const nameVer = versions[0] || card.version;
+    await booksFor(nameVer);   // ensure this version's book list is cached for the label
+    const short = bookShortFor(nameVer, card.book);
+    toast(I18N.t("toast.copiedRef", { ref: `${short} ${card.chapter}:${verses.join(",")}` }));
     logReference({ book_num: card.book, chapter: card.chapter, verses,
       short_name: short, n_parts: r.n_parts || 1, text: r.text });
     const body = CardManager.bodyEl(card.id);
