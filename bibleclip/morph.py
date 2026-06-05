@@ -14,24 +14,47 @@ _CONTENT_TAGS = frozenset({
     'NNG', 'NNP', 'NR', 'XR', 'SL', 'SH', 'VV', 'VA',
 })
 
+import threading
+
 _kiwi = None
 _kiwi_tried = False
+_kiwi_lock = threading.Lock()
 
 
 def _get_kiwi():
     """The shared Kiwi instance, or None if unavailable. Loaded once, lazily —
     importing/constructing Kiwi is heavy, so it never happens at module import,
-    only on the first real tokenize call (i.e. the first fuzzy search)."""
+    only on the first real use.
+
+    ⚠️ 스레드 안전성: 프로즌 빌드(pywebview/pythonnet)에서 검색은 .NET/WebView2
+    브리지 스레드에서 호출된다. Kiwi 를 그 외래 스레드에서 '처음 생성'하면 내부
+    워커 스레드풀을 띄우다 네이티브 크래시(즉시 강제 종료)가 났다 — 단일어/문장
+    검색은 exact 매치라 Kiwi 를 안 부르고, 다중 키워드만 이 경로를 처음 타며 죽음.
+    방어 2겹:
+      (1) ``num_workers=1`` 로 내부 스레드풀을 아예 만들지 않는다(인라인 단일 스레드).
+      (2) 락으로 생성을 1회로 직렬화 → 시작 시 ``warmup()`` 데몬이 먼저 잡으면
+          브리지 스레드의 검색은 락에서 대기, 생성은 안전한 스레드에서 끝난다.
+    한 줄 검색어 토큰화에 병렬성은 무의미하므로 단일 스레드가 성능상도 적절."""
     global _kiwi, _kiwi_tried
     if _kiwi_tried:
         return _kiwi
-    _kiwi_tried = True
-    try:
-        from kiwipiepy import Kiwi
-        _kiwi = Kiwi()
-    except Exception:
-        _kiwi = None
+    with _kiwi_lock:
+        if _kiwi_tried:                 # double-checked: another thread won the race
+            return _kiwi
+        try:
+            from kiwipiepy import Kiwi
+            _kiwi = Kiwi(num_workers=1)
+        except Exception:
+            _kiwi = None
+        _kiwi_tried = True
     return _kiwi
+
+
+def warmup():
+    """Construct the Kiwi singleton ahead of first search. Call from a daemon
+    thread at app startup so the heavy/native init happens on a normal Python
+    thread — never lazily on the pywebview bridge thread (which crashed)."""
+    _get_kiwi()
 
 
 def available():

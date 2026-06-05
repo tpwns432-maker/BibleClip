@@ -126,6 +126,13 @@ def main():
             f"morpheme search should reach 창 1:1 ({len(mh)} hits)"
         print(f"kiwi tokenize '태초에 하나님이 천지를' -> {toks}")
         print(f"   morpheme search '하나님 창조' -> {len(mh)} hits incl 창 1:1 OK")
+        # 다중 키워드(스페이스로 엮은 3단어) 검색이 죽지 않고 결과를 내는지 — 소장님
+        # 실창에서 "태초 말씀 하나님" 류가 크래시한 회귀 가드. exact 를 빗나가
+        # 형태소 AND 경로를 타며, 세 단어를 모두 품은 요 1:1(book 500)을 찾아야 함.
+        mw = lib.search(version, '태초 말씀 하나님')
+        assert any(b == 500 and c == 1 and v == 1 for (b, c, v, t) in mw), \
+            f"multi-keyword '태초 말씀 하나님' should reach 요 1:1 ({len(mw)} hits)"
+        print(f"   multi-keyword '태초 말씀 하나님' -> {len(mw)} hits incl 요 1:1 OK")
     else:
         assert morph.tokenize_keywords('아무 문장') == []
         print("(kiwipiepy absent — morpheme search no-ops, trigram fallback) OK")

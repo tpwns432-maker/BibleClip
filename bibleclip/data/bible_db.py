@@ -94,14 +94,23 @@ class BibleDB:
         # like "하나님의 사랑" → ["하나님","사랑"] matches verses carrying both,
         # ignoring 조사. Skipped when the lone token equals the despaced query
         # (the exact pass already covered that) or Kiwi yields nothing.
+        #
+        # 전체를 try/except 로 감싼다: Kiwi 형태소 분석/스캔에서 어떤 예외가 나도
+        # 검색이 죽지 않고 아래 trigram 폴백으로 부드럽게 내려가도록(fail-soft).
+        # 다중 키워드("태초 말씀 하나님")가 exact 를 빗나가 Kiwi 경로를 처음 타며
+        # 깨지는 회귀를 방어. (단, kiwipiepy C확장의 네이티브 abort 는 Python 으로
+        # 못 잡으므로 그 경우는 morph 단에서 Kiwi 자체를 비활성화해야 함.)
         if not self.is_english:
-            tokens = morph.tokenize_keywords(keyword)
-            if tokens and not (len(tokens) == 1 and tokens[0] == qd):
-                morph_hits = [(b, c, v, ct)
-                              for (b, c, v, ct, dt, tri) in self._search_index
-                              if all(tok in dt for tok in tokens)]
-                if morph_hits:
-                    return morph_hits[:limit]
+            try:
+                tokens = morph.tokenize_keywords(keyword)
+                if tokens and not (len(tokens) == 1 and tokens[0] == qd):
+                    morph_hits = [(b, c, v, ct)
+                                  for (b, c, v, ct, dt, tri) in self._search_index
+                                  if all(tok in dt for tok in tokens)]
+                    if morph_hits:
+                        return morph_hits[:limit]
+            except Exception:
+                pass  # 형태소 검색 실패 → 조용히 trigram 폴백으로
         qtri = trigrams(qd)
         if not qtri:
             return []
