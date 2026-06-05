@@ -11,9 +11,26 @@
 $ErrorActionPreference = "Stop"
 Set-Location (Split-Path $PSScriptRoot -Parent)   # repo root
 
+# 9차 모듈화: 분할된 web/**/*.js 를 빌드 전에 node --check 로 문법 검증
+# (core/cards/search-notes 중 하나라도 깨지면 빌드 중단). node 부재 시 건너뜀.
+if (Get-Command node -ErrorAction SilentlyContinue) {
+  $jsFiles = Get-ChildItem -Recurse web -Filter *.js
+  foreach ($js in $jsFiles) {
+    & node --check $js.FullName
+    if ($LASTEXITCODE -ne 0) { throw "node --check failed: $($js.FullName)" }
+  }
+  Write-Host "web/**/*.js syntax OK ($($jsFiles.Count) files)" -ForegroundColor Green
+} else {
+  Write-Host "node not found — skipping JS syntax check" -ForegroundColor Yellow
+}
+
+# --collect-all kiwipiepy(+model): 한국어 형태소 검색기(9차 Phase 2)의 C 확장과
+# 모델 데이터를 동봉. 미동봉 시 앱은 trigram 폴백으로 동작하나, 동봉해야 검색창
+# 형태소 분석이 배포본에서 활성화됨. (모델이 수십 MB — 빌드 용량 증가 유의)
 python -m PyInstaller --onedir --windowed --noconfirm --clean `
   --collect-submodules bibleclip `
   --hidden-import pyperclip `
+  --collect-all kiwipiepy --collect-all kiwipiepy_model `
   --add-data "web;web" `
   --icon=icon.ico --name BibleClipWeb `
   --distpath dist_web --workpath build_web `

@@ -30,10 +30,21 @@ jobs:
         # clipboard backend; without it monitoring + verse-copy silently fail).
         run: python -m pip install --upgrade pip pyinstaller -r requirements.txt
 
+      # 9차 모듈화: 분할된 web/**/*.js 문법 검증 (하나라도 깨지면 빌드 중단)
+      - name: Check web JS syntax
+        shell: pwsh
+        run: |
+          Get-ChildItem -Recurse web -Filter *.js | ForEach-Object {
+            node --check $_.FullName
+            if ($LASTEXITCODE -ne 0) { throw "node --check failed: $($_.FullName)" }
+          }
+          Write-Host "web/**/*.js syntax OK"
+
       - name: Build BibleClipWeb.exe
         run: >
           python -m PyInstaller --onedir --windowed --noconfirm --clean
-          --collect-submodules bibleclip --hidden-import pyperclip --add-data "web;web"
+          --collect-submodules bibleclip --hidden-import pyperclip
+          --collect-all kiwipiepy --collect-all kiwipiepy_model --add-data "web;web"
           --icon=icon.ico --name BibleClipWeb bibleclip_web.py
 
       - name: Assemble package
@@ -72,6 +83,14 @@ jobs:
       - name: Install deps
         run: python -m pip install --upgrade pip pyinstaller -r requirements.txt
 
+      # 9차 모듈화: 분할된 web/**/*.js 문법 검증 (하나라도 깨지면 빌드 중단)
+      - name: Check web JS syntax
+        run: |
+          find web -name '*.js' -print0 | while IFS= read -r -d '' f; do
+            node --check "$f" || exit 1
+          done
+          echo "web/**/*.js syntax OK"
+
       - name: Generate icns icon
         run: |
           if [ -f icon.png ]; then
@@ -81,9 +100,9 @@ jobs:
       - name: Build BibleClipWeb.app
         run: |
           if [ -f icon.icns ]; then
-            python -m PyInstaller --onedir --windowed --noconfirm --clean --collect-submodules bibleclip --hidden-import pyperclip --add-data "web:web" --icon=icon.icns --name BibleClipWeb bibleclip_web.py
+            python -m PyInstaller --onedir --windowed --noconfirm --clean --collect-submodules bibleclip --hidden-import pyperclip --collect-all kiwipiepy --collect-all kiwipiepy_model --add-data "web:web" --icon=icon.icns --name BibleClipWeb bibleclip_web.py
           else
-            python -m PyInstaller --onedir --windowed --noconfirm --clean --collect-submodules bibleclip --hidden-import pyperclip --add-data "web:web" --name BibleClipWeb bibleclip_web.py
+            python -m PyInstaller --onedir --windowed --noconfirm --clean --collect-submodules bibleclip --hidden-import pyperclip --collect-all kiwipiepy --collect-all kiwipiepy_model --add-data "web:web" --name BibleClipWeb bibleclip_web.py
           fi
 
       - name: Assemble package
