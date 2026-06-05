@@ -839,10 +839,16 @@
       return;
     }
 
-    // 3) Keyword search (default)
+    // 3) Keyword search (default). v1.0.5: 띄어쓰기 다중 키워드면 AND/OR 모드 적용.
     $("search-meta").textContent = "";
     $("search-results").innerHTML = `<div class="panel-loading">검색 중…</div>`;
-    renderSearch(await api().search(q, state.searchVersion || undefined));
+    renderSearch(await api().search(q, state.searchVersion || undefined, 200, searchMode()));
+  }
+
+  // 검색바의 AND/OR 세그먼트 현재 값 ('and'|'or'). 기본 'and'.
+  function searchMode() {
+    const on = document.querySelector('#search-mode .opt.on');
+    return (on && on.dataset.mode === "or") ? "or" : "and";
   }
 
   // Click handler shared by keyword + strong-code results. Each hit carries
@@ -878,8 +884,11 @@
       host.innerHTML = `<div class="panel-loading">검색 결과가 없습니다.</div>`;
       return;
     }
+    // 띄어쓰기 다중 키워드일 때만 AND/OR 모드 표기(단일어는 모드 무관 폴백).
+    const multi = res.keyword.trim().includes(" ");
+    const modeTag = multi && res.mode ? ` · ${res.mode.toUpperCase()}` : "";
     $("search-meta").textContent =
-      `"${res.keyword}" 결과 ${searchHits.length}건 · ${res.display} — 구절 클릭 시 ` +
+      `"${res.keyword}" 결과 ${searchHits.length}건 · ${res.display}${modeTag} — 구절 클릭 시 ` +
       (state.searchClickNav ? "복사 + 본문 이동" : "복사");
     host.innerHTML = (res.hits || [])
       .map(
@@ -963,6 +972,14 @@
       });
       input.addEventListener("input", () => renderSuggest(input.value));
       input.addEventListener("blur", () => setTimeout(clearSuggest, 150));
+    }
+    // v1.0.5: AND/OR 모드 토글 시(시각 전환은 공용 .seg 핸들러가 처리) 현재 검색어가
+    // 있으면 즉시 재검색.
+    const sm = $("search-mode");
+    if (sm) {
+      sm.addEventListener("click", (e) => {
+        if (e.target.closest(".opt") && $("search-input").value.trim()) runSearch();
+      });
     }
     const sv = $("search-ver");
     if (sv) {

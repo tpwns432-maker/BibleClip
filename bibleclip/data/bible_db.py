@@ -15,6 +15,7 @@ class BibleDB:
         self.is_english = self.name.upper() in ENGLISH_VERSIONS
         self._search_index = None   # built lazily on first search
         self._inverted_index = None  # {원형토큰: set((b,c,v))}, lazy (v1.0.5 스마트 검색)
+        self._verse_tokens = None    # {(b,c,v): [원형토큰...]}, 스코어링용 (역색인과 함께 빌드)
         self._load_info()
         self._load_books()
 
@@ -80,34 +81,88 @@ class BibleDB:
         if self._inverted_index is not None:
             return
         idx = {}
+        vtoks = {}
         cur = self.conn.cursor()
         cur.execute("SELECT book_number, chapter, verse, text FROM verses "
                     "ORDER BY book_number, chapter, verse")
         for b, c, v, t in cur.fetchall():
             addr = (b, c, v)
-            for tok in korean.tokenize(clean_text(t)):
+            toks = korean.tokenize(clean_text(t))
+            vtoks[addr] = toks
+            for tok in toks:
                 idx.setdefault(tok, set()).add(addr)
         self._inverted_index = idx
+        self._verse_tokens = vtoks
 
     def inverted_index(self):
         """The {원형토큰 -> set((b,c,v))} index, building it on first access."""
         self._build_inverted_index()
         return self._inverted_index
 
-    def search(self, keyword, limit=300, fuzzy_threshold=0.7):
-        """Whitespace-insensitive verse search with morpheme + fuzzy fallbacks.
+    def _score(self, addr, query_tokens):
+        """절 관련도 점수 — 걸러진 결과셋에만 적용(전수조사 아님).
 
-        1) Exact (spacing-ignored) substring matches, in canonical order.
-        2) If none, Kiwi 형태소 다중 키워드: split the query into content
-           morphemes (조사·어미 제거) and return verses containing ALL of them.
-        3) If still none, rank verses by trigram overlap with the query
-           (handles minor typos) and return those above a threshold.
-        Steps 2–3 are skipped/fall through silently when their analyzer is
-        unavailable. Returns a list of (book_number, chapter, verse, text).
+        Phase 2: **매칭 단어 수**(어간 부분일치 포함). Phase 3 에서 밀집도(proximity)·
+        길이 보너스를 보강한다."""
+        vtokens = self._verse_tokens.get(addr, ()) if self._verse_tokens else ()
+        matched = sum(1 for qt in query_tokens
+                      if any(qt in vt for vt in vtokens))
+        return float(matched)
+
+    def smart_search(self, keyword, mode='and', limit=300):
+        """v1.0.5 띄어쓰기 다중 키워드 검색 — 메모리 역색인 집합 연산.
+
+        검색어를 ``korean.tokenize`` 로 정규화(색인과 동일 규칙)하고, 각 토큰을
+        **부분일치**로 조회(어간 회수: '창조'→'창조하시니라')해 주소 집합을 만든 뒤
+        ``mode`` 에 따라 AND(교집합 ``&``)/OR(합집합 ``|``)으로 결합한다. 매칭 단어 수
+        (Phase 3: +밀집도·길이) 기준 내림차순 정렬 후 상위 ``limit`` 반환. 매칭 없으면
+        ``[]`` → 호출부가 기존 검색으로 폴백. 순수 ``dict``/``set`` (프로즌 크래시 0).
+        반환 형식은 ``search`` 와 동일: ``[(book, chapter, verse, text), ...]``."""
+        self._build_inverted_index()
+        idx = self._inverted_index
+        tokens = korean.tokenize(keyword)
+        if not tokens:
+            return []
+        sets = []
+        for tok in tokens:
+            hits = set()
+            for key, addrs in idx.items():   # 부분일치 스캔(정확 매칭 포함)
+                if tok in key:
+                    hits |= addrs
+            sets.append(hits)
+        if mode == 'or':
+            addrs = set()
+            for s in sets:
+                addrs |= s
+        else:  # 'and'
+            addrs = set(sets[0])
+            for s in sets[1:]:
+                addrs &= s
+        if not addrs:
+            return []
+        ranked = sorted(addrs, key=lambda a: (-self._score(a, tokens), a))
+        return [(b, c, v, self.get_verse_text(b, c, v))
+                for (b, c, v) in ranked[:limit]]
+
+    def search(self, keyword, limit=300, fuzzy_threshold=0.7, mode='and'):
+        """Whitespace-insensitive verse search.
+
+        0) v1.0.5: 검색어에 **띄어쓰기**가 있고 한국어 역본이면 → 메모리 역색인
+           스마트 검색(``smart_search``, AND/OR 집합연산+스코어). 결과가 있으면 반환.
+        1) (공백 없음·영어 역본·스마트 무결과 시) Exact (spacing-ignored) substring.
+        2) If none, Kiwi 형태소 다중 키워드(프로즌 비활성, 소스 폴백).
+        3) If still none, trigram overlap fuzzy.
+        Returns a list of (book_number, chapter, verse, text).
         """
         keyword = (keyword or '').strip()
         if not keyword:
             return []
+        # v1.0.5 스마트 검색: 띄어쓰기 다중 키워드 → 역색인 집합연산. 결과 있으면 반환,
+        # 없거나 공백 없으면 아래 기존 v1.0.4 라인으로 100% 폴백(호환 유지).
+        if (' ' in keyword) and not self.is_english:
+            smart = self.smart_search(keyword, mode=mode, limit=limit)
+            if smart:
+                return smart
         self._build_search_index()
         qd = despace(keyword)
         if not qd:

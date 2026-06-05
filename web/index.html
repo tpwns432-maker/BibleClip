@@ -135,6 +135,11 @@
         <input type="text" id="search-input" class="search-input" autocomplete="off"
                placeholder="검색어 · 구절 · 원어코드  (예: 사랑 / 창 1:1 / H7225)">
         <span class="pill dropdown" id="search-ver" title="검색할 역본">KRV</span>
+        <!-- v1.0.5: 여러 단어 검색 방식 (띄어쓰기 다중 키워드). 기본 AND. -->
+        <span class="seg search-mode" id="search-mode" title="여러 단어 검색: AND=모두 포함 / OR=하나라도">
+          <span class="opt on" data-mode="and">AND</span>
+          <span class="opt" data-mode="or">OR</span>
+        </span>
         <button class="btn primary" id="search-go">검색</button>
       </div>
       <div class="search-suggest" id="search-suggest"></div>
