@@ -7,6 +7,7 @@ Mixed into webui.api.Api. Uses ``self.lib`` and ``self._popup_factory``.
 """
 import re
 
+from bibleclip import korean
 from bibleclip.webui.dicthtml import _TAGS_RE, _dict_page_html, parse_entry
 
 
@@ -83,22 +84,28 @@ class BibleRoutes:
         """Keyword search in one version (defaults to the primary/Korean one).
 
         ``mode`` ('and'/'or') drives v1.0.5 띄어쓰기 다중 키워드 검색(역색인 집합연산);
-        검색어에 공백이 없으면 무시되고 기존 검색으로 폴백된다.
-        Returns {keyword, version, display, mode, hits:[{book,chapter,verse,short,text}]}."""
+        검색어에 공백이 없으면 무시되고 기존 검색으로 폴백된다. ``matched_tokens`` 는
+        결과 하이라이트용 — 조사 제거된 어근 토큰(`korean.tokenize`, 검색이 실제로
+        매칭한 단위와 동일). 프론트가 본문에서 부분일치로 강조한다('창조'→'창조하시니라').
+        Returns {keyword, version, display, mode, matched_tokens, hits:[...]}."""
         keyword = (keyword or '').strip().lstrip('#').strip()
         mode = 'or' if str(mode).lower() == 'or' else 'and'
+        # 하이라이트 토큰: 조사 제거된 어근. tokenize 가 비면(아주 짧은 질의 등) 원문 사용.
+        matched_tokens = korean.tokenize(keyword) or ([keyword] if keyword else [])
         if not keyword:
-            return {'keyword': '', 'version': None, 'display': '', 'mode': mode, 'hits': []}
+            return {'keyword': '', 'version': None, 'display': '', 'mode': mode,
+                    'matched_tokens': [], 'hits': []}
         ver = version if (version and version in self.lib.dbs) else self._search_version()
         db = self.lib.dbs.get(ver)
         if not db:
-            return {'keyword': keyword, 'version': None, 'display': '', 'mode': mode, 'hits': []}
+            return {'keyword': keyword, 'version': None, 'display': '', 'mode': mode,
+                    'matched_tokens': matched_tokens, 'hits': []}
         rows = db.search(keyword, limit=limit, mode=mode)
         hits = [{'book': b, 'chapter': c, 'verse': v,
                  'short': db.books[b][0] if b in db.books else '?', 'text': t}
                 for (b, c, v, t) in rows]
-        return {'keyword': keyword, 'version': ver,
-                'display': db.display_name, 'mode': mode, 'hits': hits}
+        return {'keyword': keyword, 'version': ver, 'display': db.display_name,
+                'mode': mode, 'matched_tokens': matched_tokens, 'hits': hits}
 
     # ---- Lexicon ----
 

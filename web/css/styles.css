@@ -618,6 +618,19 @@ body {
 .search-suggest .sug-hint { font-size: 12px; color: var(--text-muted); padding: 4px 2px; }
 .search-suggest .sug-hint b { color: var(--accent); }
 
+/* ---- 검색어 하이라이트 (v1.0.5): 결과 본문 내 매칭 토큰 강조 ---- */
+.search-highlight {
+  background-color: rgba(255, 213, 79, 0.45);  /* 노란 반투명 틴트 (라이트) */
+  border-radius: 2px;
+  font-weight: 700;
+  /* 드래그 복사 시 강조 span 이 본문 텍스트 흐름을 끊지 않도록 */
+  padding: 0 1px;
+}
+html[data-theme="dark"] .search-highlight {
+  background-color: rgba(255, 152, 0, 0.40);   /* 오렌지 틴트 (다크) */
+  color: #fff;
+}
+
 /* ---- 묵상 노트 (Phase 3): badge · context menu · editor modal ---- */
 .note-badge {
   cursor: pointer; margin: 0 5px 0 1px; font-size: .82em; vertical-align: middle;

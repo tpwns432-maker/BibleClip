@@ -221,6 +221,8 @@ def main():
     g11 = lambda r: any(h['book'] == 10 and h['chapter'] == 1 and h['verse'] == 1
                         for h in r['hits'])
     assert s_and['mode'] == 'and' and s_or['mode'] == 'or'
+    # 하이라이트용 matched_tokens(조사 제거된 어근) — 프론트가 본문 강조에 사용
+    assert s_and['matched_tokens'] == ['하나님', '천지'], s_and['matched_tokens']
     assert g11(s_and) and g11(s_or), "smart search should reach 창1:1"
     assert len(s_or['hits']) >= len(s_and['hits']), (len(s_or['hits']), len(s_and['hits']))
     # 어간 회수: '창조'는 '창조하시니라' 부분일치로 창1:1 도달
