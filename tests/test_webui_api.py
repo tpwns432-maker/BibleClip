@@ -304,6 +304,18 @@ def main():
 
     monitor_check()
 
+    # unified search bar (Phase 2): resolve_reference parses → navigable target;
+    # search_strong reverse-queries the Strong-tagged KRV (개역한글S).
+    rr = api.resolve_reference('창 1:1')
+    assert rr and rr['book_num'] == 10 and rr['chapter'] == 1 and rr['verses'] == [1], rr
+    assert api.resolve_reference('점심 뭐먹지') is None
+    if api.lib.bethlehem_strongs:
+        ss = api.search_strong('H7225')
+        assert ss['count'] >= 1 and any(h['ref'].endswith('1:1') for h in ss['hits']), ss
+        print(f"resolve_reference + search_strong('H7225') -> {ss['count']} hits OK")
+    else:
+        print("resolve_reference OK (개역한글S absent — search_strong skipped)")
+
     print("\nALL WEBUI API CHECKS PASSED ✅")
 
 
