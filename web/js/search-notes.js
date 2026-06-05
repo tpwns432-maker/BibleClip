@@ -22,6 +22,7 @@
     m.innerHTML =
       `<div class="ctx-item" data-a="copy">${I18N.t("ctx.copyVerse")}</div>` +
       `<div class="ctx-item" data-a="note">${has ? I18N.t("ctx.noteEdit") : I18N.t("ctx.noteNew")}</div>` +
+      `<div class="ctx-item" data-a="cart">${I18N.t("cart.add")}</div>` +
       `<div class="ctx-item" data-a="orig">${I18N.t("ctx.lookupOriginal")}</div>`;
     document.body.appendChild(m);
     const r = m.getBoundingClientRect();
@@ -35,6 +36,7 @@
       hideVerseMenu();
       if (a === "copy") copyVersesFromCard(card, [verse]);
       else if (a === "note") openNoteEditor(card, verse);
+      else if (a === "cart") addVerseToCart(card, verse);
       else if (a === "orig") openOriginalFor(card, verse);
     });
     verseMenuEl = m;
@@ -48,6 +50,13 @@
   // Open (or focus) a linked 원어 card for the verse's chapter.
   function openOriginalFor(card, verse) {
     CardManager.ensureInterlinearFor(card.id);
+  }
+
+  // 우클릭 → 설교 장바구니에 담기. 책이름은 표시 중 viewer 역본 기준(카드 복사와 동일).
+  function addVerseToCart(card, verse) {
+    const ver = state.viewer[0] || state.primary;
+    addToCart({ book_num: card.book, chapter: card.chapter, verses: [verse],
+      short_name: bookShortFor(ver, card.book) });
   }
 
   async function openNoteEditor(card, verse) {
@@ -312,6 +321,7 @@
     // 백엔드 ui_lang 기록(Python-렌더 표면용)은 토글마다가 아니라 모달 닫을 때 1회만 한다.
     if (window.I18N) {
       setSeg($("opt-ui-lang"), I18N.getLang(), (val) => {
+        if (val === I18N.getLang()) return;   // 무변경 클릭 무시(불필요 디스크 쓰기 방지)
         I18N.setLang(val);
         _uiLangDirty = true;
       });
@@ -684,7 +694,7 @@
       return;
     }
     list.innerHTML = cart.map((e, i) =>
-      `<div class="log-row cart-item" data-cart="${i}">` +
+      `<div class="log-row cart-item" data-cart="${i}" data-tip="${esc(I18N.t("cart.itemTip"))}">` +
         `<div class="log-ref">${esc(e.short_name)} ${e.chapter}:${esc(vlist(e.verses))}</div>` +
         `<span class="cart-del-btn" data-del="${i}" title="${esc(I18N.t("cart.remove"))}">✕</span>` +
       `</div>`
@@ -698,7 +708,11 @@
         if (r && r.ok) {
           row.classList.add("copied");
           setTimeout(() => row.classList.remove("copied"), 600);
-          toast(I18N.t("toast.copiedRef", { ref: `${e.short_name} ${e.chapter}:${vlist(e.verses)}` }));
+          toast(I18N.t("toast.recopiedRef", { ref: `${e.short_name} ${e.chapter}:${vlist(e.verses)}` }));
+        }
+        if (state.searchClickNav) {   // 찾기 옵션처럼: 클릭 시 본문(viewer)으로 이동
+          showView("viewer");
+          CardManager.goToRef(e.book_num, e.chapter, e.verses);
         }
       });
     });
@@ -783,6 +797,8 @@
   // we inject an @font-face from base64 and drive the scripture via --reading-font.
   let fontsList = [];                 // [{family, file}]
   const injectedFonts = new Set();
+  // family 는 파일명에서 오므로, 따옴표/구두점이 CSS 를 깨뜨리지 않게 안전화.
+  const cssFontName = (s) => String(s).replace(/["\\;{}<>\r\n]/g, "").trim();
   async function loadFontsList() {
     try { fontsList = await api().list_fonts(); } catch (_) { fontsList = []; }
     if (!Array.isArray(fontsList)) fontsList = [];
@@ -794,14 +810,14 @@
     try { info = await api().get_font(file); } catch (_) {}
     if (!info || !info.b64) return false;
     const st = document.createElement("style");
-    st.textContent = `@font-face{font-family:"${family}";font-display:swap;` +
+    st.textContent = `@font-face{font-family:"${cssFontName(family)}";font-display:swap;` +
       `src:url(data:${info.mime};base64,${info.b64});}`;
     document.head.appendChild(st);
     injectedFonts.add(family);
     return true;
   }
   function applyReadingFont(family) {
-    if (family) root.style.setProperty("--reading-font", `"${family}", var(--font-ui)`);
+    if (family) root.style.setProperty("--reading-font", `"${cssFontName(family)}", var(--font-ui)`);
     else root.style.removeProperty("--reading-font");
     state.readingFont = family || "";
   }
