@@ -183,6 +183,7 @@ window.BC = window.BC || {};
     fontSize: 11,
     searchVersion: null,    // version used for keyword search (default = primary)
     searchClickNav: false,  // search hit click also jumps a bible card
+    autoCopyTop: false,     // 검색 시 최고 점수 결과를 클립보드에 자동 복사
     booksCache: {},         // version -> [{num,short,long}]
     chapCache: {},          // "version:book" -> [chapters]
     primaryBooks: [],       // primary version's book list (for search autocomplete)
@@ -237,6 +238,7 @@ window.BC = window.BC || {};
     state.isPremium = init.is_premium !== false;  // default premium unless backend says false
     syncLangSeg();
     state.searchClickNav = !!init.search_click_navigates;
+    state.autoCopyTop = !!init.auto_copy_top_result;
     const verLabel = $("app-ver");
     if (verLabel && init.version) verLabel.textContent = "v" + init.version;
 

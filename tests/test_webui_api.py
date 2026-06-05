@@ -287,6 +287,12 @@ def main():
     assert api.lib.settings['search_click_navigates'] is True
     assert api.set_app_setting('auto_update_check', 0)['ok']
     assert api.lib.settings['auto_update_check'] is False
+    # 검색 최고점 자동 복사 옵션 (기본 False, get_initial/get_app_settings 노출)
+    assert api.get_initial()['auto_copy_top_result'] is False
+    assert api.get_app_settings()['auto_copy_top_result'] is False
+    assert api.set_app_setting('auto_copy_top_result', 1)['ok']
+    assert api.lib.settings['auto_copy_top_result'] is True
+    assert api.get_app_settings()['auto_copy_top_result'] is True
     # unknown key rejected
     assert not api.set_app_setting('no_such_app_key', 1)['ok']
     print("app settings get/set (poll clamp, lex enum, bool) OK")
