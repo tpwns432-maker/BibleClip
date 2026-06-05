@@ -199,6 +199,9 @@ def main():
 
     # keyword search + copy_reference (clipboard write stubbed out)
     import bibleclip.webui.api as apimod_local
+    # check_update lives in the SystemRoutes mixin now (9차 라우트 분리); stub the
+    # network where the name is looked up (routes.system), not on the api facade.
+    import bibleclip.webui.routes.system as sysroutes
     apimod_local.pyperclip = None  # don't touch the real clipboard
     # search an explicit Korean version (a prior test left primary on English)
     sr = api.search('태초', version=ver)
@@ -236,7 +239,7 @@ def main():
     print("ui prefs (font/dark/position) OK")
 
     # update check: stub the network so the test stays offline/deterministic
-    apimod_local.fetch_latest_release = lambda timeout=8: (
+    sysroutes.fetch_latest_release = lambda timeout=8: (
         {'version': 'v99.0.0', 'download_url': 'http://x/a.zip',
          'asset_name': 'a.zip', 'body': 'notes'}, '')
     up = api.check_update()
@@ -244,7 +247,7 @@ def main():
     api.skip_update('v99.0.0')
     assert api.lib.settings['skip_update_version'] == 'v99.0.0'
     assert api.check_update()['skipped'] is True
-    apimod_local.fetch_latest_release = lambda timeout=8: (None, '네트워크 오류')
+    sysroutes.fetch_latest_release = lambda timeout=8: (None, '네트워크 오류')
     assert api.check_update()['ok'] is False
     # install only runs in a frozen build → graceful refusal under source mode
     assert api.install_update()['ok'] is False
