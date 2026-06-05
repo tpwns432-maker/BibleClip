@@ -109,6 +109,35 @@ def main():
     ping_usage_async(url=None)  # must not raise / not touch the network
     print("business guard: is_premium default True; usage ping fail-open OK")
 
+    # 13) v1.0.5 Phase 1 — 한국어 정규화기(조사 제거) + KRV 역색인 빌더. 순수 파이썬,
+    #     형태소기/사전 불필요. 색인·검색어가 같은 tokenize 를 공유(대칭).
+    from bibleclip import korean
+    assert korean.tokenize('태초에 하나님이 천지를 창조하시니라') == \
+        ['태초', '하나님', '천지', '창조하시니라'], \
+        korean.tokenize('태초에 하나님이 천지를 창조하시니라')
+    assert korean.strip_particle('하나님이') == '하나님'
+    assert korean.strip_particle('천지를') == '천지'        # 합성어 보존
+    assert korean.strip_particle('창조하시니라') == '창조하시니라'  # 어미는 안 뗌
+    assert korean.tokenize('그 또한 하나님') == ['하나님']   # 불용어 제외
+    print("korean.tokenize/strip_particle OK")
+
+    if 'KRV' in lib.dbs:
+        inv = lib.dbs['KRV'].inverted_index()
+        assert inv and isinstance(inv, dict), "inverted index empty"
+        # 창 1:1 = (10,1,1) 이 핵심 원형 토큰들에 색인되어야 한다
+        for tok in ('태초', '하나님', '천지'):
+            assert (10, 1, 1) in inv.get(tok, set()), f"'{tok}' 색인에 창1:1 누락"
+        both = inv['하나님'] & inv['천지']           # AND 교집합
+        assert (10, 1, 1) in both, "AND(하나님&천지) 교집합에 창1:1 누락"
+        # 어간 부분일치(Phase 2 예고): 창1:1 은 '창조'가 아니라 '창조하시니라'로만 색인됨
+        # → 정확 매칭 '창조'로는 창1:1 미발견(Phase 2 부분일치가 회수할 대상)
+        assert (10, 1, 1) in inv.get('창조하시니라', set())
+        assert (10, 1, 1) not in inv.get('창조', set())
+        print(f"KRV 역색인 OK — 고유키 {len(inv)}개, '하나님' {len(inv['하나님'])}절, "
+              f"하나님&천지 {len(both)}절")
+    else:
+        print("(KRV 없음 — 역색인 검증 스킵)")
+
     # 12) Kiwi 형태소 검색 (9차 Phase 2): tokenize_keywords strips 조사/어미 and
     #     keeps content morphemes; a query whose words are non-contiguous (so the
     #     exact substring pass misses) is still recovered by the morpheme-AND
