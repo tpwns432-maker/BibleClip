@@ -890,13 +890,29 @@
     $("search-meta").textContent =
       `"${res.keyword}" 결과 ${searchHits.length}건 · ${res.display}${modeTag} — 구절 클릭 시 ` +
       (state.searchClickNav ? "복사 + 본문 이동" : "복사");
+    const toks = res.matched_tokens || [];
     host.innerHTML = (res.hits || [])
       .map(
         (h, i) =>
-          `<div class="sr" data-i="${i}"><span class="sr-ref">${esc(h.short)} ${h.chapter}:${h.verse}</span><span class="sr-text">${esc(h.text)}</span></div>`
+          `<div class="sr" data-i="${i}"><span class="sr-ref">${esc(h.short)} ${h.chapter}:${h.verse}</span><span class="sr-text">${highlightHtml(esc(h.text), toks)}</span></div>`
       )
       .join("");
     wireSearchHitClicks();
+  }
+
+  // 검색 결과 하이라이트. 이미 esc()된 본문에서 매칭 토큰을 <span class="search-highlight">
+  // 로 래핑한다. 토큰은 백엔드 matched_tokens(korean.tokenize — 조사 제거된 어근)이며,
+  // 부분일치로 적용되어 '창조'가 '창조하시니라' 안에서도 강조된다. 대소문자 무시.
+  // esc 이후에 동작하므로 안전(한국어/일반 단어엔 HTML 특수문자 없음).
+  function reEscapeRx(s) { return String(s).replace(/[.*+?^${}()|[\]\\]/g, "\\$&"); }
+  function highlightHtml(escapedText, tokens) {
+    if (!escapedText || !tokens || !tokens.length) return escapedText;
+    const parts = tokens.filter(Boolean).map(reEscapeRx);
+    if (!parts.length) return escapedText;
+    // 긴 토큰 우선(겹칠 때 더 긴 매칭) — 정규식 교대는 좌측 우선이므로 길이 내림차순.
+    parts.sort((a, b) => b.length - a.length);
+    const re = new RegExp("(" + parts.join("|") + ")", "gi");
+    return escapedText.replace(re, '<span class="search-highlight">$1</span>');
   }
 
   // Reverse Strong's search results (구절 목록 — 개역한글S 기준).
