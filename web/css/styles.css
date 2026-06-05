@@ -622,6 +622,8 @@ body {
 .note-badge {
   cursor: pointer; margin: 0 5px 0 1px; font-size: .82em; vertical-align: middle;
   opacity: .85; transition: transform .12s, opacity .12s; line-height: 1;
+  /* 드래그-선택 복사 시 📄 가 클립보드 텍스트에 섞이지 않도록 선택 대상에서 제외 */
+  -webkit-user-select: none; user-select: none;
 }
 .note-badge:hover { opacity: 1; transform: scale(1.18); }
 

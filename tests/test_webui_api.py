@@ -317,8 +317,10 @@ def main():
         print("resolve_reference OK (개역한글S absent — search_strong skipped)")
 
     # 묵상 노트 CRUD (Phase 3) — stub the disk write so the test never touches
-    # userdata/user_notes.json.
+    # userdata/user_notes.json, and start from an empty store so the test is
+    # hermetic (the real file may hold notes from manual testing).
     api.lib.notes._save = lambda: True
+    api.lib.notes.data = {}
     assert api.get_note(10, 1, 1) is None
     api.set_note(10, 1, 1, "  태초 묵상  ")
     n = api.get_note(10, 1, 1)
