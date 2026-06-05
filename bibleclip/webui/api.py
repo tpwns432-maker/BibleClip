@@ -741,11 +741,13 @@ class Api:
         """Format book/chapter/verses via the output pipeline, place it on the
         clipboard, and tell the monitor (so it isn't re-detected). ``verses`` is
         a list (empty = whole chapter). ``versions`` overrides output_order
-        (the viewer passes its displayed versions for manual copy). Returns
-        {ok, text} or {ok:False}."""
+        (the viewer passes its displayed versions for manual copy). ``n_parts``
+        (역본 수) is returned so the front-end can record this in-app copy in the
+        activity log alongside monitor-caught references. Returns
+        {ok, text, n_parts} or {ok:False}."""
         vs = [int(v) for v in (verses or [])]
         order = [v for v in versions if v in self.lib.dbs] if versions else None
-        text, _ = self.lib.format_reference(int(book), int(chapter), vs, order)
+        text, n_parts = self.lib.format_reference(int(book), int(chapter), vs, order)
         if not text:
             return {'ok': False}
         if pyperclip is not None:
@@ -754,7 +756,7 @@ class Api:
             except Exception:
                 pass
         self.lib.notify_clipboard_written(text)
-        return {'ok': True, 'text': text}
+        return {'ok': True, 'text': text, 'n_parts': n_parts}
 
     # ---- Lexicon ----
 
