@@ -2,6 +2,7 @@
 import os
 import sqlite3
 
+from bibleclip import morph
 from bibleclip.constants import ENGLISH_VERSIONS
 from bibleclip.text_utils import clean_text, despace, trigrams
 
@@ -68,12 +69,15 @@ class BibleDB:
         self._search_index = idx
 
     def search(self, keyword, limit=300, fuzzy_threshold=0.7):
-        """Whitespace-insensitive verse search with a fuzzy fallback.
+        """Whitespace-insensitive verse search with morpheme + fuzzy fallbacks.
 
         1) Exact (spacing-ignored) substring matches, in canonical order.
-        2) If none, rank verses by trigram overlap with the query (handles
-           particle changes / minor typos) and return those above a threshold.
-        Returns a list of (book_number, chapter, verse, cleaned_text).
+        2) If none, Kiwi 형태소 다중 키워드: split the query into content
+           morphemes (조사·어미 제거) and return verses containing ALL of them.
+        3) If still none, rank verses by trigram overlap with the query
+           (handles minor typos) and return those above a threshold.
+        Steps 2–3 are skipped/fall through silently when their analyzer is
+        unavailable. Returns a list of (book_number, chapter, verse, text).
         """
         keyword = (keyword or '').strip()
         if not keyword:
@@ -86,6 +90,18 @@ class BibleDB:
                  if qd in dt]
         if exact:
             return exact[:limit]
+        # 형태소 다중 키워드 AND (Korean only — Kiwi is a 한국어 분석기). A query
+        # like "하나님의 사랑" → ["하나님","사랑"] matches verses carrying both,
+        # ignoring 조사. Skipped when the lone token equals the despaced query
+        # (the exact pass already covered that) or Kiwi yields nothing.
+        if not self.is_english:
+            tokens = morph.tokenize_keywords(keyword)
+            if tokens and not (len(tokens) == 1 and tokens[0] == qd):
+                morph_hits = [(b, c, v, ct)
+                              for (b, c, v, ct, dt, tri) in self._search_index
+                              if all(tok in dt for tok in tokens)]
+                if morph_hits:
+                    return morph_hits[:limit]
         qtri = trigrams(qd)
         if not qtri:
             return []

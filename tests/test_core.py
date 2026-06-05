@@ -109,6 +109,27 @@ def main():
     ping_usage_async(url=None)  # must not raise / not touch the network
     print("business guard: is_premium default True; usage ping fail-open OK")
 
+    # 12) Kiwi 형태소 검색 (9차 Phase 2): tokenize_keywords strips 조사/어미 and
+    #     keeps content morphemes; a query whose words are non-contiguous (so the
+    #     exact substring pass misses) is still recovered by the morpheme-AND
+    #     pass. Fail-soft — when kiwipiepy is absent we assert the no-op contract
+    #     and trigram remains the fallback.
+    from bibleclip import morph
+    if morph.available():
+        toks = morph.tokenize_keywords('태초에 하나님이 천지를')
+        assert '태초' in toks and '하나님' in toks and '천지' in toks, toks
+        assert '에' not in toks and '이' not in toks and '를' not in toks, toks
+        # '하나님 창조' is not a contiguous (despaced) substring of 창 1:1, so the
+        # exact pass fails; morpheme AND (["하나님","창조"]) still reaches it.
+        mh = lib.search(version, '하나님 창조')
+        assert any(b == 10 and c == 1 and v == 1 for (b, c, v, t) in mh), \
+            f"morpheme search should reach 창 1:1 ({len(mh)} hits)"
+        print(f"kiwi tokenize '태초에 하나님이 천지를' -> {toks}")
+        print(f"   morpheme search '하나님 창조' -> {len(mh)} hits incl 창 1:1 OK")
+    else:
+        assert morph.tokenize_keywords('아무 문장') == []
+        print("(kiwipiepy absent — morpheme search no-ops, trigram fallback) OK")
+
     print("\nALL CORE CHECKS PASSED ✅")
 
 

@@ -1667,7 +1667,10 @@
     if (!verses.length) return;
     const r = await api().copy_reference(card.book, card.chapter, verses, [card.version]);
     if (!r || !r.ok) return;
-    toast(`${bookShortFor(card.version, card.book)} ${card.chapter}:${verses.join(",")} 복사됨`);
+    const short = bookShortFor(card.version, card.book);
+    toast(`${short} ${card.chapter}:${verses.join(",")} 복사됨`);
+    logReference({ book_num: card.book, chapter: card.chapter, verses,
+      short_name: short, n_parts: r.n_parts || 1, text: r.text });
     const body = CardManager.bodyEl(card.id);
     if (!body) return;
     verses.forEach((n) => {
@@ -2193,6 +2196,15 @@
     return verses.join(", ");
   }
 
+  // Append an internally-copied reference to the activity log (좌측 클립보드
+  // 드로어). The clipboard monitor's onReference uses this same refLog/renderLog
+  // path; in-app 클릭·드래그·검색 결과 복사도 여기로 통합 기록한다.
+  function logReference(entry) {
+    refLog.push({ kind: "reference", ...entry });
+    renderLog();
+    flagUnread();
+  }
+
   function renderLog() {
     const list = $("log-list");
     if (!list) return;
@@ -2519,6 +2531,8 @@
         const r = await api().copy_reference(h.book, h.chapter, [h.verse]);
         if (r && r.ok) {
           toast(`${h.short} ${h.chapter}:${h.verse} 복사됨`);
+          logReference({ book_num: h.book, chapter: h.chapter, verses: [h.verse],
+            short_name: h.short, n_parts: r.n_parts || 1, text: r.text });
           el.classList.add("copied");
           setTimeout(() => el.classList.remove("copied"), 700);
         }

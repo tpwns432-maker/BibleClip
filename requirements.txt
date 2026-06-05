@@ -8,3 +8,6 @@ pywebview>=5.0
 # Cross-platform clipboard backend for the web UI's monitoring loop
 # (the CustomTkinter app uses tkinter/pbcopy directly instead).
 pyperclip>=1.8
+# Korean morphological analyzer for smart verse search (조사·어미 제거 후
+# 형태소 다중 키워드 검색). Fail-soft: absence falls back to trigram fuzzy.
+kiwipiepy>=0.21
