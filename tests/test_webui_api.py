@@ -215,6 +215,18 @@ def main():
     assert cp2['ok'] and '태초' in cp2['text'], cp2
     print(f"search('태초') -> {len(sr['hits'])} hits; copy_reference ok")
 
+    # v1.0.5: 띄어쓰기 다중 키워드 AND/OR 스마트 검색(역색인). AND ⊆ OR, 둘 다 창1:1 포함.
+    s_and = api.search('하나님 천지', version=ver, mode='and')
+    s_or = api.search('하나님 천지', version=ver, mode='or')
+    g11 = lambda r: any(h['book'] == 10 and h['chapter'] == 1 and h['verse'] == 1
+                        for h in r['hits'])
+    assert s_and['mode'] == 'and' and s_or['mode'] == 'or'
+    assert g11(s_and) and g11(s_or), "smart search should reach 창1:1"
+    assert len(s_or['hits']) >= len(s_and['hits']), (len(s_or['hits']), len(s_and['hits']))
+    # 어간 회수: '창조'는 '창조하시니라' 부분일치로 창1:1 도달
+    assert g11(api.search('하나님 창조', version=ver, mode='and')), "stem recovery failed"
+    print(f"smart search AND={len(s_and['hits'])} OR={len(s_or['hits'])}; 창1:1 + 어간회수 OK")
+
     # refresh_databases returns the (unchanged here) version list
     rd = api.refresh_databases()
     assert isinstance(rd['added'], list) and rd['versions'], rd

@@ -79,23 +79,26 @@ class BibleRoutes:
                 return v
         return next(iter(self.lib.dbs), None)
 
-    def search(self, keyword, version=None, limit=200):
+    def search(self, keyword, version=None, limit=200, mode='and'):
         """Keyword search in one version (defaults to the primary/Korean one).
 
-        Returns {keyword, version, display, hits:[{book,chapter,verse,short,text}]}."""
+        ``mode`` ('and'/'or') drives v1.0.5 띄어쓰기 다중 키워드 검색(역색인 집합연산);
+        검색어에 공백이 없으면 무시되고 기존 검색으로 폴백된다.
+        Returns {keyword, version, display, mode, hits:[{book,chapter,verse,short,text}]}."""
         keyword = (keyword or '').strip().lstrip('#').strip()
+        mode = 'or' if str(mode).lower() == 'or' else 'and'
         if not keyword:
-            return {'keyword': '', 'version': None, 'display': '', 'hits': []}
+            return {'keyword': '', 'version': None, 'display': '', 'mode': mode, 'hits': []}
         ver = version if (version and version in self.lib.dbs) else self._search_version()
         db = self.lib.dbs.get(ver)
         if not db:
-            return {'keyword': keyword, 'version': None, 'display': '', 'hits': []}
-        rows = db.search(keyword, limit=limit)
+            return {'keyword': keyword, 'version': None, 'display': '', 'mode': mode, 'hits': []}
+        rows = db.search(keyword, limit=limit, mode=mode)
         hits = [{'book': b, 'chapter': c, 'verse': v,
                  'short': db.books[b][0] if b in db.books else '?', 'text': t}
                 for (b, c, v, t) in rows]
         return {'keyword': keyword, 'version': ver,
-                'display': db.display_name, 'hits': hits}
+                'display': db.display_name, 'mode': mode, 'hits': hits}
 
     # ---- Lexicon ----
 
