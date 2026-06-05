@@ -23,9 +23,12 @@ if ($LASTEXITCODE -ne 0) { throw "PyInstaller failed" }
 # Runtime data lives next to the exe (config.get_base_dir() = exe dir when frozen).
 $dst = "dist_web\BibleClipWeb"
 Copy-Item icon.ico $dst -Force
+# Copyright guard: bundle ONLY copyright-clean data — KRV(개역한글, royalty-free)
+# and 개역한글S(KRV+Strong tags). Other bibles (ESV/NKJV/…) and the lexicons
+# (HebGrkKo TWOT-Korean, HebGrkEn) are user-supplied modules, never redistributed.
 New-Item -ItemType Directory -Force "$dst\bible_versions" | Out-Null
-Copy-Item bible_versions\* "$dst\bible_versions\" -Recurse -Force
+Copy-Item bible_versions\KRV.SQLite3 "$dst\bible_versions\" -Force
 New-Item -ItemType Directory -Force "$dst\original_lang" | Out-Null
-Copy-Item original_lang\* "$dst\original_lang\" -Recurse -Force
+Copy-Item "original_lang\개역한글S.sdb" "$dst\original_lang\" -Force
 
 Write-Host "`nBuilt: $dst\BibleClipWeb.exe" -ForegroundColor Green

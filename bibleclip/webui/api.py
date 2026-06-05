@@ -244,6 +244,11 @@ class Api:
             'font_size': int(s.get('viewer_font_size', 11)),
             'auto_update_check': bool(s.get('auto_update_check', True)),
             'lex_lang': 'en' if s.get('lex_lang') == 'en' else 'ko',
+            # Which original-language dictionaries are installed (user-supplied
+            # modules in original_lang/). When both are false the UI guides the
+            # user to add a module instead of showing an empty lexicon panel.
+            'lex': {'ko': self.lib.lexicon_ko is not None,
+                    'en': self.lib.lexicon_en is not None},
             'search_click_navigates': bool(s.get('search_click_navigates', False)),
             # Persisted modular-card layout (None until the web UI saves one; the
             # front-end builds a sensible default when this is null).

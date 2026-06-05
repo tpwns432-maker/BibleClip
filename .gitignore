@@ -30,12 +30,20 @@ image.jpg
 *.png
 !icon.png
 
-# Original-language data: track only the 3 files used (for CI builds);
-# ignore the rest of the folder and the full legacy archive.
+# Bible versions + original-language data — copyright guard (v1.0.3~).
+# Only copyright-clean data is tracked / redistributed:
+#   · KRV.SQLite3      개역한글 (대한성서공회, 저작재산권 만료 — royalty-free)
+#   · 개역한글S.sdb     KRV + Strong's tags (자체 원어 엔진의 기반)
+#   · HebGrkEn.dct     BDB(1906)+Strong's(1890) — public domain. (tracked, but
+#                      EXCLUDED from builds; users opt-in as an external module)
+# Everything else is copyrighted (ESV/NKJV/KNRSV/NRKV/myJB bibles, TWOT-Korean
+# HebGrkKo.dct). Kept LOCALLY for the maintainer but NOT tracked or shipped;
+# end users drop their own licensed modules into these folders.
 BethlehemWin/
+bible_versions/*
+!bible_versions/KRV.SQLite3
 original_lang/*
 !original_lang/개역한글S.sdb
-!original_lang/HebGrkKo.dct
 !original_lang/HebGrkEn.dct
 
 # Mac source package (assembled artifact, contains data)
