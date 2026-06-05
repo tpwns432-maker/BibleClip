@@ -97,7 +97,7 @@
     </div>
 
     <!-- Modular card workspace. Cards (성경 본문 / 원어 분석 / 사전) are created
-         dynamically by CardManager (app.js) and laid out horizontally; the
+         dynamically by CardManager (js/cards.js) and laid out horizontally; the
          container starts empty and is filled on boot from the saved layout (or
          a sensible default). Drag a card's handle to reorder; the right edge of
          each card resizes it. -->
@@ -106,7 +106,7 @@
     </div>
 
     <!-- Output-settings view (출력 설정 탭). Format rows + output order are
-         rendered live by app.js; the preview shows what a caught reference
+         rendered live by js/search-notes.js; the preview shows what a caught reference
          would put on the clipboard. -->
     <div class="settings-view" id="settings-view" hidden>
       <section class="card set-card">
@@ -227,6 +227,10 @@
 <!-- Transient confirmation when a reference is converted on the clipboard. -->
 <div class="toast-wrap" id="toast-wrap"></div>
 
-<script src="app.js"></script>
+<!-- 9차 모듈화: app.js → core/cards/search-notes 3분할(클래식 스크립트, 순서 로드,
+     전역 스코프 공유). file:// 에서 ESM CORS 차단을 피하려 type=module 미사용. -->
+<script src="js/core.js"></script>
+<script src="js/cards.js"></script>
+<script src="js/search-notes.js"></script>
 </body>
 </html>
