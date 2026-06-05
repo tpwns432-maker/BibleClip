@@ -23,7 +23,7 @@ if ($LASTEXITCODE -ne 0) { throw "PyInstaller failed" }
 # Runtime data lives next to the exe (config.get_base_dir() = exe dir when frozen).
 $dst = "dist_web\BibleClipWeb"
 Copy-Item icon.ico $dst -Force
-Copy-Item 사용법.txt, 사용법.html, version_changes.json $dst -Force
+Copy-Item 사용법.txt, 사용법.html, 사용법.css, 사용법.js, version_changes.json $dst -Force
 # Copyright guard: bundle ONLY copyright-clean data — KRV(개역한글, royalty-free)
 # and 개역한글S(KRV+Strong tags). Other bibles (ESV/NKJV/…) and the lexicons
 # (HebGrkKo TWOT-Korean, HebGrkEn) are user-supplied modules, never redistributed.
