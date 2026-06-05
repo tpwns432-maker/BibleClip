@@ -197,6 +197,7 @@
     booksCache: {},         // version -> [{num,short,long}]
     chapCache: {},          // "version:book" -> [chapters]
     lexAvail: { ko: false, en: false },  // installed dictionary modules (original_lang/)
+    isPremium: true,        // business guard (Phase 1): false → free-tier limits
   };
 
   function applyFontScale() {
@@ -242,6 +243,7 @@
     applyFontScale();
     lexLang = init.lex_lang === "en" ? "en" : "ko";
     if (init.lex) state.lexAvail = init.lex;
+    state.isPremium = init.is_premium !== false;  // default premium unless backend says false
     syncLangSeg();
     state.searchClickNav = !!init.search_click_navigates;
     const verLabel = $("app-ver");
@@ -634,6 +636,11 @@
     // Existing cards keep their positions (the user rearranges manually).
 
     function addCard(type) {
+      // Free tier (Phase 1): a single card only. Premium unlocks the workspace.
+      if (!state.isPremium && cards.length >= 1) {
+        toast("무료 버전은 카드를 1개만 사용할 수 있습니다 (프리미엄에서 자유 배치 해제)");
+        return;
+      }
       if (type === "bible" && bibleCards().length >= MAX_BIBLE) {
         toast(`성경 카드는 최대 ${MAX_BIBLE}개까지 추가할 수 있습니다`);
         return;
@@ -1354,6 +1361,12 @@
     // ---- public ----
     async function init(layout) {
       cards = restore(layout);
+      // Free tier (Phase 1): collapse to a single card (prefer the first bible
+      // card). Premium keeps the full saved workspace.
+      if (!state.isPremium && cards.length > 1) {
+        const keep = cards.find((c) => c.type === "bible") || cards[0];
+        cards = [keep];
+      }
       cards.forEach(seedHistory); // seed per-card nav history (bible cards only)
       normalizeLocks();
       zTop = Math.max(1, ...cards.map((c) => c.z || 1));
@@ -1372,6 +1385,10 @@
     // Add a non-bible card with a specific link (used by showStrong to create a
     // lexicon card pre-linked to the source bible).
     function addCardWithLink(type, linkId) {
+      if (!state.isPremium && cards.length >= 1) {
+        toast("무료 버전은 카드를 1개만 사용할 수 있습니다 (프리미엄에서 해제)");
+        return null;
+      }
       const id = nextId(type);
       const w = 33, h = 60;
       const off = (cascadeN++ % 4) * 4;
@@ -2375,6 +2392,7 @@
     document.addEventListener("keydown", (e) => {
       if (e.target.closest("input, textarea")) return;
       if ($("viewer-view").hidden) return;
+      if (!state.isPremium) return;  // free tier: chapter shortcut locked (Phase 1)
       if (!CardManager.primaryBible()) return;
       if (e.key === "ArrowLeft") { e.preventDefault(); CardManager.chapStepActive(-1); }
       else if (e.key === "ArrowRight") { e.preventDefault(); CardManager.chapStepActive(1); }

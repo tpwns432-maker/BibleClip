@@ -249,6 +249,10 @@ class Api:
             # user to add a module instead of showing an empty lexicon panel.
             'lex': {'ko': self.lib.lexicon_ko is not None,
                     'en': self.lib.lexicon_en is not None},
+            # Business guard (Phase 1): premium unlocks multi-card, the chapter
+            # shortcut, and notes/badge. Default True until a licensing backend
+            # writes userdata/config.json with {"is_premium": false}.
+            'is_premium': bool(getattr(self.lib, 'is_premium', True)),
             'search_click_navigates': bool(s.get('search_click_navigates', False)),
             # Persisted modular-card layout (None until the web UI saves one; the
             # front-end builds a sensible default when this is null).

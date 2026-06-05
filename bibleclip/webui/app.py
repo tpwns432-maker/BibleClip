@@ -53,6 +53,14 @@ def main():
         webview.start()
         return
 
+    # Anonymous, fail-open 'app launched' ping (실사용 카운터, Phase 1). Runs on a
+    # daemon thread so it never delays or blocks startup; offline = silent no-op.
+    try:
+        from bibleclip.usage import ping_usage_async
+        ping_usage_async()
+    except Exception:
+        pass
+
     library = Library()
     api = Api(library)
 

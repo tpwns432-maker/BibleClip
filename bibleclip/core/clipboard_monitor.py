@@ -50,15 +50,24 @@ class ClipboardMonitor:
 
     def stop(self):
         self._running = False
+        # Join the worker so repeated start/stop cycles don't accumulate threads
+        # (the old daemon thread would otherwise linger until process exit).
+        t, self._thread = self._thread, None
+        if t and t.is_alive() and t is not threading.current_thread():
+            try:
+                t.join(timeout=max(0.1, self.poll_interval) + 0.5)
+            except Exception:
+                pass
 
     def _loop(self):
         while self._running:
             try:
                 current = self.read_fn()
-                if current != self.last and current.strip():
+                if current and current != self.last and current.strip():
                     self.last = current
                     self._handle(current.strip())
             except Exception:
+                # Never let a transient read/parse error kill the watch loop.
                 pass
             time.sleep(self.poll_interval)
 
@@ -67,9 +76,20 @@ class ClipboardMonitor:
         if not result:
             return
         kind = result.get('kind')
+        # Isolate UI callbacks: a callback raising must not break the loop or
+        # leave `last` unset (which would re-fire the same text every poll).
         if kind == 'keyword':
-            self.on_keyword(result['keyword'])
+            try:
+                self.on_keyword(result['keyword'])
+            except Exception:
+                pass
         elif kind == 'reference':
-            self.write_fn(result['text'])
-            self.last = result['text']
-            self.on_reference(result)
+            try:
+                self.write_fn(result['text'])
+                self.last = result['text']
+            except Exception:
+                pass
+            try:
+                self.on_reference(result)
+            except Exception:
+                pass

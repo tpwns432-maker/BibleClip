@@ -33,6 +33,11 @@ RELEASES_PAGE_URL = f"https://github.com/{GITHUB_OWNER}/{GITHUB_REPO}/releases/l
 # copies. Fetched anonymously at startup; any failure is fail-open (see
 # bibleclip.killswitch). Keep the repo PUBLIC so this URL stays reachable.
 KILLSWITCH_URL = f"https://raw.githubusercontent.com/{GITHUB_OWNER}/{GITHUB_REPO}/main/killswitch.json"
+# Optional anonymous "app launched" ping (실사용 카운터, Phase 1). Best-effort,
+# fail-open, NO personal data — just an anonymous GET in a background thread.
+# Defaults to the public repo API endpoint (the maintainer owns it); set to None
+# to disable, or repoint at a dedicated analytics/count endpoint.
+USAGE_PING_URL = f"https://api.github.com/repos/{GITHUB_OWNER}/{GITHUB_REPO}"
 
 def get_base_dir():
     """Get the base directory - works for both script and PyInstaller bundle.
@@ -78,6 +83,21 @@ def system_env():
 
 BASE_DIR = get_base_dir()
 SETTINGS_FILE = "bibleclip_settings.json"
+# App-managed per-install config folder (premium flag etc.), separate from the
+# user's UI settings file. Meant to be written by a licensing backend / the
+# maintainer. See bibleclip.userconfig.
+USERDATA_DIR = "userdata"
+
+
+def get_userdata_dir():
+    """Writable folder for app-managed config (userdata/), next to the exe/app.
+    Created on demand; failures are swallowed (caller falls back to defaults)."""
+    d = os.path.join(BASE_DIR, USERDATA_DIR)
+    try:
+        os.makedirs(d, exist_ok=True)
+    except Exception:
+        pass
+    return d
 # Pre-1.6 settings filename. Read once (and only as a fallback) so existing
 # users keep their version order, last position, theme, window size, etc.
 LEGACY_SETTINGS_FILE = "autobible_settings.json"

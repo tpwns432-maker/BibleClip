@@ -100,6 +100,15 @@ def main():
     else:
         print("(개역한글S absent — skipping reverse Strong's search check)")
 
+    # 11) business guard (Phase 1): user config defaults to permissive (premium),
+    #     and the usage ping is fail-open (url=None → instant no-op, never raises).
+    from bibleclip.userconfig import load_user_config, is_premium
+    assert load_user_config().get('is_premium') is True
+    assert is_premium() is True and lib.is_premium is True
+    from bibleclip.usage import ping_usage_async
+    ping_usage_async(url=None)  # must not raise / not touch the network
+    print("business guard: is_premium default True; usage ping fail-open OK")
+
     print("\nALL CORE CHECKS PASSED ✅")
 
 
