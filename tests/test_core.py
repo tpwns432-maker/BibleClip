@@ -88,6 +88,18 @@ def main():
         lib.settings['show_version_header'] = saved_hdr
     print("inline output: '요 1:1-2,4' has ' // ', '요 1:1-3' does not")
 
+    # 10) reverse Strong's search (7차 Phase 2 원어 엔진): the tagged KRV finds
+    #     verses by Strong's code, with tag-stripped clean text. H7225(레쉬트) is
+    #     the first word of 창 1:1.
+    if lib.bethlehem_strongs:
+        ss = lib.search_strong('H7225')
+        assert any(h['book_num'] == 10 and h['chapter'] == 1 and h['verse'] == 1
+                   for h in ss), f"H7225 should hit 창 1:1 ({len(ss)} hits)"
+        assert ss and '<W' not in ss[0]['text'], "clean text must have no <W..> tags"
+        print(f"search_strong('H7225') -> {len(ss)} verses incl 창 1:1; clean text OK")
+    else:
+        print("(개역한글S absent — skipping reverse Strong's search check)")
+
     print("\nALL CORE CHECKS PASSED ✅")
 
 

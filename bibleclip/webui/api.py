@@ -607,6 +607,23 @@ class Api:
         return [{'n': n, 'words': [{'w': w, 'code': c} for (w, c) in words]}
                 for n, words in self.lib.interlinear(int(book), int(chapter))]
 
+    def search_strong(self, code):
+        """Reverse Strong's cross-query: KRV verses containing the original-
+        language word with this code. {code, count, hits:[{book_num, ref,
+        chapter, verse, text}]}. Powers the original-language search (the
+        copyright-clean replacement for the removed lexicon-based lookup)."""
+        code = (code or '').strip().upper()
+        rows = self.lib.search_strong(code)
+        primary = self.lib.primary_version()
+        shortmap = ({b['num']: b['short'] for b in self.lib.books(primary)}
+                    if primary else {})
+        hits = [{'book_num': r['book_num'],
+                 'ref': f"{shortmap.get(r['book_num'], r['book_num'])} "
+                        f"{r['chapter']}:{r['verse']}",
+                 'chapter': r['chapter'], 'verse': r['verse'], 'text': r['text']}
+                for r in rows]
+        return {'code': code, 'count': len(hits), 'hits': hits}
+
     # ---- Keyword search ----
 
     def _search_version(self):

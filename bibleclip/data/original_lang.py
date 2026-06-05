@@ -66,6 +66,28 @@ class BethlehemDB:
         row = cur.fetchone()
         return row[0] if row and row[0] else 0
 
+    def search_by_strong(self, code):
+        """Reverse Strong's lookup: every verse whose Strong-tagged text carries
+        `code` ('H3068' / 'G26'). Uses a plain DB substring match on the embedded
+        tag (`<WH3068>`) — no NLP needed, and the trailing '>' keeps it exact
+        (H3068 won't match H30680). Returns [(our_book_num, chapter, verse,
+        btext), ...] in canonical order."""
+        if not code:
+            return []
+        tag = f"<W{code}>"   # e.g. 'H3068' -> '<WH3068>'
+        cur = self.conn.cursor()
+        cur.execute(
+            "SELECT book, chapter, verse, btext FROM Bible WHERE btext LIKE ? "
+            "ORDER BY book, chapter, verse",
+            (f"%{tag}%",),
+        )
+        out = []
+        for bn, ch, v, bt in cur.fetchall():
+            ob = BETHLEHEM_TO_OUR.get(bn)
+            if ob:
+                out.append((ob, ch, v, bt))
+        return out
+
     def close(self):
         try:
             self.conn.close()
@@ -107,6 +129,16 @@ WONJUN_BLOCK = re.compile(
 
 
 KOREAN_STRONG_TAG = re.compile(r'<W([HG])(\d+)>')
+
+
+def strip_korean_strongs(text):
+    """Clean display text: the Korean sentence with every embedded <WH../WG..>
+    Strong's tag removed and any resulting double spaces collapsed. Used to
+    render 개역한글S body text for users without exposing the code tags."""
+    if not text:
+        return ''
+    cleaned = KOREAN_STRONG_TAG.sub('', text)
+    return re.sub(r'\s{2,}', ' ', cleaned).strip()
 
 
 def parse_korean_strongs(text):

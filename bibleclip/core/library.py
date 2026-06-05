@@ -21,7 +21,7 @@ from bibleclip.core.clipboard_monitor import ClipboardMonitor
 from bibleclip.data.bible_db import BibleDB
 from bibleclip.data.original_lang import (
     resolve_original_lang_dir, BethlehemDB, Lexicon, parse_korean_strongs,
-    parse_wonjun_verse,
+    parse_wonjun_verse, strip_korean_strongs,
 )
 
 
@@ -258,6 +258,18 @@ class Library:
         web: a markup→HTML converter)."""
         lex = self.lexicon_en if lang == 'en' else self.lexicon_ko
         return lex.lookup(code) if lex else None
+
+    def search_strong(self, code):
+        """Reverse Strong's lookup over the Strong-tagged KRV (개역한글S): every
+        verse whose original text carries `code` ('H3068'/'G26'). Returns
+        [{book_num, chapter, verse, text}] with clean (tag-stripped) Korean text,
+        or [] when the tagged bible isn't loaded. Copyright-clean (KRV + PD
+        Strong's numbering only) — the basis of the original-language search."""
+        if not self.bethlehem_strongs or not code:
+            return []
+        return [{'book_num': ob, 'chapter': ch, 'verse': v,
+                 'text': strip_korean_strongs(bt)}
+                for ob, ch, v, bt in self.bethlehem_strongs.search_by_strong(code)]
 
     def interlinear(self, book_num, chapter):
         """[(verse, [(word, code), ...]), ...] from the Strong's-tagged KRV."""
