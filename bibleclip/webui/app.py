@@ -64,6 +64,24 @@ def main():
     library = Library()
     api = Api(library)
 
+    # v1.0.5: 한국어 역색인(스마트 검색)을 데몬 스레드에서 미리 빌드 — 첫 다중 키워드
+    # 검색의 ~0.6초 빌드 지연을 숨긴다. 순수 dict/set 이라 네이티브 크래시 위험이 없다
+    # (v1.0.4 Kiwi 워밍업 크래시와 달리 안전). 실패해도 lazy 빌드로 폴백되므로 fail-soft.
+    try:
+        import threading
+
+        def _warm_index():
+            try:
+                pv = library.primary_version()
+                db = library.dbs.get(pv)
+                if db is not None and not db.is_english:
+                    db.inverted_index()
+            except Exception:
+                pass
+        threading.Thread(target=_warm_index, daemon=True).start()
+    except Exception:
+        pass
+
     # Restore the last web-window size/position (separate from the desktop app's
     # tk-format 'geometry' so the two UIs don't clobber each other's window).
     geo = library.settings.get('web_geometry') or {}
