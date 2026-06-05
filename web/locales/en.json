@@ -57,7 +57,7 @@
   "cart.itemTip": "Click: copy (jumps if enabled) · ✕ remove",
 
   "present.qsPlaceholder": "Type a reference or keyword, then Enter (e.g. Jn 1:1)",
-  "present.hint": "F2 search · ESC to exit",
+  "present.hint": "F2 search · +/− font size · ESC to exit",
 
   "modal.title": "Settings",
   "modal.grpLang": "Language",

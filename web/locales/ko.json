@@ -57,7 +57,7 @@
   "cart.itemTip": "클릭: 복사 (옵션 시 본문 이동) · ✕ 빼기",
 
   "present.qsPlaceholder": "구절·키워드 입력 후 Enter (예: 창 1:1)",
-  "present.hint": "F2 검색 · ESC 나가기",
+  "present.hint": "F2 검색 · +/− 글자 크기 · ESC 나가기",
 
   "modal.title": "설정",
   "modal.grpLang": "언어",

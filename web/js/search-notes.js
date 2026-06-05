@@ -1359,6 +1359,14 @@
     };
     if ($("font-dec")) $("font-dec").addEventListener("click", () => changeFont(-1));
     if ($("font-inc")) $("font-inc").addEventListener("click", () => changeFont(1));
+    // 전체화면 프레젠테이션에서 키보드로 글자 크기 조절(+/−). 컨트롤바가 숨겨지므로.
+    document.addEventListener("keydown", (e) => {
+      if (!document.fullscreenElement) return;
+      if (e.target.closest("input, textarea, [contenteditable]")) return;  // F2 입력 중 제외
+      if (e.ctrlKey || e.metaKey || e.altKey) return;
+      if (e.key === "+" || e.key === "=") { e.preventDefault(); changeFont(1); }
+      else if (e.key === "-" || e.key === "_") { e.preventDefault(); changeFont(-1); }
+    });
 
     // DB rescan (settings tab). Refreshes available versions everywhere.
     if ($("db-refresh")) $("db-refresh").addEventListener("click", refreshDbs);
