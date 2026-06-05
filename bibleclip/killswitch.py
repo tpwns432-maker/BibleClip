@@ -67,3 +67,19 @@ def check_killswitch(timeout=6):
             return False, ''
 
     return False, ''
+
+
+def recommended_version(timeout=6):
+    """The manifest's SOFT forced-update threshold ('recommend_version'). Builds
+    below it should nag the user with a non-dismissible in-app update modal —
+    but still run, unlike 'min_version' which hard-blocks at startup. Returns the
+    version string, or None (fail-open on any error)."""
+    try:
+        data = _fetch_manifest(timeout)
+        if isinstance(data, dict):
+            rv = data.get('recommend_version')
+            if isinstance(rv, str) and rv:
+                return rv
+    except Exception:
+        pass
+    return None

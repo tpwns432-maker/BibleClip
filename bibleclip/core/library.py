@@ -44,6 +44,8 @@ class Library:
         'viewer_font_size': 11,
         'auto_update_check': True,
         'skip_update_version': '',
+        'seen_version': None,            # last version whose patch-note modal was acknowledged
+        'dismissed_patches': [],         # versions with "다시 보지 않기" checked
         'lex_lang': 'ko',                 # default dictionary language (ko/en)
         'poll_interval': 0.5,             # clipboard polling interval (seconds)
         'search_click_navigates': False,  # search hit click also jumps the viewer

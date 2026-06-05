@@ -328,6 +328,25 @@ def main():
     assert api.get_note(10, 1, 1) is None
     print("notes CRUD (set/get/chapter/delete) OK")
 
+    # 패치노트 모달 가드 (Phase 4): show once, then dismissed. Stub save_settings
+    # so the test never writes to disk.
+    api.lib.save_settings = lambda: None
+    api.lib.settings['seen_version'] = None
+    api.lib.settings['dismissed_patches'] = []
+    p = api.get_patch_notes()
+    assert p['version'] == __version__, p
+    if p['notes']:
+        assert p['show'] is True
+        api.dismiss_patch(False)
+        assert api.get_patch_notes()['show'] is False  # seen this version now
+        api.lib.settings['seen_version'] = None
+        api.dismiss_patch(True)  # forever
+        assert __version__ in api.lib.settings['dismissed_patches']
+        assert api.get_patch_notes()['show'] is False
+        print(f"patch modal guard OK (v{__version__}: {len(p['notes'])} notes)")
+    else:
+        print(f"patch modal guard OK (no notes for v{__version__})")
+
     print("\nALL WEBUI API CHECKS PASSED ✅")
 
 

@@ -662,6 +662,22 @@ html[data-theme="dark"] .note-modal-back { background: rgba(0,0,0,.55); }
 .note-modal-foot { display: flex; align-items: center; gap: 8px; }
 .note-modal-foot .note-modal-spacer { flex: 1; }
 .note-modal-foot .note-del { color: var(--danger, #D6456A); border-color: var(--danger, #D6456A); }
+
+/* ---- 패치노트 / 강제 업데이트 모달 (Phase 4) ---- */
+.patch-h { display: flex; align-items: center; gap: 9px; font-size: 16px; font-weight: 800; letter-spacing: -.02em; }
+.patch-badge {
+  font-size: 10px; font-weight: 800; letter-spacing: .06em; color: #fff;
+  background: var(--accent-grad); border-radius: 999px; padding: 2px 9px;
+}
+.patch-list { margin: 4px 0 2px; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 9px; }
+.patch-list li { position: relative; padding-left: 20px; font-size: 13.6px; line-height: 1.55; color: var(--text); }
+.patch-list li::before { content: ""; position: absolute; left: 4px; top: 9px; width: 6px; height: 6px; border-radius: 50%; background: var(--accent); opacity: .6; }
+.patch-dismiss { display: flex; align-items: center; gap: 7px; font-size: 12.5px; color: var(--text-muted); cursor: pointer; user-select: none; }
+.patch-dismiss input { accent-color: var(--accent); }
+.forced-back { backdrop-filter: blur(1.5px); }
+.forced-h { color: var(--danger, #D6456A); }
+.forced-text { font-size: 13.8px; line-height: 1.6; color: var(--text); margin: 2px 0; }
+.forced-text b { color: var(--accent-text); }
 .search-card { flex: 1; min-height: 0; }
 .search-card .card-body { padding: 8px 8px 8px 16px; }
 .sr {
