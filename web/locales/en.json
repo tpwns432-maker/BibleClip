@@ -54,6 +54,7 @@
   "cart.remove": "Remove",
   "cart.added": "Added to cart",
   "cart.dup": "Already in the cart",
+  "cart.itemTip": "Click: copy (jumps if enabled) · ✕ remove",
 
   "present.qsPlaceholder": "Type a reference or keyword, then Enter (e.g. Jn 1:1)",
   "present.hint": "F2 search · ESC to exit",
