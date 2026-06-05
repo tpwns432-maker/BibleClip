@@ -61,18 +61,6 @@ def main():
     except Exception:
         pass
 
-    # Pre-warm the Kiwi 형태소 분석기 on a daemon thread (9차 Phase 2). This forces
-    # its heavy/native construction to happen here, on a normal Python thread —
-    # NOT lazily on the pywebview bridge thread during the first multi-keyword
-    # search, which crashed the process. Fail-soft: any error just leaves search
-    # on its trigram fallback.
-    try:
-        import threading
-        from bibleclip import morph
-        threading.Thread(target=morph.warmup, daemon=True).start()
-    except Exception:
-        pass
-
     library = Library()
     api = Api(library)
 

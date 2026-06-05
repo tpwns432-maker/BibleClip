@@ -29,11 +29,15 @@ if (Get-Command node -ErrorAction SilentlyContinue) {
   Write-Host "node not found - skipping JS syntax check" -ForegroundColor Yellow
 }
 
-# 한국어 형태소 검색기(9차 Phase 2): C 확장 + 모델 데이터를 동봉. 단, kiwipiepy의
-# 선택적 서브모듈은 torch/transformers/cv2 등 거대 ML 스택을 끌어오므로(우리는 기본
-# tokenize만 사용) 전부 제외 → ~900MB 절감. 미동봉 시 앱은 trigram 폴백으로 동작.
-# (kiwipiepy_model 약 104MB는 형태소 분석의 불가피한 바닥 용량.)
+# ⚠️ kiwipiepy(형태소 검색기)는 프로즌 빌드에서 제외한다. kiwipiepy 의 C++ 네이티브
+# 런타임이 PyInstaller 로 동봉된 pywebview(pythonnet/WebView2)와 같은 프로세스에서
+# 공존하면 네이티브 힙 손상(0xC0000374)으로 앱이 즉시 강제 종료된다(검증됨). 따라서
+# 배포본은 형태소 검색을 끄고 trigram 폴백만 사용(morph._get_kiwi 가 sys.frozen 에서
+# None 반환). kiwipiepy 를 제외하지 않으면 morph 의 import 를 따라가 kiwipiepy +
+# torch/transformers 등 거대 ML 스택까지 끌어와 ~1GB 로 폭증하므로 반드시 제외.
+# 형태소 검색은 소스/개발 실행에서만 동작.
 $kiwiExclude = @(
+  'kiwipiepy','kiwipiepy_model',
   'torch','transformers','cv2','scipy','sklearn','numba','llvmlite','pandas',
   'matplotlib','PIL','tokenizers','numpy','lxml','safetensors','huggingface_hub',
   'sympy','networkx'
@@ -42,7 +46,6 @@ $kiwiExclude = @(
 python -m PyInstaller --onedir --windowed --noconfirm --clean `
   --collect-submodules bibleclip `
   --hidden-import pyperclip `
-  --collect-all kiwipiepy --collect-all kiwipiepy_model `
   @kiwiExclude `
   --add-data "web;web" `
   --icon=icon.ico --name BibleClipWeb `
