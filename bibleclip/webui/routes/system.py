@@ -79,25 +79,23 @@ class SystemRoutes:
         return self.set_app_setting('web_cards_layout', layout)
 
     def get_locale(self, lang):
-        """UI string table for ``lang``, read from web/locales/<lang>.json.
+        """UI string table for ``lang``, for the front-end's i18n.js.
 
         The front-end runs from file://, where WebView2 blocks fetch() of local
-        JSON — so the bridge reads the locale file and hands JS the dict (i18n.js
-        registers it). Returns {} on any failure (the front-end then falls back
-        to the authored Korean text). Frozen-safe via get_resource_dir(); ``lang``
-        is validated to a short locale code so it can't escape the locales/ dir."""
+        JSON — so the bridge hands JS the dict (i18n.js registers it). Returns {}
+        on any failure (the front-end then falls back to the authored Korean
+        text).
+
+        Single source of truth: delegates to ``i18n._table`` — the SAME cached
+        loader the Python-rendered surfaces (kill-switch page, dict popups,
+        preview) use — so the front-end and backend never load/validate the
+        locale files differently. ``lang`` is still validated to a short locale
+        code here so it can't escape the locales/ dir."""
         import re
-        from bibleclip.config import get_resource_dir
         if not isinstance(lang, str) or not re.fullmatch(
                 r'[a-z]{2,3}(?:-[A-Za-z]{2,4})?', lang):
             return {}
-        path = os.path.join(get_resource_dir(), 'web', 'locales', lang + '.json')
-        try:
-            with open(path, 'r', encoding='utf-8') as f:
-                data = json.load(f)
-            return data if isinstance(data, dict) else {}
-        except Exception:
-            return {}
+        return i18n._table(lang)
 
     # ---- Custom reading fonts (the 'fonts' folder next to bible_versions) ----
 
@@ -458,7 +456,10 @@ class SystemRoutes:
     # Format keys the settings tab may write. Enums carry their allowed values;
     # bool keys map to None (coerced to a real bool on write).
     _FORMAT_KEYS = {
-        'book_name': {'long_ko', 'short_ko', 'long_en', 'short_en'},
+        # 정식(long)/약칭(short) 2지선다. ko/en 구분은 v1.0.6에서 폐기(각 역본이 자기
+        # 모국 책이름을 쓰므로 길이만 의미가 있다) — formatter 는 startswith('long')만 본다.
+        # 구 설정값(long_en/short_en)은 load_settings 가 ko 형태로 정규화한다.
+        'book_name': {'long_ko', 'short_ko'},
         'chapter_verse_format': {'colon', 'korean'},
         'bracket_style': {'none', '[]', '()'},
         'ref_position': {'before', 'after'},

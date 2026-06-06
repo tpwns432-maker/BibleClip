@@ -668,6 +668,15 @@
   function saveCart() { try { localStorage.setItem(CART_KEY, JSON.stringify(cart)); } catch (_) {} }
   function cartKey(it) { return `${it.book_num}|${it.chapter}|${(it.verses || []).join(",")}`; }
 
+  // 선택 추출용 체크 상태 — cartKey 기준(인덱스가 아니라 항목 동일성으로 추적해
+  // 삭제/재정렬에도 유지). 세션 한정(localStorage 미영속).
+  const cartSel = new Set();
+  // cart 에 더 이상 없는 키는 선택 집합에서 정리.
+  function pruneCartSel() {
+    const live = new Set(cart.map(cartKey));
+    [...cartSel].forEach((k) => { if (!live.has(k)) cartSel.delete(k); });
+  }
+
   function addToCart(item) {
     const it = {
       book_num: item.book_num, chapter: item.chapter,
@@ -683,25 +692,30 @@
     }
     toast(I18N.t("cart.added"));
   }
-  function removeFromCart(i) { cart.splice(i, 1); saveCart(); renderCart(); }
-  function clearCart() { cart = []; saveCart(); renderCart(); }
+  function removeFromCart(i) { cart.splice(i, 1); pruneCartSel(); saveCart(); renderCart(); }
+  function clearCart() { cart = []; cartSel.clear(); saveCart(); renderCart(); }
 
   function renderCart() {
     const list = $("cart-list");
     if (!list) return;
+    const foot = $("cart-foot");
     if (!cart.length) {
       list.innerHTML = `<div class="log-empty" data-i18n="cart.empty">${I18N.t("cart.empty")}</div>`;
+      if (foot) foot.hidden = true;
       return;
     }
-    list.innerHTML = cart.map((e, i) =>
-      `<div class="log-row cart-item" data-cart="${i}" data-tip="${esc(I18N.t("cart.itemTip"))}">` +
+    list.innerHTML = cart.map((e, i) => {
+      const checked = cartSel.has(cartKey(e)) ? " checked" : "";
+      return `<div class="log-row cart-item" data-cart="${i}" data-tip="${esc(I18N.t("cart.itemTip"))}">` +
+        `<input type="checkbox" class="cart-cb" data-cb="${i}"${checked} ` +
+          `title="${esc(I18N.t("cart.selectThis"))}">` +
         `<div class="log-ref">${esc(e.short_name)} ${e.chapter}:${esc(vlist(e.verses))}</div>` +
         `<span class="cart-del-btn" data-del="${i}" title="${esc(I18N.t("cart.remove"))}">✕</span>` +
-      `</div>`
-    ).join("");
+      `</div>`;
+    }).join("");
     list.querySelectorAll("[data-cart]").forEach((row) => {
       row.addEventListener("click", async (ev) => {
-        if (ev.target.closest("[data-del]")) return;
+        if (ev.target.closest("[data-del]") || ev.target.closest(".cart-cb")) return;
         const e = cart[Number(row.dataset.cart)];
         if (!e) return;
         const r = await api().copy_reference(e.book_num, e.chapter, e.verses || []);
@@ -716,9 +730,49 @@
         }
       });
     });
+    list.querySelectorAll(".cart-cb").forEach((cb) => {
+      cb.addEventListener("click", (ev) => {
+        ev.stopPropagation();
+        const e = cart[Number(cb.dataset.cb)];
+        if (!e) return;
+        const k = cartKey(e);
+        if (cb.checked) cartSel.add(k); else cartSel.delete(k);
+        syncCartSelAll();
+      });
+    });
     list.querySelectorAll("[data-del]").forEach((x) => {
       x.addEventListener("click", (ev) => { ev.stopPropagation(); removeFromCart(Number(x.dataset.del)); });
     });
+    if (foot) foot.hidden = false;
+    syncCartSelAll();
+  }
+
+  // "전체 선택" 체크박스를 현재 선택 상태에 맞춘다(전부 선택 시 on, 일부면 indeterminate).
+  function syncCartSelAll() {
+    const all = $("cart-selall-cb");
+    if (!all) return;
+    const n = cart.length, sel = cart.filter((e) => cartSel.has(cartKey(e))).length;
+    all.checked = n > 0 && sel === n;
+    all.indeterminate = sel > 0 && sel < n;
+  }
+
+  // 일괄 추출: items(=카트 항목들)를 현재 출력 포맷으로 한 번에 클립보드 내보내기.
+  async function extractCart(items, allMode) {
+    if (!items.length) { toast(I18N.t("cart.noneSelected")); return; }
+    const payload = items.map((e) => ({ book: e.book_num, chapter: e.chapter, verses: e.verses || [] }));
+    let r = null;
+    try { r = await api().copy_references(payload); } catch (_) { r = null; }
+    if (!r || !r.ok) { toast(I18N.t("cart.extractFail")); return; }
+    toast(I18N.t(allMode ? "cart.extractedAll" : "cart.extractedSelected", { n: r.n_items }));
+  }
+  function extractAllCart() { extractCart(cart.slice(), true); }
+  function extractSelectedCart() {
+    extractCart(cart.filter((e) => cartSel.has(cartKey(e))), false);
+  }
+  function toggleSelectAll(on) {
+    cartSel.clear();
+    if (on) cart.forEach((e) => cartSel.add(cartKey(e)));
+    renderCart();
   }
 
   function openCart() {
@@ -740,6 +794,10 @@
     if (tog) tog.addEventListener("click", () => $("cart-drawer").hidden ? openCart() : closeCart());
     const cl = $("cart-close"); if (cl) cl.addEventListener("click", closeCart);
     const clr = $("cart-clear"); if (clr) clr.addEventListener("click", clearCart);
+    const exAll = $("cart-extract-all"); if (exAll) exAll.addEventListener("click", extractAllCart);
+    const exSel = $("cart-extract-sel"); if (exSel) exSel.addEventListener("click", extractSelectedCart);
+    const selAll = $("cart-selall-cb");
+    if (selAll) selAll.addEventListener("change", (e) => toggleSelectAll(e.target.checked));
     renderCart();
   }
 
@@ -814,12 +872,35 @@
       `src:url(data:${info.mime};base64,${info.b64});}`;
     document.head.appendChild(st);
     injectedFonts.add(family);
+    // 실제 글리프가 로드된 뒤에야 스크립처가 새 폰트로 리플로우된다 — 호출부가 로드 완료
+    // 후 앵커 재정렬(BUG-01)을 하도록 여기서 기다린다(base64라 보통 즉시 완료).
+    try { await document.fonts.load(`1em "${cssFontName(family)}"`); } catch (_) {}
     return true;
   }
   function applyReadingFont(family) {
+    // BUG-01: a font-family swap reflows the scripture; pin the reading position
+    // (and the linked 원어 카드) across it. No-op at boot (no cards yet).
+    const anchors = (window.CardManager && CardManager.snapshotAnchors)
+      ? CardManager.snapshotAnchors() : null;
     if (family) root.style.setProperty("--reading-font", `"${cssFontName(family)}", var(--font-ui)`);
     else root.style.removeProperty("--reading-font");
     state.readingFont = family || "";
+    if (anchors && anchors.size) CardManager.realignAnchors(anchors);
+  }
+
+  // ---- A−/A+ font-size stepping (대형 스크린/방송 송출까지, 8–400) ----
+  // 비례 스텝이지만 일반 읽기 구간(8–27px)에서는 1px 단위로 움직여 정수 크기를
+  // 건너뛰지 않는다(구버전 round(size*0.12)는 13px부터 2씩 뛰어 14/16…을 스킵했다).
+  // 그 위로는 단계적으로 폭을 키워 대형 스크린에서 빠르게 도달한다.
+  const FONT_MIN = 8, FONT_MAX = 400;
+  function fontStep(size) {
+    if (size < 28) return 1;
+    if (size < 80) return 2;
+    return Math.max(4, Math.round(size * 0.05));
+  }
+  function nextFontSize(size, d) {
+    const n = size + d * fontStep(size);
+    return Math.max(FONT_MIN, Math.min(FONT_MAX, n));
   }
   async function selectReadingFont(family, file) {
     if (family && file && !(await injectFont(family, file))) { toast(I18N.t("font.loadFail")); return; }
@@ -844,6 +925,81 @@
         await selectReadingFont(family, f ? f.file : null);
         pill.textContent = family || I18N.t("font.default");
       });
+    });
+  }
+
+  // ---- 사용자정의 약칭 관리 (설정 ▸ 참조 입력) ----
+  // aliases_override.json 을 앱에서 직접 편집. 숫자는 책이름 맨 앞에만(파서 장번호 충돌
+  // 방지) — 프론트가 1차 검증해 즉시 토스트하고, 백엔드가 최종 검증/저장한다(error_code).
+  let aliasBookNum = null;
+  const ALIAS_RE = /^\d*\s*[가-힣A-Za-z][^\d]*$/;
+  const aliasBooks = () => state.primaryBooks || [];
+
+  function setAliasBook(num) {
+    aliasBookNum = num;
+    const pill = $("alias-book");
+    if (!pill) return;
+    const b = aliasBooks().find((x) => x.num === num);
+    pill.textContent = b ? b.long : I18N.t("alias.pickBook");
+  }
+
+  async function renderAliasList() {
+    const host = $("alias-list");
+    if (!host) return;
+    let items = [];
+    try { items = await api().get_aliases(); } catch (_) { items = []; }
+    if (!items.length) { host.innerHTML = `<div class="log-empty">${I18N.t("alias.empty")}</div>`; return; }
+    host.innerHTML = items.map((it) =>
+      `<div class="alias-row"><span class="alias-name">${esc(it.alias)}</span>` +
+      `<span class="alias-arrow">→</span><span class="alias-target">${esc(it.book_name)}</span>` +
+      `<span class="alias-del" data-del="${esc(it.alias)}" title="${esc(I18N.t("alias.remove"))}">✕</span></div>`
+    ).join("");
+    host.querySelectorAll("[data-del]").forEach((x) => {
+      x.addEventListener("click", async () => { await api().remove_alias(x.dataset.del); renderAliasList(); });
+    });
+  }
+
+  async function addAlias() {
+    const inp = $("alias-input");
+    const alias = (inp.value || "").trim();
+    if (!alias || !ALIAS_RE.test(alias)) { toast(I18N.t("alias.errFormat")); return; }
+    if (aliasBookNum == null) { toast(I18N.t("alias.errBook")); return; }
+    const r = await api().add_alias(alias, aliasBookNum);
+    if (!r || !r.ok) { toast(bridgeErr(r, "alias.errFormat")); return; }
+    inp.value = "";
+    toast(I18N.t("alias.added"));
+    renderAliasList();
+  }
+
+  function openAliasManager() {
+    const m = $("alias-modal");
+    if (!m) return;
+    aliasBookNum = null;
+    const inp = $("alias-input"); if (inp) inp.value = "";
+    setAliasBook(null);
+    renderAliasList();
+    m.hidden = false;
+    if (inp) setTimeout(() => inp.focus(), 0);
+  }
+  function closeAliasManager() { const m = $("alias-modal"); if (m) m.hidden = true; }
+
+  function wireAliasManager() {
+    const open = $("act-alias"); if (open) open.addEventListener("click", openAliasManager);
+    const close = $("alias-close"); if (close) close.addEventListener("click", closeAliasManager);
+    const modal = $("alias-modal");
+    if (modal) modal.addEventListener("click", (e) => { if (e.target === modal) closeAliasManager(); });
+    const add = $("alias-add-btn"); if (add) add.addEventListener("click", addAlias);
+    const inp = $("alias-input");
+    if (inp) inp.addEventListener("keydown", (e) => {
+      if (e.key === "Enter") addAlias();
+      else if (e.key === "Escape") closeAliasManager();
+    });
+    const pill = $("alias-book");
+    if (pill) pill.addEventListener("click", () => {
+      const books = aliasBooks();
+      if (!books.length) { toast(I18N.t("alias.noBooks")); return; }
+      openMenu(pill, books.map((b) => ({ label: b.long, value: b.num, on: b.num === aliasBookNum })),
+        (num) => setAliasBook(num));
     });
   }
 
@@ -978,12 +1134,15 @@
     setState.output_order = next.slice();
     renderOrder();
     flipReorder(prev);
-    refreshPreview();
+    // 미리보기는 백엔드가 새 순서를 반영한 뒤 새로고침한다. 예전엔 set_output_order
+    // 보다 refreshPreview(=get_preview)가 먼저 실행돼 직전 순서가 보였고, 역본 추가/삭제가
+    // 한 박자 늦게(다음 동작 때) 반영되는 것처럼 보였다(특히 삭제 시 KRV가 안 사라짐).
     api().set_output_order(next).then((cleaned) => {
       if (cleaned && cleaned.join(" ") !== next.join(" ")) {
         setState.output_order = cleaned;
         renderOrder();
       }
+      refreshPreview();
     });
   }
 
@@ -1349,12 +1508,14 @@
 
     // Font size A− / A+ (persisted as viewer_font_size).
     const changeFont = (d) => {
-      // 비례 스텝: 큰 글자일수록 큰 폭으로(대형 스크린 극대화). Max 제한 사실상 해제(400).
-      const step = Math.max(1, Math.round(state.fontSize * 0.12));
-      const n = Math.max(8, Math.min(400, state.fontSize + d * step));
+      const n = nextFontSize(state.fontSize, d);
       if (n === state.fontSize) return;
       state.fontSize = n;
+      // BUG-01: pin each bible card's reading position across the reflow so the
+      // body + linked 원어 카드 don't drift apart when the size changes.
+      const anchors = CardManager.snapshotAnchors();
       applyFontScale();
+      CardManager.realignAnchors(anchors);
       api().set_font_size(n);
     };
     if ($("font-dec")) $("font-dec").addEventListener("click", () => changeFont(-1));
@@ -1402,7 +1563,17 @@
       try { renderOrder(); } catch (_) {}
     }
   }
-  window.addEventListener("i18n:changed", relabelDynamic);
+
+  // i18n 라이브 전환 단일 진입점. I18N.setLang 이 data-i18n* 정적 표면을 전역 재스윕한
+  // 뒤 "i18n:changed" 를 쏘면, JS-렌더 표면(카드 헤더 라벨·툴팁 + 로그/장바구니/출력
+  // 설정 등 동적 뷰)을 여기서 한 번에 다시 그린다. 뷰별로 콜백을 따로 등록하던 방식은
+  // 새 뷰 추가 때마다 훅 누락이 잦아 번역이 새던 문제가 있어, 진입점을 하나로 합쳤다.
+  // 새 지속 뷰를 추가하면 이 함수에 한 줄만 더하면 된다.
+  function retranslateViewport() {
+    try { CardManager.relabel(); } catch (_) {}
+    relabelDynamic();
+  }
+  window.addEventListener("i18n:changed", retranslateViewport);
 
   // Shared namespace (classic scripts, file:// safe). The three app scripts
   // share global scope; BC surfaces the principal handles for debugging.

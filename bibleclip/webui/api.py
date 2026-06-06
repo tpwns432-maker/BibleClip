@@ -116,11 +116,15 @@ class Api(SystemRoutes, BibleRoutes, NoteRoutes):
         a list (empty = whole chapter). ``versions`` overrides output_order
         (the viewer passes its displayed versions for manual copy). ``n_parts``
         (역본 수) is returned so the front-end can record this in-app copy in the
-        activity log alongside monitor-caught references. Returns
-        {ok, text, n_parts} or {ok:False}."""
+        activity log alongside monitor-caught references. ``short_name`` is the
+        book label honoring the 정식/약칭 setting + the copied version's own book
+        name (same source as the monitor toast, Library._display_book_name) so the
+        front-end no longer hard-codes the abbreviation. Returns
+        {ok, text, n_parts, short_name} or {ok:False}."""
+        book, chapter = int(book), int(chapter)
         vs = [int(v) for v in (verses or [])]
         order = [v for v in versions if v in self.lib.dbs] if versions else None
-        text, n_parts = self.lib.format_reference(int(book), int(chapter), vs, order)
+        text, n_parts = self.lib.format_reference(book, chapter, vs, order)
         if not text:
             return {'ok': False}
         if pyperclip is not None:
@@ -129,4 +133,38 @@ class Api(SystemRoutes, BibleRoutes, NoteRoutes):
             except Exception:
                 pass
         self.lib.notify_clipboard_written(text)
-        return {'ok': True, 'text': text, 'n_parts': n_parts}
+        return {'ok': True, 'text': text, 'n_parts': n_parts,
+                'short_name': self.lib._display_book_name(book, order)}
+
+    def copy_references(self, items, versions=None):
+        """Format MANY references into one clipboard block — the sermon cart's
+        일괄 추출(전체/선택). ``items`` is a list of {book|book_num, chapter, verses}
+        dicts (the cart's stored shape); each is formatted via the output
+        pipeline (current 포맷터 규격 — same as a single copy) and the blocks are
+        joined with a blank line, preserving the given order. ``versions``
+        overrides output_order. Returns {ok, text, n_items} or {ok:False}."""
+        order = [v for v in versions if v in self.lib.dbs] if versions else None
+        blocks = []
+        for it in (items or []):
+            if not isinstance(it, dict):
+                continue
+            raw_book = it.get('book', it.get('book_num'))
+            try:
+                book = int(raw_book)
+                chapter = int(it.get('chapter'))
+                verses = [int(v) for v in (it.get('verses') or [])]
+            except (TypeError, ValueError):
+                continue
+            text, _ = self.lib.format_reference(book, chapter, verses, order)
+            if text:
+                blocks.append(text)
+        if not blocks:
+            return {'ok': False}
+        out = '\n\n'.join(blocks)
+        if pyperclip is not None:
+            try:
+                pyperclip.copy(out)
+            except Exception:
+                pass
+        self.lib.notify_clipboard_written(out)
+        return {'ok': True, 'text': out, 'n_items': len(blocks)}

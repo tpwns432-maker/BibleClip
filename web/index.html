@@ -59,7 +59,7 @@
     <!-- Top bar -->
     <header class="topbar">
       <span class="brand">BibleClip</span>
-      <span class="ver" id="app-ver">v1.0.6</span>
+      <span class="ver" id="app-ver">v1.0.7</span>
       <span class="spacer"></span>
       <button class="btn primary" id="monitor-btn" data-i18n="topbar.monitorStart">모니터링 시작</button>
       <span class="badge" id="status-badge" data-i18n="topbar.statusIdle">대기 중</span>
@@ -185,6 +185,14 @@
     <div class="drawer-body" id="cart-list">
       <div class="log-empty" data-i18n="cart.empty">담은 성구가 여기에 쌓입니다. 검색 결과나 활동 로그에서 ＋ 로 추가하세요.</div>
     </div>
+    <!-- 일괄 추출: 전체 또는 체크된 성구만 현재 출력 포맷으로 클립보드에 내보낸다. -->
+    <div class="cart-foot" id="cart-foot" hidden>
+      <label class="cart-selall"><input type="checkbox" id="cart-selall-cb">
+        <span data-i18n="cart.selectAll">전체 선택</span></label>
+      <span class="cart-foot-spacer"></span>
+      <button class="btn" id="cart-extract-sel" data-i18n="cart.extractSelected">선택 추출</button>
+      <button class="btn primary" id="cart-extract-all" data-i18n="cart.extractAll">전체 추출</button>
+    </div>
   </aside>
 
 </div>
@@ -246,6 +254,15 @@
       </div>
 
       <div class="set-group">
+        <div class="set-group-h" data-i18n="modal.grpRef">참조 입력</div>
+        <div class="set-row">
+          <span class="set-label" data-i18n="modal.aliasLabel">사용자 약칭</span>
+          <button class="btn" id="act-alias" data-i18n="alias.manage">약칭 관리</button>
+        </div>
+        <p class="set-note" data-i18n="modal.aliasNote">역본·책이름의 나만의 약칭을 등록해 참조 인식에 씁니다.</p>
+      </div>
+
+      <div class="set-group">
         <div class="set-group-h" data-i18n="modal.grpSearch">검색 · 업데이트</div>
         <div class="set-toggle" id="opt-search-nav">
           <span class="set-label" data-i18n="modal.searchNav">검색 결과 클릭 시 본문으로 이동</span>
@@ -273,6 +290,27 @@
           <button class="btn danger" id="act-reset" data-i18n="modal.actReset">설정 초기화</button>
         </div>
       </div>
+    </div>
+  </div>
+</div>
+
+<!-- 사용자정의 약칭 관리 (설정 ▸ 참조 입력 ▸ 약칭 관리). aliases_override.json 을
+     앱 안에서 직접 읽고 쓴다. 숫자는 책 이름 맨 앞에만 허용(파서 장번호 충돌 방지). -->
+<div class="modal-overlay" id="alias-modal" hidden>
+  <div class="modal" role="dialog" aria-label="약칭 관리" data-i18n-aria="alias.title">
+    <div class="modal-head">
+      <span data-i18n="alias.title">약칭 관리</span>
+      <span class="modal-close" id="alias-close" title="닫기" data-i18n-title="common.close">✕</span>
+    </div>
+    <div class="modal-body">
+      <p class="set-note" data-i18n-html="alias.note">나만의 책이름 약칭을 등록합니다. <b>숫자는 책 이름 맨 앞에만</b> 붙일 수 있습니다 (예: <b>1요</b> → 요한1서). <b>요1</b>·<b>벧1</b>처럼 숫자를 뒤에 두면 장 번호와 충돌하여 거부됩니다.</p>
+      <div class="alias-add">
+        <input type="text" id="alias-input" class="alias-input" maxlength="20" autocomplete="off"
+               placeholder="약칭 (예: 1요)" data-i18n-placeholder="alias.inputPh">
+        <span class="pill dropdown" id="alias-book" data-i18n="alias.pickBook">책 선택</span>
+        <button class="btn primary" id="alias-add-btn" data-i18n="alias.add">추가</button>
+      </div>
+      <div id="alias-list" class="alias-list"></div>
     </div>
   </div>
 </div>

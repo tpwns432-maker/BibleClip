@@ -258,11 +258,8 @@ window.BC = window.BC || {};
     state.searchVersion = CardManager.primaryVersion();
     renderVerChips();
 
-    // 라이브 UI 언어 전환: I18N.setLang 이 data-i18n* 를 전역 재스윕하고, 추가로 카드의
-    // JS-렌더 부분(락 툴팁·장/연결 라벨)만 무브릿지로 다시 라벨링한다.
-    window.addEventListener("i18n:changed", () => {
-      try { CardManager.relabel(); } catch (_) {}
-    });
+    // 라이브 UI 언어 전환은 search-notes.js 의 retranslateViewport(단일 진입점)가
+    // 처리한다 — 카드 헤더 라벨/툴팁 + 동적 뷰를 한 곳에서 다시 그린다(훅 누락 방지).
 
     wireGlobalControls();
     wireMonitor();
@@ -271,6 +268,7 @@ window.BC = window.BC || {};
     wireUpdate();
     wireAppSettings();
     wireReadingFontMenu();
+    wireAliasManager();
     if (init.auto_update_check) checkUpdate(true); // silent startup check
     maybePatchModal(); // first-run-after-update patch notes (Phase 4)
   }
