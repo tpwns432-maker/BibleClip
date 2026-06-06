@@ -173,3 +173,40 @@ class Api(SystemRoutes, BibleRoutes, NoteRoutes):
                 pass
         self.lib.notify_clipboard_written(out)
         return {'ok': True, 'text': out, 'n_items': len(blocks)}
+
+    def copy_text(self, text):
+        """Put arbitrary text on the clipboard (노트 모아보기 일괄 복사 등). Tells the
+        monitor so it doesn't re-detect the write. Returns {ok}."""
+        text = str(text or '')
+        if not text:
+            return {'ok': False}
+        self._clip_write(text)
+        try:
+            self.lib.notify_clipboard_written(text)
+        except Exception:
+            pass
+        return {'ok': True}
+
+    def export_text_file(self, text, suggested_name='bibleclip_notes.txt'):
+        """Save text to a user-chosen file via the native Save dialog (노트 일괄
+        텍스트 파일 내보내기). Returns {ok, path} or {ok:False, error}. No-op
+        (ok:False) without a window/backend, so headless tests stay safe."""
+        text = str(text or '')
+        if self._window is None:
+            return {'ok': False, 'error': 'no window'}
+        try:
+            import webview  # lazy: keep api.py headless-importable
+            result = self._window.create_file_dialog(
+                webview.SAVE_DIALOG, save_filename=str(suggested_name or 'notes.txt'))
+        except Exception as e:
+            return {'ok': False, 'error': str(e)}
+        # create_file_dialog → path str, (path,) tuple, or None/'' on cancel.
+        path = result[0] if isinstance(result, (list, tuple)) and result else result
+        if not path:
+            return {'ok': False, 'error': 'cancelled'}
+        try:
+            with open(path, 'w', encoding='utf-8') as f:
+                f.write(text)
+        except Exception as e:
+            return {'ok': False, 'error': str(e)}
+        return {'ok': True, 'path': path}

@@ -1585,7 +1585,8 @@
     wireChipDrag();
 
     // ＋ 본문 / ＋ 원어 / ＋ 사전 — new cards appear at the workspace center, on top.
-    [["add-bible", "bible"], ["add-inter", "interlinear"], ["add-lex", "lexicon"]].forEach(([id, type]) => {
+    [["add-bible", "bible"], ["add-inter", "interlinear"], ["add-lex", "lexicon"],
+     ["add-notes", "notes"]].forEach(([id, type]) => {
       const btn = $(id);
       if (btn) btn.addEventListener("click", () => CardManager.addCard(type));
     });

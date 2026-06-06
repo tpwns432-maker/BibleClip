@@ -67,6 +67,20 @@ class Notes:
         self._save()
         return True
 
+    def all(self):
+        """Every note as a flat list in canonical bible order:
+        [{book, chapter, verse, text, ts}, ...]. Powers the 노트 모아보기 card."""
+        out = []
+        for k, v in self.data.items():
+            try:
+                b, c, vs = (int(x) for x in k.split(":"))
+            except Exception:
+                continue
+            out.append({"book": b, "chapter": c, "verse": vs,
+                        "text": (v or {}).get("text", ""), "ts": (v or {}).get("ts", "")})
+        out.sort(key=lambda n: (n["book"], n["chapter"], n["verse"]))
+        return out
+
     def for_chapter(self, book, chapter):
         """{verse:int -> text} for one chapter — drives the note badges."""
         prefix = f"{int(book)}:{int(chapter)}:"
