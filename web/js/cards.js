@@ -58,6 +58,9 @@
         };
         if (c.type === "bible") {
           o.version = c.version; o.book = c.book; o.chapter = c.chapter; o.locked = !!c.locked;
+          if (c.parallel && c.parallelVersion) {   // FEAT-04 대조 쌍 영속화
+            o.parallel = true; o.parallelVersion = c.parallelVersion;
+          }
         } else {
           o.link = c.link || null;
           if (c.type === "interlinear" && typeof c.source === "string") o.source = c.source;
@@ -113,6 +116,8 @@
             rawId: raw.id, id: "", type: "bible", version,
             book: raw.book || state.lastBook, chapter: raw.chapter || state.lastChapter,
             locked: !!raw.locked,
+            parallel: !!raw.parallel,             // FEAT-04 대조 쌍 복원
+            parallelVersion: typeof raw.parallelVersion === "string" ? raw.parallelVersion : null,
             x: raw.x, y: raw.y, w: raw.w, h: raw.h, z: raw.z,
           });
           bibleN++;
@@ -250,6 +255,9 @@
     function headerHTML(card) {
       const grip = `<span class="card-grip" data-tip="드래그하여 이동" data-i18n-tip="card.tip.move">⠿</span>`;
       if (card.type === "bible") {
+        // FEAT-04: 다국어 대조(parallel) 토글 pill. 켜지면 대조 역본명을, 꺼지면 "대조".
+        const parOn = !!(card.parallel && card.parallelVersion);
+        const parLabel = parOn ? esc(card.parallelVersion) : I18N.t("card.parallelOff");
         return `<div class="card-hd">${grip}<span class="card-title" data-i18n="card.type.bible">${typeLabel("bible")}</span>` +
           `<span class="hd-mini hd-nav disabled" data-act="back" data-tip="이전 구절로" data-i18n-tip="card.tip.prevVerse">◀</span>` +
           `<span class="hd-mini hd-nav disabled" data-act="forward" data-tip="다음 구절로" data-i18n-tip="card.tip.nextVerse">▶</span>` +
@@ -258,6 +266,7 @@
             `<span class="hd-pill dropdown" data-act="chapter">${I18N.t("card.chapterLabel", { n: card.chapter || 1 })}</span>` +
             `<span class="hd-mini" data-act="prev" data-tip="이전 장" data-i18n-tip="card.tip.prevChapter">‹</span>` +
             `<span class="hd-mini" data-act="next" data-tip="다음 장" data-i18n-tip="card.tip.nextChapter">›</span>` +
+            `<span class="hd-pill dropdown${parOn ? " on" : ""}" data-act="parallel" data-tip="다국어 대조 보기 (역본 쌍)" data-i18n-tip="card.tip.parallel">${parLabel}</span>` +
           `</span>` +
           `<span class="card-hd-spacer"></span>` +
           `<span class="card-lock" data-act="lock">${LOCK_OPEN}</span>` +
@@ -370,8 +379,9 @@
       await booksFor(navVer);
       const chs = await chaptersFor(navVer, card.book);
       if (!chs.includes(card.chapter)) card.chapter = chs[0] || 1;
-      // Load all active viewer versions in parallel.
-      const viewerVers = state.viewer.length > 0 ? state.viewer : [navVer];
+      // Versions to show: the card's 대조(parallel) pair when on, else the global
+      // viewer selection (cardVersions decides — render + copy agree).
+      const viewerVers = cardVersions(card);
       const chapDataArr = await Promise.all(
         viewerVers.map((v) => api().get_chapter(v, card.book, card.chapter))
       );
@@ -575,6 +585,12 @@
       const navVer = state.viewer[0] || state.primary;
       const bp = s.querySelector('[data-act="book"]'); if (bp) bp.textContent = bookShortFor(navVer, card.book) || "…";
       const cp = s.querySelector('[data-act="chapter"]'); if (cp) cp.textContent = I18N.t("card.chapterLabel", { n: card.chapter });
+      const pp = s.querySelector('[data-act="parallel"]');
+      if (pp) {                                  // FEAT-04 대조 pill 라벨/활성 갱신
+        const on = !!(card.parallel && card.parallelVersion);
+        pp.textContent = on ? card.parallelVersion : I18N.t("card.parallelOff");
+        pp.classList.toggle("on", on);
+      }
     }
     function updateLinkHeader(card) {
       const s = sectionEl(card.id);
@@ -855,6 +871,23 @@
         case "prev": cardChapStep(card, -1); break;
         case "next": cardChapStep(card, 1); break;
         case "notesReload": loadNotesCard(card); break;
+        case "parallel": {
+          // FEAT-04: 대조 역본 선택(끄기 + navVer 제외한 역본들). 켜면 기준+대조 쌍 렌더.
+          const base = state.viewer[0] || state.primary;
+          const items = [{ label: I18N.t("card.parallelOff"), value: "", on: !card.parallel }];
+          state.versions.filter((v) => v.name !== base).forEach((v) =>
+            items.push({ label: v.display, value: v.name,
+                         on: !!(card.parallel && card.parallelVersion === v.name) }));
+          openMenu(actEl, items, async (name) => {
+            if (!name) { card.parallel = false; }
+            else { card.parallel = true; card.parallelVersion = name; }
+            await loadBibleCard(card);
+            reloadDependents(card);
+            updateBibleHeader(card);
+            saveLayout();
+          });
+          break;
+        }
         case "back": cardHistoryNav(card, -1); break;
         case "forward": cardHistoryNav(card, 1); break;
         case "lock": toggleLock(card); break;
@@ -1550,6 +1583,20 @@
   // workspace (overflow:hidden but still programmatically scrollable), dragging
   // every other card's apparent position with it. That entanglement is FIX-01:
   // F2 점프로 잠금 카드를 띄울 때 메인 카드 스크롤과 엉켜 엉뚱한 절이 보이던 현상.
+  // FEAT-04: the version list a bible card displays. When 대조(parallel) mode is
+  // on, it's a fixed pair [기준 역본(viewer[0]), 대조 역본] independent of the
+  // global viewer selection; otherwise the global viewer set. Shared by render
+  // AND copy so both stay in lockstep (copy keeps the per-version block format).
+  function cardVersions(card) {
+    const navVer = state.viewer[0] || state.primary;
+    if (card && card.parallel && card.parallelVersion
+        && state.versionsNames.includes(card.parallelVersion)
+        && card.parallelVersion !== navVer) {
+      return [navVer, card.parallelVersion].filter(Boolean);
+    }
+    return state.viewer.length ? state.viewer.slice() : [navVer].filter(Boolean);
+  }
+
   function centerHighlightVerse(body) {
     const first = body.querySelector(".v.hl");
     if (!first) return;
@@ -1726,11 +1773,11 @@
 
   async function copyVersesFromCard(card, verses) {
     if (!verses.length) return;
-    // Copy the versions the card is actually SHOWING (state.viewer), per
-    // copy_reference's contract ("the viewer passes its displayed versions").
-    // A stale per-card card.version would copy the wrong text AND miss the book-
-    // name cache → "?" (e.g. card.version='KRV' left over while viewer=['ESV']).
-    const versions = state.viewer.length ? state.viewer.slice() : [card.version].filter(Boolean);
+    // Copy the versions the card is actually SHOWING — its 대조 쌍 when parallel
+    // mode is on, else the global viewer (cardVersions). Block format unchanged
+    // (format_reference joins per-version blocks). A stale per-card card.version
+    // would copy the wrong text AND miss the book-name cache → "?".
+    const versions = cardVersions(card);
     const r = await api().copy_reference(card.book, card.chapter, verses, versions);
     if (!r || !r.ok) return;
     const nameVer = versions[0] || card.version;
