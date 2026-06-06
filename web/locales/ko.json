@@ -61,7 +61,7 @@
   "cart.remove": "빼기",
   "cart.added": "장바구니에 담음",
   "cart.dup": "이미 장바구니에 있습니다",
-  "cart.itemTip": "클릭: 복사 (옵션 시 본문 이동) · ✕ 빼기",
+  "cart.itemTip": "클릭: 복사 (옵션 시 본문 이동) · 드래그: 순서 변경 · ✕ 빼기",
   "cart.selectThis": "선택 추출에 포함",
   "cart.selectAll": "전체 선택",
   "cart.extractSelected": "선택 추출",

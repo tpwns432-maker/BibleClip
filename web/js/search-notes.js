@@ -671,6 +671,7 @@
   // 선택 추출용 체크 상태 — cartKey 기준(인덱스가 아니라 항목 동일성으로 추적해
   // 삭제/재정렬에도 유지). 세션 한정(localStorage 미영속).
   const cartSel = new Set();
+  let cartDragFrom = null;   // FEAT-01: 드래그 중인 항목의 원본 인덱스(드롭 시 재배치)
   // cart 에 더 이상 없는 키는 선택 집합에서 정리.
   function pruneCartSel() {
     const live = new Set(cart.map(cartKey));
@@ -706,7 +707,7 @@
     }
     list.innerHTML = cart.map((e, i) => {
       const checked = cartSel.has(cartKey(e)) ? " checked" : "";
-      return `<div class="log-row cart-item" data-cart="${i}" data-tip="${esc(I18N.t("cart.itemTip"))}">` +
+      return `<div class="log-row cart-item" data-cart="${i}" draggable="true" data-tip="${esc(I18N.t("cart.itemTip"))}">` +
         `<input type="checkbox" class="cart-cb" data-cb="${i}"${checked} ` +
           `title="${esc(I18N.t("cart.selectThis"))}">` +
         `<div class="log-ref">${esc(e.short_name)} ${e.chapter}:${esc(vlist(e.verses))}</div>` +
@@ -743,8 +744,61 @@
     list.querySelectorAll("[data-del]").forEach((x) => {
       x.addEventListener("click", (ev) => { ev.stopPropagation(); removeFromCart(Number(x.dataset.del)); });
     });
+    wireCartDnD(list);
     if (foot) foot.hidden = false;
     syncCartSelAll();
+  }
+
+  // FEAT-01: 장바구니 항목 드래그앤드롭 순서 재배치. cart 배열을 직접 재정렬하므로
+  // '전체 추출'(cart.slice)·'선택 추출'(cart.filter)이 재배치된 순서를 그대로
+  // 따라간다 — 추출 로직과의 별도 동기화 불필요(상태가 곧 순서). 드롭 위치는 행의
+  // 위/아래 절반으로 판정해 그 앞/뒤로 삽입한다.
+  function clearCartDropMarks(list) {
+    list.querySelectorAll(".cart-item").forEach((r) =>
+      r.classList.remove("drag-over-before", "drag-over-after", "dragging"));
+  }
+  function dropTargetIndex(row, clientY) {
+    const over = Number(row.dataset.cart);
+    const rect = row.getBoundingClientRect();
+    const after = (clientY - rect.top) > rect.height / 2;
+    return { over, after };
+  }
+  function wireCartDnD(list) {
+    list.querySelectorAll(".cart-item").forEach((row) => {
+      row.addEventListener("dragstart", (e) => {
+        cartDragFrom = Number(row.dataset.cart);
+        row.classList.add("dragging");
+        try {
+          e.dataTransfer.effectAllowed = "move";
+          e.dataTransfer.setData("text/plain", String(cartDragFrom));  // Firefox는 데이터 필요
+        } catch (_) {}
+      });
+      row.addEventListener("dragend", () => { clearCartDropMarks(list); cartDragFrom = null; });
+      row.addEventListener("dragover", (e) => {
+        if (cartDragFrom === null) return;
+        e.preventDefault();
+        try { e.dataTransfer.dropEffect = "move"; } catch (_) {}
+        const { over, after } = dropTargetIndex(row, e.clientY);
+        list.querySelectorAll(".cart-item").forEach((r) =>
+          r.classList.remove("drag-over-before", "drag-over-after"));
+        if (over !== cartDragFrom) row.classList.add(after ? "drag-over-after" : "drag-over-before");
+      });
+      row.addEventListener("drop", (e) => {
+        if (cartDragFrom === null) return;
+        e.preventDefault();
+        const from = cartDragFrom;
+        const { over, after } = dropTargetIndex(row, e.clientY);
+        let to = after ? over + 1 : over;
+        const item = cart[from];
+        if (!item) { clearCartDropMarks(list); return; }
+        cart.splice(from, 1);
+        if (from < to) to -= 1;          // 제거로 뒤 인덱스가 한 칸 당겨짐
+        to = Math.max(0, Math.min(cart.length, to));
+        cart.splice(to, 0, item);
+        saveCart();
+        renderCart();                     // cartSel 은 cartKey 기준이라 재배치에도 유지
+      });
+    });
   }
 
   // "전체 선택" 체크박스를 현재 선택 상태에 맞춘다(전부 선택 시 on, 일부면 indeterminate).

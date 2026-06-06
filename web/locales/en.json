@@ -61,7 +61,7 @@
   "cart.remove": "Remove",
   "cart.added": "Added to cart",
   "cart.dup": "Already in the cart",
-  "cart.itemTip": "Click: copy (jumps if enabled) · ✕ remove",
+  "cart.itemTip": "Click: copy (jumps if enabled) · Drag: reorder · ✕ remove",
   "cart.selectThis": "Include in selected extract",
   "cart.selectAll": "Select all",
   "cart.extractSelected": "Extract selected",

@@ -795,8 +795,12 @@ html[data-theme="dark"] .note-modal-back { background: rgba(0,0,0,.55); }
 .cart-add-btn:hover { color: var(--accent); background: var(--seg-bg); }
 .cart-del-btn:hover { color: var(--danger, #e5484d); background: var(--seg-bg); }
 /* cart row: checkbox + reference, with room on the right for the ✕ del button */
-.cart-item { display: flex; align-items: center; gap: 9px; padding-right: 28px; }
+.cart-item { display: flex; align-items: center; gap: 9px; padding-right: 28px; cursor: grab; }
 .cart-item .log-ref { flex: 1; min-width: 0; }
+/* FEAT-01: 드래그앤드롭 순서 재배치 — 끌리는 항목은 흐리게, 드롭 위치는 강조선으로 표시 */
+.cart-item.dragging { opacity: .45; cursor: grabbing; }
+.cart-item.drag-over-before { box-shadow: inset 0 2px 0 0 var(--accent); }
+.cart-item.drag-over-after { box-shadow: inset 0 -2px 0 0 var(--accent); }
 .cart-cb, .cart-selall input { width: 15px; height: 15px; cursor: pointer; accent-color: var(--accent); flex: 0 0 auto; }
 /* 일괄 추출 푸터 */
 .cart-foot {
