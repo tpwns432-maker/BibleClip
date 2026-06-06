@@ -23,7 +23,7 @@ from bibleclip.core.clipboard_monitor import ClipboardMonitor
 from bibleclip.data.bible_db import BibleDB
 from bibleclip.data.original_lang import (
     resolve_original_lang_dir, BethlehemDB, Lexicon, parse_korean_strongs,
-    parse_wonjun_verse, strip_korean_strongs,
+    parse_english_strongs, parse_wonjun_verse, strip_korean_strongs,
 )
 
 
@@ -452,14 +452,23 @@ class Library:
                  'text': strip_korean_strongs(bt)}
                 for ob, ch, v, bt in self.bethlehem_strongs.search_by_strong(code)]
 
-    def interlinear(self, book_num, chapter):
-        """[(verse, [(word, code), ...]), ...] from the Strong's-tagged KRV."""
+    def interlinear(self, book_num, chapter, version=None):
+        """[(verse, [(word, code), ...]), ...] for one chapter.
+
+        Default source is the Strong's-tagged KRV (개역한글S). When `version` names
+        a loaded bible that carries inline Strong's numbers (KJV+ → strong_numbers
+        flag), the breakdown is built from THAT version's own English words instead
+        — identical shape, so the 원전 분해 card and dict routing stay version-
+        agnostic. The H/G prefix for KJV+ comes from the testament (parse_english_
+        strongs), matching the codes in HebGrkEn/Ko.dct."""
+        db = self.dbs.get(version) if version else None
+        if db is not None and getattr(db, 'has_strongs', False):
+            return [(verse, parse_english_strongs(raw, book_num))
+                    for verse, raw in db.get_chapter_raw(book_num, chapter)]
         if not self.bethlehem_strongs:
             return []
-        out = []
-        for verse, btext in self.bethlehem_strongs.get_chapter_verses(book_num, chapter):
-            out.append((verse, parse_korean_strongs(btext)))
-        return out
+        return [(verse, parse_korean_strongs(btext))
+                for verse, btext in self.bethlehem_strongs.get_chapter_verses(book_num, chapter)]
 
     def morphology(self, code, book_num, chapter, verse):
         """Morphological analysis entries for one Strong's code in one verse,

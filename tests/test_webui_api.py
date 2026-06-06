@@ -138,6 +138,22 @@ def main():
     print(f"get_interlinear(10,1) -> {len(inter)} verses; "
           f"v1 first word: {first['w']}/{first['code']}")
 
+    # KJV+ (영어 원전 분해): a Strong-tagged English bible yields the breakdown from
+    # its OWN words, H/G prefixed by testament. Gen 1:1 'God'→H430, 'created'→H1254;
+    # John 3:16 (NT) carries Greek G-codes. Skipped if KJV+ isn't installed.
+    if 'KJV+' in api.lib.dbs:
+        kjv = api.get_interlinear(10, 1, 'KJV+')
+        words = {w['w']: w['code'] for w in kjv[0]['words']}
+        assert words.get('God') == 'H430', words
+        assert words.get('created') == 'H1254', words
+        assert api.lookup_strong('H430', 'en'), 'H430 not in HebGrkEn.dct'
+        john = next(v for v in api.get_interlinear(500, 3, 'KJV+') if v['n'] == 16)
+        assert any((w['code'] or '').startswith('G') for w in john['words']), john
+        # 한국어 폴백 불변: 비-Strong 역본/버전 미지정은 개역한글S 분해 그대로.
+        assert api.get_interlinear(10, 1, 'KRV')[0]['words'][0]['code'].startswith('H')
+        print(f"get_interlinear KJV+ -> God/{words['God']} created/{words['created']}; "
+              f"John3:16 Greek OK; 개역한글S fallback intact")
+
     # set_viewer_versions: validation + ordering, WITHOUT touching the real
     # settings file (save_settings stubbed — see headless-test-no-save rule).
     saved = []

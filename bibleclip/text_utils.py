@@ -61,6 +61,11 @@ def convert_qwerty_to_hangul(text):
 def clean_text(text):
     if not text:
         return ''
+    # Remove Strong's-number tags '<S>NNNN</S>' WHOLE — tag plus the number inside.
+    # KJV+-style bibles embed them; the generic tag pass below strips only the
+    # <S>/</S> brackets and would leave the digits glued to the word
+    # ('beginning7225'). Must run before the generic removal.
+    text = re.sub(r'<S>\d+</S>', '', text)
     # Remove footnote tags <f>...</f>
     text = re.sub(r'<f>[^<]*</f>', '', text)
     # Remove section title tags <n>...</n> and their bracket content
