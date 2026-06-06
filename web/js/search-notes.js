@@ -1093,6 +1093,23 @@
     { key: "hide_reference", label: "fmt.hideReference" },
   ];
 
+  // FEAT-02/05 매직 포맷터 매크로 태그 — 칩 버튼으로 입력창 커서 위치에 주입된다.
+  // content2/version2 는 대조(병렬) 복사용 둘째 역본 본문/이름(FEAT-05).
+  const FORMAT_MACRO_TAGS = ["{book_full}", "{book_short}", "{chap}", "{verse}",
+                             "{content}", "{version}", "{content2}", "{version2}"];
+
+  // 입력창의 현재 커서(selectionStart) 위치에 text 를 주입하고 커서를 그 뒤로 옮긴다.
+  // (칩은 mousedown preventDefault 로 포커스를 뺏지 않아 selectionStart 가 보존된다.)
+  function insertAtCaret(input, text) {
+    if (input.disabled) return;
+    const s = (input.selectionStart != null) ? input.selectionStart : input.value.length;
+    const e = (input.selectionEnd != null) ? input.selectionEnd : input.value.length;
+    input.value = input.value.slice(0, s) + text + input.value.slice(e);
+    const pos = s + text.length;
+    input.focus();
+    try { input.setSelectionRange(pos, pos); } catch (_) {}
+  }
+
   let settingsLoaded = false;
   let setState = null; // {format:{...}, output_order:[...], versions:[...]}
 
@@ -1155,17 +1172,19 @@
       host.appendChild(t);
     });
 
-    // FEAT-02: 클립보드 매직 포맷터 — 유저 매크로 템플릿. 켜면 위의 표준 서식 대신
-    // 템플릿이 적용되어 복사/미리보기에 즉시 반영된다. 인식 태그는 힌트로 안내.
+    // FEAT-02: 클립보드 매직 포맷터 — 유저 매크로 템플릿. 켜면 표준 서식 대신 템플릿이
+    // 복사/미리보기에 즉시 반영. 태그는 클릭 가능한 칩 버튼으로 커서 위치에 주입되며
+    // (타이핑도 그대로 가능), 켜짐 여부에 따라 입력/칩이 함께 활성·비활성된다.
+    const enabled = !!setState.format.custom_format_enabled;
     const wrap = document.createElement("div");
-    wrap.className = "set-custom-fmt";
+    wrap.className = "set-custom-fmt" + (enabled ? "" : " disabled");
     const ct = document.createElement("div");
     ct.className = "set-toggle";
     const clab = document.createElement("span");
     clab.className = "set-label";
     clab.textContent = I18N.t("fmt.customEnable");
     const csw = document.createElement("span");
-    csw.className = "switch" + (setState.format.custom_format_enabled ? " on" : "");
+    csw.className = "switch" + (enabled ? " on" : "");
     csw.innerHTML = `<span class="knob"></span>`;
     ct.appendChild(clab); ct.appendChild(csw);
     const inp = document.createElement("input");
@@ -1173,26 +1192,41 @@
     inp.className = "set-input";
     inp.placeholder = "[{book_full} {chap}:{verse}] {content}";
     inp.value = setState.format.custom_format_template || "";
-    inp.disabled = !setState.format.custom_format_enabled;
-    const hint = document.createElement("div");
-    hint.className = "set-hint";
-    hint.textContent = I18N.t("fmt.customHint");
-    wrap.appendChild(ct); wrap.appendChild(inp); wrap.appendChild(hint);
-    host.appendChild(wrap);
-    ct.addEventListener("click", async () => {
-      const next = !setState.format.custom_format_enabled;
-      setState.format.custom_format_enabled = next;
-      csw.classList.toggle("on", next);
-      inp.disabled = !next;
-      await api().set_setting("custom_format_enabled", next);
-      refreshPreview();
-    });
+    inp.disabled = !enabled;
     const commitTmpl = async () => {
       if (inp.value === setState.format.custom_format_template) return;  // 무변경 저장 생략
       setState.format.custom_format_template = inp.value;
       await api().set_setting("custom_format_template", inp.value);
       refreshPreview();
     };
+    // 태그 칩 버튼 행(입력창 상단). mousedown preventDefault 로 입력 포커스/커서를 지켜
+    // selectionStart 위치에 정확히 주입한다.
+    const chipRow = document.createElement("div");
+    chipRow.className = "fmt-tagchips";
+    FORMAT_MACRO_TAGS.forEach((tag) => {
+      const chip = document.createElement("button");
+      chip.type = "button";
+      chip.className = "fmt-tagchip";
+      chip.textContent = tag;
+      chip.title = I18N.t("fmt.insertTag");
+      chip.addEventListener("mousedown", (e) => e.preventDefault());  // keep caret/focus
+      chip.addEventListener("click", () => { insertAtCaret(inp, tag); commitTmpl(); });
+      chipRow.appendChild(chip);
+    });
+    const hint = document.createElement("div");
+    hint.className = "set-hint";
+    hint.textContent = I18N.t("fmt.customHint");
+    wrap.appendChild(ct); wrap.appendChild(chipRow); wrap.appendChild(inp); wrap.appendChild(hint);
+    host.appendChild(wrap);
+    ct.addEventListener("click", async () => {
+      const next = !setState.format.custom_format_enabled;
+      setState.format.custom_format_enabled = next;
+      csw.classList.toggle("on", next);
+      inp.disabled = !next;
+      wrap.classList.toggle("disabled", !next);
+      await api().set_setting("custom_format_enabled", next);
+      refreshPreview();
+    });
     inp.addEventListener("change", commitTmpl);   // blur 시 커밋(키 입력마다 저장 방지)
     inp.addEventListener("keydown", (e) => { if (e.key === "Enter") { e.preventDefault(); inp.blur(); } });
   }
