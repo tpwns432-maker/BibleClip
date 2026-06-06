@@ -563,8 +563,10 @@ class Library:
             order = self.settings.get('output_order') or []
         if not order:
             return '', 0
-        fmt = Formatter(self.settings, self.dbs)
-        parts = []
+        s = self.settings
+        fmt = Formatter(s, self.dbs)
+        # Gather valid (db, verse_data) columns in the given order.
+        cols = []
         for ver_name in order:
             db = self.dbs.get(ver_name)
             if db is None or book_num not in db.books:
@@ -574,8 +576,22 @@ class Library:
             else:
                 verse_data = db.get_verses(book_num, chapter)
             verse_data = [(v, t) for v, t in verse_data if t]
-            if not verse_data:
-                continue
+            if verse_data:
+                cols.append((db, verse_data))
+        if not cols:
+            return '', 0
+
+        # FEAT-05 병렬 복사 부스터: 커스텀 템플릿이 둘째 역본 태그({content2}/{version2})를
+        # 쓰고 역본이 2개 이상이면, 앞 두 역본을 ONE 블록으로 결합(한/영 한 세트). 그 외엔
+        # 기존 역본별 블록(\n\n join) 그대로.
+        template = (s.get('custom_format_template') or '')
+        if (s.get('custom_format_enabled') and template.strip()
+                and ('{content2}' in template or '{version2}' in template)
+                and len(cols) >= 2):
+            return fmt.format_parallel(book_num, chapter, cols[0], cols[1]), 2
+
+        parts = []
+        for db, verse_data in cols:
             actual_verses = [v for v, _ in verse_data]
             result = fmt.format_version_output(db, book_num, chapter, actual_verses, verse_data)
             if result:
