@@ -38,6 +38,40 @@ def _blocked_html(message):
 </div></body></html>"""
 
 
+def _conn_error_html(lang):
+    """Friendly, bilingual guide shown when the local page fails to load
+    (ERR_CONNECTION_REFUSED) — almost always security software / a firewall
+    blocking the 127.0.0.1 loopback the WebView uses, or the local server thread
+    being blocked from starting. Rendered via load_html → NavigateToString, so it
+    displays WITHOUT the loopback server (it shows even when that's exactly what's
+    blocked). pywebview already binds a random free port on 127.0.0.1, so a fixed-
+    port collision isn't the cause — the guidance targets the real (external) one."""
+    def esc(k):
+        return _html.escape(i18n.t(k, lang))
+    title = esc('conn.errTitle')
+    intro = esc('conn.errIntro')
+    steps = ''.join(f'<li>{esc(k)}</li>'
+                    for k in ('conn.errAdmin', 'conn.errWhitelist', 'conn.errReboot'))
+    return f"""<!DOCTYPE html>
+<html lang="{_html.escape(lang)}"><head><meta charset="utf-8">
+<style>
+  html,body{{margin:0;height:100%;
+    font-family:'Malgun Gothic','Apple SD Gothic Neo','Noto Sans CJK KR',sans-serif;
+    background:#1b1d22;color:#e8e8ea;
+    display:flex;align-items:center;justify-content:center;}}
+  .box{{max-width:480px;padding:44px 48px;}}
+  .title{{font-size:20px;font-weight:700;margin-bottom:14px;color:#ffb454;}}
+  .msg{{font-size:14.5px;line-height:1.7;color:#c9c9cf;margin-bottom:18px;}}
+  ol{{margin:0;padding-left:20px;}}
+  li{{font-size:14px;line-height:1.9;color:#e3e3e7;}}
+</style></head>
+<body><div class="box">
+  <div class="title">BibleClip — {title}</div>
+  <div class="msg">{intro}</div>
+  <ol>{steps}</ol>
+</div></body></html>"""
+
+
 def main():
     import webview  # imported lazily so api.py stays headless-testable
 
@@ -126,6 +160,25 @@ def main():
                               min_size=(360, 360))
 
     api.set_popup_factory(_open_popup)
+
+    # Startup connection watchdog (Fix-C): if the front-end never reaches the
+    # bridge (get_initial) within the timeout, the local HTTP page failed to load
+    # — ERR_CONNECTION_REFUSED, typically security software/firewall blocking the
+    # 127.0.0.1 loopback the WebView uses, or the local server thread being
+    # blocked. Replace the bare Chromium error with a friendly bilingual guide via
+    # load_html (NavigateToString — no server, so it shows even when the loopback
+    # is what's blocked). A normal launch fires get_initial in ~1-2s and stands
+    # the watchdog down well within the generous timeout.
+    import threading
+
+    def _conn_watchdog():
+        if not api._booted.wait(15):
+            try:
+                window.load_html(_conn_error_html(i18n.resolve_ui_lang(library.settings)))
+            except Exception:
+                pass
+    threading.Thread(target=_conn_watchdog, daemon=True).start()
+
     webview.start()
 
 

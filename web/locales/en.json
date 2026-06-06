@@ -1,4 +1,9 @@
 {
+  "conn.errTitle": "Startup was temporarily blocked",
+  "conn.errIntro": "Security software or a firewall blocked BibleClip's screen from loading. Please try the steps below in order.",
+  "conn.errAdmin": "Right-click the program and choose [Run as administrator].",
+  "conn.errWhitelist": "Add BibleClip to the exceptions (allow list) in Windows Defender or your antivirus.",
+  "conn.errReboot": "Restart your computer and try again.",
   "nav.viewer": "Bible",
   "nav.settings": "Output Settings",
   "nav.search": "Search",

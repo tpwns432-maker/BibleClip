@@ -14,6 +14,7 @@ popup injection, the JS push channel) plus the clipboard monitoring + copy path
 monkeypatch on *this* module, so they must reference it here.
 """
 import json
+import threading
 
 from bibleclip.webui.routes import BibleRoutes, NoteRoutes, SystemRoutes
 # Lexicon-markup helpers live in their own module to avoid a circular import
@@ -42,6 +43,10 @@ class Api(SystemRoutes, BibleRoutes, NoteRoutes):
         self._popup_factory = None  # callable(title, html) -> new native window
         self._update = None        # last fetch_latest_release info (for install)
         self.monitoring = False
+        # Set when the front-end first reaches the bridge (get_initial) — proof
+        # the local HTTP page actually loaded. The startup connection watchdog in
+        # webui.app waits on this; if it never fires, it shows the guide screen.
+        self._booted = threading.Event()
 
     def set_window(self, window):
         """Receive the pywebview window so Python-side events can reach JS.
