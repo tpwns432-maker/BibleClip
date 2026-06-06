@@ -129,6 +129,7 @@ window.BC = window.BC || {};
   function openDrawer() {
     if (!drawer) return;
     if (typeof closeCart === "function") closeCart();  // 상호배타: 장바구니 드로어 닫기
+    if (typeof closeNotes === "function") closeNotes();  // 상호배타: 노트 레일 닫기
     drawer.hidden = false;
     $("log-toggle").classList.add("on");
     const dot = $("log-dot");
@@ -266,6 +267,7 @@ window.BC = window.BC || {};
     wireGlobalControls();
     wireMonitor();
     wireCart();
+    wireNotesRail();
     wireTabs();
     wireUpdate();
     wireAppSettings();
@@ -283,12 +285,12 @@ window.BC = window.BC || {};
   // 카드 타입 라벨. TYPE_LABEL은 ko 베이스(= i18n 폴백), typeLabel()은 렌더 시점의
   // 현재 언어 문자열을 돌려준다. card-title span은 data-i18n도 달아 언어 전환 시
   // apply() 재스윕으로 즉시 갱신된다(카드 재렌더 불필요).
-  const TYPE_LABEL = { bible: "성경 본문", interlinear: "원전 분해", lexicon: "사전", notes: "노트 모아보기" };
+  const TYPE_LABEL = { bible: "성경 본문", interlinear: "원전 분해", lexicon: "사전" };
   function typeLabel(type) {
     return window.I18N ? I18N.t("card.type." + type, TYPE_LABEL[type]) : TYPE_LABEL[type];
   }
-  const ID_PREFIX = { bible: "bible", interlinear: "inter", lexicon: "lex", notes: "notes" };
-  const BODY_CLASS = { bible: "scripture", interlinear: "interlin", lexicon: "lex", notes: "notes" };
+  const ID_PREFIX = { bible: "bible", interlinear: "inter", lexicon: "lex" };
+  const BODY_CLASS = { bible: "scripture", interlinear: "interlin", lexicon: "lex" };
 
   const LOCK_CLOSED = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>';
   const LOCK_OPEN = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 9.9-1"/></svg>';

@@ -843,6 +843,7 @@
     const cd = $("cart-drawer");
     if (!cd) return;
     if (typeof closeDrawer === "function") closeDrawer();   // 상호배타: 로그 드로어 닫기
+    if (typeof closeNotes === "function") closeNotes();     // 상호배타: 노트 레일 닫기
     cd.hidden = false;
     $("cart-toggle").classList.add("on");
     const dot = $("cart-dot"); if (dot) dot.hidden = true;
@@ -863,6 +864,115 @@
     const selAll = $("cart-selall-cb");
     if (selAll) selAll.addEventListener("change", (e) => toggleSelectAll(e.target.checked));
     renderCart();
+  }
+
+  // ---- 묵상 노트 레일 패널 (FEAT-03: 카드 폐기 → 슬라이딩 드로어) ----
+  // 흩어진 절별 묵상 노트를 성경 순서로 모아보는 우측 슬라이딩 패널. 본문 카드를 넓게
+  // 띄운 채 상시 접근 가능. 로그/장바구니 드로어와 상호배타. 행 클릭→본문 점프,
+  // 선택(없으면 전체)을 클립보드 복사 / 텍스트 파일 저장(백엔드 copy_text/export_text_file).
+  let notesData = [];
+  const notesSel = new Set();   // book:chapter:verse 키 기준 선택(세션 한정)
+  function noteRowKey(n) { return `${n.book}:${n.chapter}:${n.verse}`; }
+  function notesNavVer() { return state.viewer[0] || state.primary; }
+  function buildNotesText(list) {
+    const v = notesNavVer();
+    return list.map((n) => `${bookShortFor(v, n.book) || ""} ${n.chapter}:${n.verse}\n${n.text}`).join("\n\n");
+  }
+  function notesTargets() {              // 선택분, 없으면 전체
+    const sel = notesData.filter((n) => notesSel.has(noteRowKey(n)));
+    return sel.length ? sel : notesData;
+  }
+  function syncNotesSelAll() {
+    const all = $("notes-selall-cb");
+    if (!all) return;
+    const n = notesData.length, sel = notesData.filter((x) => notesSel.has(noteRowKey(x))).length;
+    all.checked = n > 0 && sel === n;
+    all.indeterminate = sel > 0 && sel < n;
+  }
+  async function renderNotes() {
+    const list = $("notes-list");
+    if (!list) return;
+    const foot = $("notes-foot");
+    let notes = [];
+    try { notes = (await api().get_all_notes()) || []; } catch (_) { notes = []; }
+    notesData = notes;
+    const live = new Set(notes.map(noteRowKey));                 // 사라진 노트 선택 정리
+    [...notesSel].forEach((k) => { if (!live.has(k)) notesSel.delete(k); });
+    if (!notes.length) {
+      list.innerHTML = `<div class="log-empty" data-i18n-html="notes.empty">${I18N.t("notes.empty")}</div>`;
+      if (foot) foot.hidden = true;
+      return;
+    }
+    const v = notesNavVer();
+    try { await booksFor(v); } catch (_) {}                      // 책이름 캐시 보장
+    list.innerHTML = notes.map((n) => {
+      const k = noteRowKey(n);
+      const short = esc(bookShortFor(v, n.book) || "");
+      const checked = notesSel.has(k) ? " checked" : "";
+      const ts = n.ts ? `<span class="note-ts">${esc(String(n.ts).replace("T", " "))}</span>` : "";
+      return `<div class="note-row" data-k="${esc(k)}" data-b="${n.book}" data-c="${n.chapter}" data-v="${n.verse}" data-tip="${esc(I18N.t("notes.rowTip"))}">` +
+        `<input type="checkbox" class="note-cb"${checked} title="${esc(I18N.t("notes.selectThis"))}">` +
+        `<div class="note-main"><div class="note-ref">${short} ${n.chapter}:${n.verse}${ts}</div>` +
+        `<div class="note-text">${esc(n.text)}</div></div></div>`;
+    }).join("");
+    list.querySelectorAll(".note-row").forEach((row) => {
+      row.addEventListener("click", (e) => {
+        if (e.target.closest(".note-cb")) return;                // 체크박스는 선택 전용
+        showView("viewer");
+        CardManager.goToRef(+row.dataset.b, +row.dataset.c, [+row.dataset.v]);  // 본문 점프
+      });
+    });
+    list.querySelectorAll(".note-cb").forEach((cb) => {
+      cb.addEventListener("click", (e) => {
+        e.stopPropagation();
+        const k = cb.closest(".note-row").dataset.k;
+        if (cb.checked) notesSel.add(k); else notesSel.delete(k);
+        syncNotesSelAll();
+      });
+    });
+    if (foot) foot.hidden = false;
+    syncNotesSelAll();
+  }
+  function openNotes() {
+    const d = $("notes-drawer");
+    if (!d) return;
+    if (typeof closeDrawer === "function") closeDrawer();        // 상호배타: 로그 닫기
+    closeCart();                                                 // 상호배타: 장바구니 닫기
+    d.hidden = false;
+    const t = $("notes-toggle"); if (t) t.classList.add("on");
+    renderNotes();
+  }
+  function closeNotes() {
+    const d = $("notes-drawer"); if (d) d.hidden = true;
+    const t = $("notes-toggle"); if (t) t.classList.remove("on");
+  }
+  function wireNotesRail() {
+    const tog = $("notes-toggle");
+    if (tog) tog.addEventListener("click", () => $("notes-drawer").hidden ? openNotes() : closeNotes());
+    const cl = $("notes-close"); if (cl) cl.addEventListener("click", closeNotes);
+    const rl = $("notes-reload"); if (rl) rl.addEventListener("click", renderNotes);
+    const sa = $("notes-selall-cb");
+    if (sa) sa.addEventListener("change", (e) => {
+      notesSel.clear();
+      if (e.target.checked) notesData.forEach((n) => notesSel.add(noteRowKey(n)));
+      renderNotes();
+    });
+    const cp = $("notes-copy");
+    if (cp) cp.addEventListener("click", async () => {
+      const list = notesTargets();
+      if (!list.length) return;
+      const r = await api().copy_text(buildNotesText(list));
+      if (r && r.ok) toast(I18N.t("notes.copied", { n: list.length }));
+    });
+    const ex = $("notes-export");
+    if (ex) ex.addEventListener("click", async () => {
+      const list = notesTargets();
+      if (!list.length) return;
+      let r = null;
+      try { r = await api().export_text_file(buildNotesText(list), "bibleclip_notes.txt"); } catch (_) {}
+      if (r && r.ok) toast(I18N.t("notes.exported"));
+      else if (!r || r.error !== "cancelled") toast(I18N.t("notes.exportFail"));
+    });
   }
 
   // ---- F2 quick search (presentation jump, 3순위) ----
@@ -1629,8 +1739,7 @@
     wireChipDrag();
 
     // ＋ 본문 / ＋ 원어 / ＋ 사전 — new cards appear at the workspace center, on top.
-    [["add-bible", "bible"], ["add-inter", "interlinear"], ["add-lex", "lexicon"],
-     ["add-notes", "notes"]].forEach(([id, type]) => {
+    [["add-bible", "bible"], ["add-inter", "interlinear"], ["add-lex", "lexicon"]].forEach(([id, type]) => {
       const btn = $(id);
       if (btn) btn.addEventListener("click", () => CardManager.addCard(type));
     });
@@ -1698,6 +1807,8 @@
     try { setStatus(state.monitoring); } catch (_) {}
     try { renderLog(); } catch (_) {}
     try { renderCart(); } catch (_) {}
+    // 노트 레일이 열려 있으면 재렌더(닫혀 있으면 불필요한 fetch 회피).
+    try { const nd = $("notes-drawer"); if (nd && !nd.hidden) renderNotes(); } catch (_) {}
     if (settingsLoaded && setState) {
       try { renderFormat(); } catch (_) {}
       try { renderOrder(); } catch (_) {}
