@@ -8,7 +8,7 @@ import html as _html
 import os
 
 from bibleclip import i18n
-from bibleclip.config import __version__, get_resource_dir
+from bibleclip.config import __version__, get_resource_dir, IS_WINDOWS
 from bibleclip.core.library import Library
 from bibleclip.killswitch import check_killswitch
 from bibleclip.webui.api import Api
@@ -72,7 +72,57 @@ def _conn_error_html(lang):
 </div></body></html>"""
 
 
+# Microsoft 공식 고정 리다이렉트 → .NET Framework 4.8 오프라인 설치본
+# (NDP48-x86-x64-AllOS-ENU.exe, ~121MB)을 브라우저가 곧바로 내려받는다(검증된 fwlink).
+DOTNET_DOWNLOAD_URL = 'https://go.microsoft.com/fwlink/?linkid=2088631'
+
+
+def _is_runtime_error(exc):
+    """True if an exception looks like the pywebview(winforms) → pythonnet → .NET
+    Framework CLR initialization failure ('Failed to resolve
+    Python.Runtime.Loader.Initialize …') — i.e. .NET Framework < 4.7.2 or
+    missing/broken on the user's PC. Matched on the exception text only."""
+    s = f'{type(exc).__name__}: {exc}'.lower()
+    return any(k in s for k in (
+        'python.runtime', 'pythonnet', 'clr_loader', 'loader.initialize',
+        'coreclr', 'mscoree', 'winforms', '.net framework'))
+
+
+def _show_runtime_error():
+    """Last-resort guide when the .NET/pywebview backend can't even start. Uses
+    ONLY stdlib (a Win32 message box + the browser) so it works with no .NET, no
+    WebView2, and no local server — exactly the broken state it reports. Without
+    this the user just gets PyInstaller's cryptic 'Failed to execute script' crash.
+    [확인] → the .NET Framework 4.8 installer downloads directly."""
+    lang = i18n.resolve_ui_lang()
+    title = i18n.t('dotnet.errTitle', lang)
+    body = i18n.t('dotnet.errBody', lang)
+    try:
+        import ctypes
+        ctypes.windll.user32.MessageBoxW(0, body, title, 0x10)  # MB_OK | MB_ICONERROR
+    except Exception:
+        pass
+    try:
+        import webbrowser
+        webbrowser.open(DOTNET_DOWNLOAD_URL)
+    except Exception:
+        pass
+
+
 def main():
+    """Public entry point. Wraps the real startup so a .NET/CLR backend failure
+    becomes a friendly native guide instead of a raw PyInstaller crash. Unrelated
+    errors propagate unchanged."""
+    try:
+        _main()
+    except Exception as exc:
+        if IS_WINDOWS and _is_runtime_error(exc):
+            _show_runtime_error()
+            return
+        raise
+
+
+def _main():
     import webview  # imported lazily so api.py stays headless-testable
 
     # Remote kill switch: stop here (showing only the notice) if this build has

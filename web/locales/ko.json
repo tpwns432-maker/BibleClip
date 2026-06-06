@@ -4,6 +4,8 @@
   "conn.errAdmin": "프로그램을 마우스 우클릭하여 [관리자 권한으로 실행] 해 보세요.",
   "conn.errWhitelist": "Windows Defender 또는 백신 프로그램에서 BibleClip을 예외(허용) 등록해 주세요.",
   "conn.errReboot": "컴퓨터를 재부팅한 후 다시 실행해 보세요.",
+  "dotnet.errTitle": "BibleClip 실행 오류 — .NET Framework 필요",
+  "dotnet.errBody": ".NET Framework를 불러오지 못해 BibleClip을 시작할 수 없습니다.\n\n[확인]을 누르면 Microsoft .NET Framework 4.8 설치 파일(약 120MB) 다운로드가 바로 시작됩니다. 설치한 뒤 컴퓨터를 재시작하고 BibleClip을 다시 실행해 주세요.\n\n(백신·보안 프로그램이 BibleClip 폴더를 차단하지 않도록 예외 등록을 권장합니다.)",
   "nav.viewer": "성경 보기",
   "nav.settings": "출력 설정",
   "nav.search": "검색",

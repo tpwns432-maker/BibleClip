@@ -4,6 +4,15 @@ BibleClip의 버전별 변경 내용입니다. 최신 버전이 위에 옵니다
 
 ---
 
+## v1.0.9 — .NET 런타임 누락 대응(네이티브 안내 + 설치 직링크)
+- **`Failed to resolve Python.Runtime.Loader.Initialize` 핫픽스** — .NET Framework 4.7.2 미만/미설치 PC에서
+  pywebview(winforms) → pythonnet → .NET CLR 초기화가 실패하면 PyInstaller의 알 수 없는 크래시 창이 뜨던 문제.
+  시작 경로를 감싸 이 실패를 감지하면, **.NET·WebView2·로컬 서버가 전혀 필요 없는 순수 Win32 메시지박스**
+  (ctypes)로 ".NET Framework가 필요합니다" 안내를 띄우고, [확인] 시 **.NET Framework 4.8 오프라인 설치본**
+  (MS 공식 고정 링크)을 브라우저가 바로 내려받게 합니다. 정상 기동에는 영향이 없고, 그 외 오류는 그대로 전파됩니다.
+
+---
+
 ## v1.0.8 — 연결 차단 환경 대응(친화적 안내 화면)
 - **`ERR_CONNECTION_REFUSED` 핫픽스** — 일부 보안 프로그램·방화벽이 내부 로컬 통신(127.0.0.1 루프백)을
   차단하면 본문 화면이 안 뜨고 브라우저 표준 오류가 노출되던 문제. 부팅 워치독이 프론트의 브리지 도달
