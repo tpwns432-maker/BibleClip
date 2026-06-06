@@ -57,17 +57,22 @@ if ($LASTEXITCODE -ne 0) { throw "PyInstaller failed" }
 $dst = "dist_web\BibleClipWeb"
 Copy-Item icon.ico $dst -Force
 Copy-Item 사용법.txt, 사용법.html, 사용법.css, 사용법.js, version_changes.json $dst -Force
-# Copyright guard: bundle ONLY copyright-clean data - KRV(개역한글, royalty-free)
-# and 개역한글S(KRV+Strong tags). Other bibles (ESV/NKJV/...) and the lexicons
-# (HebGrkKo TWOT-Korean, HebGrkEn) are user-supplied modules, never redistributed.
+# Copyright guard: bundle ONLY copyright-clean data - KRV(개역한글, royalty-free),
+# 개역한글S(KRV+Strong tags), and KJV+(King James 1769 + Strong's, public domain →
+# 영어권 원전 분해 기본 소스). Other bibles (ESV/NKJV/...) and the lexicons
+# (HebGrkKo TWOT-Korean, HebGrkEn) are user-supplied modules, never redistributed
+# — interlinear shows words+codes out of the box, but Strong's 정의는 사용자 공급
+# .dct 가 있어야 뜬다(한국어/영어 동일 정책).
 New-Item -ItemType Directory -Force "$dst\bible_versions" | Out-Null
 Copy-Item bible_versions\KRV.SQLite3 "$dst\bible_versions\" -Force
+Copy-Item "bible_versions\KJV+.SQLite3" "$dst\bible_versions\" -Force
 New-Item -ItemType Directory -Force "$dst\original_lang" | Out-Null
 Copy-Item "original_lang\개역한글S.sdb" "$dst\original_lang\" -Force
 
 # 동봉 검증: 한글 파일명이 PS5.1에서 깨져 누락되는 회귀를 빌드 단계에서 즉시 포착.
 $must = @("$dst\사용법.html","$dst\사용법.css","$dst\사용법.js",
-          "$dst\original_lang\개역한글S.sdb","$dst\bible_versions\KRV.SQLite3")
+          "$dst\original_lang\개역한글S.sdb","$dst\bible_versions\KRV.SQLite3",
+          "$dst\bible_versions\KJV+.SQLite3")
 foreach ($p in $must) {
   if (-not (Test-Path -LiteralPath $p)) { throw "필수 동봉 파일 누락: $p (한글 파일명 인코딩/ BOM 확인)" }
 }
