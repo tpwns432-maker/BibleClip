@@ -205,7 +205,8 @@
   "fmt.showVersionHeader": "Show version header",
   "fmt.hideReference": "Hide reference (text only)",
   "fmt.customEnable": "Clipboard magic formatter (custom macro)",
-  "fmt.customHint": "Tags: {book_full} {book_short} {chap} {verse} {content} {version} · e.g. [{book_full} {chap}:{verse}] {content}",
+  "fmt.customHint": "Click a tag to insert it at the cursor · e.g. [{book_full} {chap}:{verse}] {content} · Parallel copy: put {content2} on the line after {content}",
+  "fmt.insertTag": "Click to insert at the cursor",
 
   "order.empty": "No versions to copy with. Add one below.",
   "order.addVersion": "＋ Add version",

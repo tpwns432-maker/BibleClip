@@ -205,7 +205,8 @@
   "fmt.showVersionHeader": "버전 헤더 출력",
   "fmt.hideReference": "장절 표기 숨기기 (본문만)",
   "fmt.customEnable": "클립보드 매직 포맷터 (커스텀 매크로)",
-  "fmt.customHint": "사용 가능한 태그: {book_full} {book_short} {chap} {verse} {content} {version} · 예: [{book_full} {chap}:{verse}] {content}",
+  "fmt.customHint": "태그를 클릭해 커서 위치에 넣으세요 · 예: [{book_full} {chap}:{verse}] {content} · 한/영 대조 복사: {content} 다음 줄에 {content2}",
+  "fmt.insertTag": "클릭하여 커서 위치에 삽입",
 
   "order.empty": "복사 시 사용할 역본이 없습니다. 아래에서 추가하세요.",
   "order.addVersion": "＋ 역본 추가",
