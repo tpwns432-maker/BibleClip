@@ -34,10 +34,12 @@ class BibleRoutes:
             'verses': verses,
         }
 
-    def get_interlinear(self, book, chapter):
-        """Strong's-tagged words per verse (KRV 개역한글S; version-independent)."""
+    def get_interlinear(self, book, chapter, version=None):
+        """Strong's-tagged words per verse. Defaults to the KRV 개역한글S breakdown;
+        when `version` is a Strong-tagged bible (KJV+), uses that version's own
+        English words so the 원전 분해 card follows the displayed translation."""
         return [{'n': n, 'words': [{'w': w, 'code': c} for (w, c) in words]}
-                for n, words in self.lib.interlinear(int(book), int(chapter))]
+                for n, words in self.lib.interlinear(int(book), int(chapter), version)]
 
     # ---- Reference + Strong's search ----
 

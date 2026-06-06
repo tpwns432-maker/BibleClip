@@ -27,6 +27,10 @@ class BibleDB:
         self.language = self.info.get('language', 'ko')
         if self.language == 'en':
             self.is_english = True
+        # MyBible/MySword bibles flag inline Strong's numbers ('<S>NNNN</S>') with
+        # info.strong_numbers='true' (e.g. KJV+). Drives the 원전 분해 breakdown so
+        # an English translation can be analyzed just like 개역한글S.
+        self.has_strongs = str(self.info.get('strong_numbers', '')).strip().lower() == 'true'
 
     def _load_books(self):
         cur = self.conn.cursor()
@@ -48,6 +52,14 @@ class BibleDB:
         cur.execute("SELECT verse, text FROM verses WHERE book_number=? AND chapter=? ORDER BY verse",
                      (book_number, chapter))
         return [(v, clean_text(t)) for v, t in cur.fetchall()]
+
+    def get_chapter_raw(self, book_number, chapter):
+        """Raw verse text (markup intact) for one chapter — used to parse inline
+        Strong's numbers for the 원전 분해 card. Display paths use get_verses."""
+        cur = self.conn.cursor()
+        cur.execute("SELECT verse, text FROM verses WHERE book_number=? AND chapter=? ORDER BY verse",
+                     (book_number, chapter))
+        return cur.fetchall()
 
     def get_verse_text(self, book_number, chapter, verse):
         cur = self.conn.cursor()

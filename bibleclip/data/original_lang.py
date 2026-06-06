@@ -161,6 +161,35 @@ def parse_korean_strongs(text):
     return out
 
 
+# KJV+-style inline Strong's: an English word followed by '<S>NNNN</S>'. The
+# number carries no testament prefix, so the book decides it — OT → Hebrew (H),
+# NT → Greek (G). MyBible numbers Matthew (first NT book) 470, so book_num >= 470
+# is the New Testament.
+ENGLISH_STRONG_TAG = re.compile(r'<S>(\d+)</S>')
+NT_FIRST_BOOK_NUM = 470
+_INLINE_MARKUP = re.compile(r'<[^>]+>')
+
+
+def parse_english_strongs(text, book_num):
+    """Parse '<S>NNNN</S>'-tagged English text (KJV+) into [(word, code)] tuples,
+    the same shape parse_korean_strongs returns. Each tag binds to the text just
+    before it; residual markup (red-letter <J>, footnotes) is stripped from each
+    word, and the H/G prefix is derived from the testament (book_num >= 470 → G).
+    """
+    prefix = 'G' if (book_num or 0) >= NT_FIRST_BOOK_NUM else 'H'
+    out = []
+    last_end = 0
+    for m in ENGLISH_STRONG_TAG.finditer(text or ''):
+        word = _INLINE_MARKUP.sub('', text[last_end:m.start()]).strip()
+        if word:
+            out.append((word, f"{prefix}{m.group(1)}"))
+        last_end = m.end()
+    trail = _INLINE_MARKUP.sub('', (text[last_end:] if text else '')).strip()
+    if trail:
+        out.append((trail, None))
+    return out
+
+
 def parse_wonjun_verse(text):
     """Parse 원전분해 verse text into list of word dicts."""
     out = []

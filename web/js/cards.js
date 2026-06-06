@@ -385,7 +385,10 @@
         return;
       }
       body.innerHTML = `<div class="panel-loading">${I18N.t("card.loading")}</div>`;
-      const data = await api().get_interlinear(src.book, src.chapter);
+      // Analyze the version the 본문 카드 is showing: a Strong-tagged English bible
+      // (KJV+) yields an English 원전 분해; everything else falls back to 개역한글S.
+      const navVer = state.viewer[0] || state.primary;
+      const data = await api().get_interlinear(src.book, src.chapter, navVer);
       const b2 = bodyEl(card.id);
       if (b2) renderInterlinearInto(b2, data);
     }
