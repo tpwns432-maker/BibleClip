@@ -201,6 +201,24 @@ def main():
     assert not api.get_preview().startswith('[요'), api.get_preview()
     print(f"custom formatter OK -> {prev_tmpl[:24]}…")
 
+    # FEAT-05 병렬 복사 부스터: 템플릿이 {content2}/{version2}를 쓰고 역본이 2개 이상이면
+    # 앞 두 역본을 ONE 블록으로 결합(한/영 한 세트). 클립보드는 FakeClipboard.
+    if len(all_names) >= 2:
+        assert api.set_setting('custom_format_enabled', True)['ok']
+        assert api.set_setting('custom_format_template',
+                               '[{book_full} {chap}:{verse}]\n{content}\n[{version2}] {content2}')['ok']
+        pair = [all_names[0], all_names[1]]
+        r = api.copy_reference(500, 3, [16], pair)            # 요 3:16
+        assert r['ok'] and r['n_parts'] == 2, r
+        assert f"[{all_names[1]}]" in r['text'], r['text']     # 둘째 역본 라벨 결합
+        assert r['text'].count('\n') >= 2, r['text']          # ref / content / content2
+        # 템플릿에 content2 없으면 다시 역본별 블록(\n\n)
+        api.set_setting('custom_format_template', '[{book_full} {chap}:{verse}] {content}')
+        r2 = api.copy_reference(500, 3, [16], pair)
+        assert '\n\n' in r2['text'], r2['text']
+        api.set_setting('custom_format_enabled', False)
+        print(f"parallel copy OK -> 2 versions in one block")
+
     # output order: filter bogus, dedup, preserve given order
     picked = api.set_output_order([all_names[0], 'BOGUS', all_names[0]])
     assert picked == [all_names[0]], picked

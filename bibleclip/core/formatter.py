@@ -54,34 +54,13 @@ class Formatter:
             version_header = f"[{db.name}]"
 
         # --- Build body ---
-        multiline = s['output_mode'] == 'newline'
-        show_chapterverse = s.get('newline_show_cv', False)
-
-        if multiline and len(all_verse_data) > 1:
-            lines = []
-            for v_num, v_text in all_verse_data:
-                if show_chapterverse:
-                    lines.append(f"{chapter}:{v_num} {v_text}")
-                else:
-                    lines.append(f"{v_num} {v_text}")
-            body = '\n'.join(lines)
-        else:
-            # inline - join texts. Between non-consecutive verse groups (a comma
-            # split in the reference, e.g. "1-2,4-6") insert " // " so the
-            # discontinuity stays legible; consecutive verses keep a plain space.
-            pieces = []
-            prev_v = None
-            for v_num, v_text in all_verse_data:
-                if prev_v is not None:
-                    pieces.append(' // ' if v_num != prev_v + 1 else ' ')
-                pieces.append(v_text)
-                prev_v = v_num
-            body = ''.join(pieces)
+        body = self._build_body(all_verse_data, chapter)
 
         # --- FEAT-02: 유저 매크로 템플릿 (켜져 있으면 표준 조립 규칙을 대체) ---
         # 지원 태그: {book_full} {book_short} {chap} {verse} {content} {version}.
         # 사용자가 괄호·위치·구분자 대신 템플릿 문자열로 서식을 100% 제어한다.
-        # 인식 못한 {x} 는 그대로 남겨 오타가 눈에 띄게 한다.
+        # 인식 못한 {x} 는 그대로 남겨 오타가 눈에 띄게 한다. ({content2}/{version2}
+        # 는 단일 역본 출력에선 빈 문자열 — 병렬은 format_parallel 가 처리.)
         tmpl = s.get('custom_format_template') or ''
         if s.get('custom_format_enabled') and tmpl.strip():
             return self._apply_template(tmpl, db_long, db_short, chapter,
@@ -123,14 +102,58 @@ class Formatter:
 
         return main_line
 
+    def _build_body(self, all_verse_data, chapter):
+        """Join verse texts into the body string per output_mode (inline/newline).
+        Shared by single-version output and the FEAT-05 parallel combiner."""
+        s = self.s
+        multiline = s['output_mode'] == 'newline'
+        show_chapterverse = s.get('newline_show_cv', False)
+        if multiline and len(all_verse_data) > 1:
+            lines = []
+            for v_num, v_text in all_verse_data:
+                lines.append(f"{chapter}:{v_num} {v_text}" if show_chapterverse
+                             else f"{v_num} {v_text}")
+            return '\n'.join(lines)
+        # inline — join texts; insert ' // ' across non-consecutive verse groups
+        # (a comma split like "1-2,4-6") so the discontinuity stays legible.
+        pieces = []
+        prev_v = None
+        for v_num, v_text in all_verse_data:
+            if prev_v is not None:
+                pieces.append(' // ' if v_num != prev_v + 1 else ' ')
+            pieces.append(v_text)
+            prev_v = v_num
+        return ''.join(pieces)
+
+    def format_parallel(self, book_num, chapter, col1, col2):
+        """FEAT-05 병렬 복사 부스터: 두 역본을 ONE 블록으로 결합. 참조(책/장/절)는
+        공유하고 {content}/{content2}=각 역본 본문, {version}/{version2}=역본명으로
+        커스텀 템플릿을 1회 치환한다. col = (db, [(verse, text), ...]). 절 목록·책이름은
+        첫 역본 기준."""
+        s = self.s
+        db1, vd1 = col1
+        db2, vd2 = col2
+        b1_short, b1_long = db1.books.get(book_num, ('?', '?'))
+        verses1 = [v for v, _ in vd1]
+        verse_list = self._format_verse_list(verses1, s.get('range_symbol', '-')) if verses1 else ''
+        body1 = self._build_body(vd1, chapter)
+        body2 = self._build_body(vd2, chapter)
+        tmpl = s.get('custom_format_template') or ''
+        return self._apply_template(tmpl, b1_long, b1_short, chapter, verse_list,
+                                    body1, db1.name, content2=body2, version2=db2.name)
+
     @staticmethod
-    def _apply_template(tmpl, book_full, book_short, chapter, verse_list, content, version):
+    def _apply_template(tmpl, book_full, book_short, chapter, verse_list, content,
+                        version, content2='', version2=''):
         """Substitute {tag} macros in a user format template. Unknown tags are
-        left verbatim so a typo is visible rather than silently dropped."""
+        left verbatim so a typo is visible rather than silently dropped.
+        content2/version2 carry the second translation for FEAT-05 parallel copy
+        (empty in single-version output)."""
         repl = {
             'book_full': str(book_full), 'book_short': str(book_short),
             'chap': str(chapter), 'verse': str(verse_list),
             'content': str(content), 'version': str(version),
+            'content2': str(content2), 'version2': str(version2),
         }
         return re.sub(r'\{(\w+)\}', lambda m: repl.get(m.group(1), m.group(0)), tmpl)
 
