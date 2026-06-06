@@ -66,6 +66,10 @@ class SystemRoutes:
             # user to add a module instead of showing an empty lexicon panel.
             'lex': {'ko': self.lib.lexicon_ko is not None,
                     'en': self.lib.lexicon_en is not None},
+            # 원전 분해(interlinear) 소스 후보. 한국어 개역한글S(로드 시 항상; name=''
+            # = 기본)와 inline Strong's 영어 역본(KJV+ 등)을 나열한다. 프론트는 UI
+            # 언어에 맞춰 기본을 고르고(영어→KJV+), 사용자가 자유롭게 바꿀 수 있다.
+            'interlin_sources': self._interlin_sources(),
             # Business guard (Phase 1): premium unlocks multi-card, the chapter
             # shortcut, and notes/badge. Default True until a licensing backend
             # writes userdata/config.json with {"is_premium": false}.
@@ -77,6 +81,18 @@ class SystemRoutes:
             'web_cards_layout': s.get('web_cards_layout'),
             'version': __version__,
         }
+
+    def _interlin_sources(self):
+        """원전 분해 소스 목록: [{name, display, lang}]. name='' = 한국어 개역한글S
+        (기본). inline Strong's 플래그가 켜진 영어 역본(KJV+ 등)을 뒤에 잇는다."""
+        out = []
+        if self.lib.bethlehem_strongs is not None:
+            out.append({'name': '', 'display': '개역한글S', 'lang': 'ko'})
+        for name, db in self.lib.dbs.items():
+            if getattr(db, 'has_strongs', False):
+                out.append({'name': name, 'display': name,
+                            'lang': getattr(db, 'language', 'en') or 'en'})
+        return out
 
     def save_cards_layout(self, layout):
         """Persist the web viewer's card layout (a JSON-serializable list of card
