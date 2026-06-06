@@ -60,6 +60,7 @@
           o.version = c.version; o.book = c.book; o.chapter = c.chapter; o.locked = !!c.locked;
         } else {
           o.link = c.link || null;
+          if (c.type === "interlinear" && typeof c.source === "string") o.source = c.source;
         }
         return o;
       });
@@ -119,6 +120,10 @@
           out.push({
             rawId: raw.id, id: "", type: raw.type,
             link: typeof raw.link === "string" ? raw.link : null,
+            // 원전 분해 소스 역본(KJV+ 등). 미저장(undefined)이면 로드 시 UI 언어
+            // 기준 기본값으로 해석한다. ''(빈문자)=개역한글S 라는 명시적 선택값.
+            source: (raw.type === "interlinear" && typeof raw.source === "string")
+              ? raw.source : undefined,
             x: raw.x, y: raw.y, w: raw.w, h: raw.h, z: raw.z,
           });
         }
@@ -223,6 +228,24 @@
 
     // ---- DOM building ----
 
+    // ---- 원전 분해 소스(Strong's source 역본) 선택 ----
+    // 소스는 viewer 역본과 분리된 카드 자체 설정이다(역본을 바꿔도 분해는 흔들리지
+    // 않는다). 기본값은 UI 언어를 따른다 — 영어 UI면 영어 Strong's 역본(KJV+),
+    // 한국어면 개역한글S('')를. 사용자는 헤더 pill 로 자유롭게 바꾼다.
+    function lexSourceLabel(name) {
+      const list = state.lexSources || [];
+      const s = list.find((x) => x.name === (name || ""));
+      if (s) return s.display;
+      return name || (list[0] && list[0].display) || "개역한글S";
+    }
+    function defaultLexSource() {
+      const list = state.lexSources || [];
+      if (!list.length) return "";
+      const lang = window.I18N ? I18N.getLang() : "ko";
+      const match = list.find((s) => s.lang === lang);
+      return match ? match.name : (list[0].name || "");
+    }
+
     function headerHTML(card) {
       const grip = `<span class="card-grip" data-tip="드래그하여 이동" data-i18n-tip="card.tip.move">⠿</span>`;
       if (card.type === "bible") {
@@ -240,9 +263,14 @@
           `<span class="card-x" data-act="close" data-tip="카드 닫기" data-i18n-tip="card.tip.close">✕</span>` +
         `</div>`;
       }
+      // 원전 분해 카드만: 분석 소스 역본 선택 pill (개역한글S / KJV+ …).
+      const sourcePill = card.type === "interlinear"
+        ? `<span class="hd-pill dropdown" data-act="source" data-tip="원전 분해 소스 역본 선택" data-i18n-tip="card.tip.sourceSelect">${esc(lexSourceLabel(card.source))}</span>`
+        : "";
       return `<div class="card-hd">${grip}<span class="card-title" data-i18n="card.type.${card.type}">${typeLabel(card.type)}</span>` +
         `<span class="card-hd-ctrls">` +
           `<span class="hd-pill dropdown" data-act="link" data-tip="연결할 성경 카드 선택" data-i18n-tip="card.tip.linkSelect">${esc(card.link || I18N.t("card.linkNone"))}</span>` +
+          sourcePill +
         `</span>` +
         `<span class="card-hd-spacer"></span>` +
         `<span class="card-x" data-act="close" data-tip="카드 닫기" data-i18n-tip="card.tip.close">✕</span>` +
@@ -385,10 +413,10 @@
         return;
       }
       body.innerHTML = `<div class="panel-loading">${I18N.t("card.loading")}</div>`;
-      // Analyze the version the 본문 카드 is showing: a Strong-tagged English bible
-      // (KJV+) yields an English 원전 분해; everything else falls back to 개역한글S.
-      const navVer = state.viewer[0] || state.primary;
-      const data = await api().get_interlinear(src.book, src.chapter, navVer);
+      // 분석 소스는 카드 자체 설정(card.source) — viewer 역본과 무관하다. 미설정이면
+      // UI 언어 기준 기본값(영어→KJV+, 한국어→개역한글S)으로 처음 한 번 정한다.
+      if (card.source == null) card.source = defaultLexSource();
+      const data = await api().get_interlinear(src.book, src.chapter, card.source);
       const b2 = bodyEl(card.id);
       if (b2) renderInterlinearInto(b2, data);
     }
@@ -425,6 +453,10 @@
       const lp = s.querySelector('[data-act="link"]');
       const src = linkedBible(card);
       if (lp) lp.textContent = src ? src.id : I18N.t("card.linkNone");
+      if (card.type === "interlinear") {
+        const sp = s.querySelector('[data-act="source"]');
+        if (sp) sp.textContent = lexSourceLabel(card.source);
+      }
     }
 
     // Reload interlinear cards that follow the given bible card (its book/chapter
@@ -700,6 +732,16 @@
             bibleCards().map((b) => ({ label: b.id, value: b.id, on: b.id === card.link })),
             (id) => { card.link = id; loadCard(card); saveLayout(); });
           break;
+        case "source": {
+          // 원전 분해 소스 역본 전환 — 즉시 재로드(역본/언어 무관, 카드 자체 설정).
+          const list = state.lexSources || [];
+          if (!list.length) break;
+          const cur = card.source == null ? defaultLexSource() : card.source;
+          openMenu(actEl,
+            list.map((s) => ({ label: s.display, value: s.name, on: s.name === cur })),
+            (name) => { card.source = name; loadInterlinearCard(card); saveLayout(); });
+          break;
+        }
       }
     }
 

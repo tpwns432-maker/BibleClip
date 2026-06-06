@@ -190,6 +190,7 @@ window.BC = window.BC || {};
     chapCache: {},          // "version:book" -> [chapters]
     primaryBooks: [],       // primary version's book list (for search autocomplete)
     lexAvail: { ko: false, en: false },  // installed dictionary modules (original_lang/)
+    lexSources: [],         // 원전 분해 소스 후보 [{name, display, lang}] (name=''=개역한글S)
     isPremium: true,        // business guard (Phase 1): false → free-tier limits
   };
 
@@ -239,6 +240,7 @@ window.BC = window.BC || {};
     state.lastBook = init.last.book;
     state.lastChapter = init.last.chapter;
     state.primaryBooks = init.books || [];
+    state.lexSources = init.interlin_sources || [];  // 원전 분해 소스 후보(개역한글S + KJV+ 등)
     // Restore persisted UI prefs (shared with the desktop app).
     root.dataset.theme = init.dark_mode ? "dark" : "light";
     state.fontSize = init.font_size || 11;

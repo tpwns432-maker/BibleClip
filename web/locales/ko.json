@@ -127,6 +127,7 @@
   "card.tip.nextChapter": "다음 장",
   "card.tip.close": "카드 닫기",
   "card.tip.linkSelect": "연결할 성경 카드 선택",
+  "card.tip.sourceSelect": "원전 분해 소스 역본 선택",
   "card.lock.needTwo": "성경 카드가 2개 이상일 때만 잠글 수 있습니다",
   "card.lock.needReceiver": "최소 한 개의 성경 카드는 클립보드 구절을 수신해야 합니다",
   "card.lock.unlockHint": "잠금 해제 — 이 카드도 클립보드 구절을 수신합니다",

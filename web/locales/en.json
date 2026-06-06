@@ -127,6 +127,7 @@
   "card.tip.nextChapter": "Next chapter",
   "card.tip.close": "Close card",
   "card.tip.linkSelect": "Choose a scripture card to link",
+  "card.tip.sourceSelect": "Choose the interlinear source translation",
   "card.lock.needTwo": "You can lock only when there are 2 or more scripture cards",
   "card.lock.needReceiver": "At least one scripture card must receive clipboard verses",
   "card.lock.unlockHint": "Unlock — this card will also receive clipboard verses",
