@@ -281,7 +281,7 @@ window.BC = window.BC || {};
   // 카드 타입 라벨. TYPE_LABEL은 ko 베이스(= i18n 폴백), typeLabel()은 렌더 시점의
   // 현재 언어 문자열을 돌려준다. card-title span은 data-i18n도 달아 언어 전환 시
   // apply() 재스윕으로 즉시 갱신된다(카드 재렌더 불필요).
-  const TYPE_LABEL = { bible: "성경 본문", interlinear: "원어 분석", lexicon: "사전" };
+  const TYPE_LABEL = { bible: "성경 본문", interlinear: "원전 분해", lexicon: "사전" };
   function typeLabel(type) {
     return window.I18N ? I18N.t("card.type." + type, TYPE_LABEL[type]) : TYPE_LABEL[type];
   }

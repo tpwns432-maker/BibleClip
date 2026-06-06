@@ -29,7 +29,7 @@
 
   "ctrl.verAddTitle": "역본 추가·관리",
   "ctrl.addBibleTitle": "성경 본문 카드 추가",
-  "ctrl.addInterTitle": "원어 분석 카드 추가",
+  "ctrl.addInterTitle": "원전 분해 카드 추가",
   "ctrl.addLexTitle": "사전 카드 추가",
   "ctrl.addBible": "＋ 본문",
   "ctrl.addInter": "＋ 원어",
@@ -117,7 +117,7 @@
   "modal.actReset": "설정 초기화",
 
   "card.type.bible": "성경 본문",
-  "card.type.interlinear": "원어 분석",
+  "card.type.interlinear": "원전 분해",
   "card.type.lexicon": "사전",
 
   "card.tip.move": "드래그하여 이동",
@@ -213,7 +213,7 @@
   "ctx.copyVerse": "구절 복사",
   "ctx.noteEdit": "묵상 노트 수정",
   "ctx.noteNew": "묵상 노트 쓰기",
-  "ctx.lookupOriginal": "원어 코드 조회",
+  "ctx.lookupOriginal": "원전 분해 보기",
 
   "note.title": "묵상 노트",
   "note.placeholder": "이 구절에 대한 묵상을 적어 보세요…",
