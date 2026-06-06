@@ -132,6 +132,8 @@
   "card.tip.linkSelect": "연결할 성경 카드 선택",
   "card.tip.sourceSelect": "원전 분해 소스 역본 선택",
   "card.tip.notesReload": "노트 목록 새로고침",
+  "card.tip.parallel": "다국어 대조 보기 (기준 역본 + 대조 역본 쌍)",
+  "card.parallelOff": "대조",
   "notes.empty": "저장된 묵상 노트가 없습니다.<br>본문에서 구절을 우클릭해 노트를 작성하세요.",
   "notes.selectAll": "전체 선택",
   "notes.selectThis": "이 노트 선택",

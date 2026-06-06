@@ -392,6 +392,9 @@ body {
 }
 .card-hd .hd-pill:hover { border-color: var(--accent); }
 .card-hd .hd-pill.dropdown::after { content: " ▾"; color: var(--text-dim); }
+/* FEAT-04: 대조(parallel) pill 활성 상태 — 켜졌음을 accent 로 강조 */
+.card-hd .hd-pill.on { background: var(--accent); color: #fff; border-color: var(--accent); }
+.card-hd .hd-pill.on.dropdown::after { color: rgba(255,255,255,.7); }
 .card-hd .hd-mini {
   width: 24px; height: 24px; border-radius: 7px; flex: 0 0 auto;
   border: 1px solid var(--pill-border); background: var(--pill-bg);

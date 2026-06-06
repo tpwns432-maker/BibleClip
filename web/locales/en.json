@@ -132,6 +132,8 @@
   "card.tip.linkSelect": "Choose a scripture card to link",
   "card.tip.sourceSelect": "Choose the interlinear source translation",
   "card.tip.notesReload": "Refresh the notes list",
+  "card.tip.parallel": "Parallel view (base + contrast translation pair)",
+  "card.parallelOff": "Parallel",
   "notes.empty": "No meditation notes yet.<br>Right-click a verse in the scripture to write one.",
   "notes.selectAll": "Select all",
   "notes.selectThis": "Select this note",
