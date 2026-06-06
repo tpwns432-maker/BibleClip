@@ -47,6 +47,16 @@ def wait_for(predicate, timeout=3.0):
     return predicate()
 
 
+def force_korean_primary(api):
+    """Pin KRV as the primary/output/viewer version so the Korean assertions
+    ('태초' …) hold regardless of the developer's personal bibleclip_settings.json
+    (which may have an English version first). In-memory only — save_settings is
+    never called here, so the user's saved file is untouched."""
+    if 'KRV' in api.lib.dbs:
+        api.lib.settings['viewer_versions'] = ['KRV']
+        api.lib.settings['output_order'] = ['KRV']
+
+
 def monitor_check():
     """Drive the clipboard monitor end-to-end against fakes: a reference is
     converted in place and pushed to JS as onReference; a '#keyword' as
@@ -55,6 +65,7 @@ def monitor_check():
     apimod.pyperclip = fake          # swap the module's clipboard backend
     win = FakeWindow()
     api = Api(Library())
+    force_korean_primary(api)
     api.set_window(win)
 
     res = api.start_monitoring()
@@ -88,6 +99,7 @@ def monitor_check():
 
 def main():
     api = Api(Library())
+    force_korean_primary(api)
 
     init = api.get_initial()
     assert init['versions'], "no versions"
@@ -243,8 +255,10 @@ def main():
     # open_dict_window is a no-op without a popup factory (headless)
     assert api.open_dict_window('H3068') == {'ok': False}
 
-    # UI prefs (save_settings still stubbed): clamp + persist into settings
-    assert api.set_font_size(40) == 30 and api.lib.settings['viewer_font_size'] == 30
+    # UI prefs (save_settings still stubbed): clamp + persist into settings.
+    # Cap raised to 400 in v1.0.6 (대형 스크린/방송 송출); 40 is in-range now.
+    assert api.set_font_size(40) == 40 and api.lib.settings['viewer_font_size'] == 40
+    assert api.set_font_size(500) == 400
     assert api.set_font_size(2) == 8
     api.set_dark_mode(True)
     assert api.lib.settings['dark_mode'] is True

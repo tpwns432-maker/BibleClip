@@ -182,7 +182,62 @@ def main():
         assert morph.tokenize_keywords('아무 문장') == []
         print("(kiwipiepy absent — morpheme search no-ops, trigram fallback) OK")
 
+    alias_check(lib)
+
     print("\nALL CORE CHECKS PASSED ✅")
+
+
+def alias_check(lib):
+    """User alias overrides (v1.0.7 약칭 UI 백엔드 + 파서 확장).
+
+    Redirects the override file to a temp path so the user's real
+    bible_versions/aliases_override.json is never touched."""
+    import tempfile
+    from bibleclip.core.engine import Engine
+
+    def tup(refs):
+        if not refs:
+            return None
+        b, _, _, c, vs = refs[0]
+        return (b, c, vs[0] if vs else None)
+
+    # ---- regression: parser unchanged when no alias is registered ----
+    # A leading digit before a Korean book is dropped (old behavior) UNLESS the
+    # token is a registered alias — so these must be untouched by the new path.
+    assert tup(lib.parse_reference('창 1:1')) == (10, 1, 1)
+    assert tup(lib.parse_reference('1요 5:4')) == (500, 5, 4)   # unreg → 요 5:4
+    assert tup(lib.parse_reference('요15:4')) == (500, 15, 4)   # trailing digit kept as chapter
+    assert tup(lib.parse_reference('1 John 5:4')) == (690, 5, 4)  # built-in numbered book
+
+    tmp = os.path.join(tempfile.mkdtemp(), 'aliases_override.json')
+    lib._alias_overrides_path = lambda: tmp
+
+    # ---- number-rule validation ----
+    assert lib.add_alias_override('1요', 690)['ok'] is True       # leading digit OK
+    assert lib.add_alias_override('창조기', 10)['ok'] is True       # custom Korean OK
+    assert lib.add_alias_override('요1', 500)['ok'] is False       # trailing digit rejected
+    assert lib.add_alias_override('벧1', 670)['ok'] is False       # trailing digit rejected
+    assert lib.add_alias_override('1요2', 690)['ok'] is False      # middle digit rejected
+    assert lib.add_alias_override('   ', 10)['ok'] is False        # empty rejected
+    assert lib.add_alias_override('테스트', 99999)['ok'] is False    # invalid book rejected
+    print("alias validation (앞숫자만 허용·중간/끝 숫자 거부) OK")
+
+    # ---- registered aliases now parse (book_aliases rebuilt) ----
+    assert tup(lib.parse_reference('1요 5:4')) == (690, 5, 4), lib.parse_reference('1요 5:4')
+    assert tup(lib.parse_reference('1요 1장 4절')) == (690, 1, 4)
+    assert tup(lib.parse_reference('창조기 1:1')) == (10, 1, 1)
+    aliases = {a['alias'] for a in lib.list_alias_overrides()}
+    assert aliases == {'1요', '창조기'}, aliases
+    print(f"alias parse: 1요→요한1서, 창조기→창세기 OK ({sorted(aliases)})")
+
+    # ---- delete reverts to old behavior ----
+    assert lib.remove_alias_override('1요')['ok'] is True
+    assert tup(lib.parse_reference('1요 5:4')) == (500, 5, 4)  # back to 요 5:4
+    assert lib.remove_alias_override('없는약칭')['ok'] is False
+
+    # ---- _canon memoization sanity ----
+    assert Engine._canon(10)[1] == '창' and Engine._canon(99999) is None
+    print("alias delete + _canon memoize OK")
 
 
 if __name__ == '__main__':

@@ -282,6 +282,38 @@
       cards.forEach((card) => loadCard(card));
     }
 
+    // ---- BUG-03: incremental mount/unmount (기존 카드 데이터 보존) ----
+    // renderAll() rebuilds the ENTIRE container (innerHTML) and reloads EVERY
+    // card — fine for the one-shot initial render, but using it on add/remove
+    // wiped every other card's DOM + content and re-fetched them (본문2·원어2 가
+    // 빈 채로 증발). Add/remove now touch ONLY the affected card: a new card is
+    // appended and loaded in isolation; a removed card's node is detached. All
+    // other cards keep their live DOM, scroll position, and loaded text intact.
+    // (Container-level event delegation in wireContainer keeps working because
+    // the container element itself is never replaced.)
+    function mountCard(card) {
+      const c = container();
+      if (!c) return;
+      const empty = c.querySelector(".panels-empty");
+      if (empty) empty.remove();                 // first card replaces the placeholder
+      c.insertAdjacentHTML("beforeend", skeleton(card));
+      const sec = sectionEl(card.id);
+      if (sec && window.I18N) I18N.apply(sec);    // translate just this card's header
+      normalizeLocks();
+      refreshLockStates();                        // lock availability depends on bible count
+      setActive(card);                            // the new card is on top → focus it
+      loadCard(card);                             // load ONLY this card
+    }
+
+    function unmountCard(id) {
+      const sec = sectionEl(id);
+      if (sec) sec.remove();
+      if (activeId === id) activeId = null;
+      if (!cards.length) { renderAll(); return; } // restore the empty placeholder
+      normalizeLocks();
+      refreshLockStates();                        // count dropped → refresh lock icons
+    }
+
     // ---- content loaders ----
 
     function loadCard(card) {
@@ -434,15 +466,24 @@
         card = { id, type, link: (firstBible() && firstBible().id) || null, ...geom };
       }
       cards.push(card);
-      renderAll();
+      mountCard(card);   // BUG-03: append only this card (others untouched)
       saveLayout();
     }
 
     function removeCard(id) {
       const i = cards.findIndex((c) => c.id === id);
       if (i < 0) return;
+      const wasBible = cards[i].type === "bible";
       cards.splice(i, 1);
-      renderAll();
+      unmountCard(id);   // BUG-03: detach only this card (others untouched)
+      // Dependents linked to a removed bible card fall back to the first bible —
+      // re-point + reload just those (not a global re-render).
+      if (wasBible) {
+        const fb = (firstBible() && firstBible().id) || null;
+        cards.forEach((c) => {
+          if (c.type !== "bible" && c.link === id) { c.link = fb; loadCard(c); }
+        });
+      }
       saveLayout();
     }
 
@@ -1035,21 +1076,69 @@
       if (markId) setTimeout(() => progScroll.delete(markId), 150);
     }
 
-    // Real-time (every frame): keep linked interlinear cards — and OTHER bible
-    // cards showing the same book/chapter (분할 비교 뷰, Phase 3) — aligned to
-    // this card's top verse. Does NOT touch history (that's debounced, 7차-2).
+    // Real-time (every frame): keep ONLY this card's linked 원어(interlinear)
+    // cards aligned to its anchor verse, placed at the SAME viewport fraction the
+    // anchor occupies in the bible card. Aligning the 원어 verse to its own TOP
+    // (the old behavior) shoved the bible's leading verses above the fold — the
+    // "1절 스킵". Matching the fraction makes the two read in lockstep, and being
+    // verse-DOM + fraction based it's immune to font family/size differences
+    // between the cards. Does NOT touch history (debounced, 7차-2).
+    //
+    // BUG-02 (v1.0.7 격리): a bible card NEVER drives another bible card. Two
+    // cards on the same book/chapter scroll/navigate independently — the old
+    // same-chapter cross-sync made them move together like magnets. Each card
+    // owns only its own scroll + the interlinear cards explicitly linked to it.
     function syncInterlinFrom(card, body) {
       const n = anchorVerseOf(body);
       if (!n) return;
+      const frac = verseTopFraction(body, n);
       cards.forEach((c) => {
         if (c === card) return;
         if (c.type === "interlinear" && linkedBible(c) === card) {
           const ib = bodyEl(c.id);
-          if (ib) scrollBodyToVerse(ib, n, null);  // 원어 카드는 절을 상단 정렬(단어 분해 가독성)
-        } else if (c.type === "bible" && c.book === card.book && c.chapter === card.chapter) {
-          const bb = bodyEl(c.id);
-          if (bb) scrollBodyToVerse(bb, n, c.id, SIGHT_BAND);  // 분할 비교: 동일 시선 밴드로 정렬
+          if (ib) scrollBodyToVerse(ib, n, null, frac);  // 동일 절을 동일 높이로 정렬
         }
+      });
+    }
+
+    // The viewport fraction (0 = top) at which verse n's top currently sits in a
+    // body — lets another card place the same verse at the same height.
+    function verseTopFraction(body, n) {
+      const el = body.querySelector(`.v[data-v="${n}"]`);
+      if (!el) return 0;
+      const br = body.getBoundingClientRect();
+      const f = (el.getBoundingClientRect().top - br.top) / (br.height || 1);
+      return Math.max(0, Math.min(0.9, f));
+    }
+
+    // ---- BUG-01: hold the reading position across font family/size changes ----
+    // A font swap or A−/A+ reflows the scripture (word-wrap + line height), so a
+    // px-preserved scrollTop lands on a different verse — and the linked 원어 card
+    // drifts with it ("겉도는"/1절 스킵). We snapshot each bible card's anchor
+    // verse AND the exact fraction it sits at BEFORE the reflow, then restore that
+    // verse to the same fraction AFTER it and re-align the linked 원어. Purely
+    // verse-DOM based (the 절 ID 앵커), immune to the font in play. The size reflow
+    // is synchronous and a family swap is already loaded (injectFont awaits the
+    // face), so one rAF after the change is enough.
+    function snapshotAnchors() {
+      const m = new Map();
+      bibleCards().forEach((c) => {
+        const b = bodyEl(c.id);
+        if (!b) return;
+        const n = anchorVerseOf(b);
+        if (n) m.set(c.id, { n, frac: verseTopFraction(b, n) });
+      });
+      return m;
+    }
+    function realignAnchors(anchors) {
+      requestAnimationFrame(() => {
+        bibleCards().forEach((c) => {
+          const b = bodyEl(c.id);
+          if (!b) return;
+          const a = anchors && anchors.get(c.id);
+          if (a) scrollBodyToVerse(b, a.n, c.id, a.frac);  // restore bible position
+          syncInterlinFrom(c, b);                          // realign linked 원어
+        });
       });
     }
 
@@ -1234,7 +1323,7 @@
         w, h, z: ++zTop,
       };
       cards.push(card);
-      renderAll();
+      mountCard(card);   // BUG-03: append only this card (others untouched)
       saveLayout();
       return card;
     }
@@ -1254,7 +1343,8 @@
     return { init, addCard, addCardWithLink, goToRef, primaryVersion,
              primaryBible, bibleCards, lexiconCards, bodyEl, linkedBibleFor,
              chapStepPrimary, chapStepActive, reloadAllBible, relabel,
-             presentToggle, ensureInterlinearFor, decorateNotesFor: decorateNotes };
+             presentToggle, ensureInterlinearFor, decorateNotesFor: decorateNotes,
+             snapshotAnchors, realignAnchors };
   })();
 
   // ---- Scripture / interlinear / lexicon rendering (into a card body) ----
@@ -1441,8 +1531,9 @@
     const r = await api().copy_reference(card.book, card.chapter, verses, versions);
     if (!r || !r.ok) return;
     const nameVer = versions[0] || card.version;
-    await booksFor(nameVer);   // ensure this version's book list is cached for the label
-    const short = bookShortFor(nameVer, card.book);
+    // 책이름은 백엔드가 정식/약칭 설정 + 복사된 역본 기준으로 돌려준 short_name 을 쓴다
+    // (모니터 토스트와 동일 출처 _display_book_name). 폴백으로만 프론트 약칭 조회.
+    const short = r.short_name || (await booksFor(nameVer), bookShortFor(nameVer, card.book));
     toast(I18N.t("toast.copiedRef", { ref: `${short} ${card.chapter}:${verses.join(",")}` }));
     logReference({ book_num: card.book, chapter: card.chapter, verses,
       short_name: short, n_parts: r.n_parts || 1, text: r.text });

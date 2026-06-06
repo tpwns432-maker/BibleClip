@@ -52,6 +52,21 @@ class BibleRoutes:
         return {'book_num': book_num, 'short': short, 'long': long_,
                 'chapter': chapter, 'verses': verses}
 
+    # ---- User alias overrides (앱 내 약칭 관리 UI) ----
+
+    def get_aliases(self):
+        """User-defined book aliases: [{alias, book_num, book_name}]."""
+        return self.lib.list_alias_overrides()
+
+    def add_alias(self, alias, book_num):
+        """Add/replace an alias → book mapping (number-rule validated). {ok} or
+        {ok:False, error_code}."""
+        return self.lib.add_alias_override(alias, book_num)
+
+    def remove_alias(self, alias):
+        """Delete a user alias. {ok}."""
+        return self.lib.remove_alias_override(alias)
+
     def search_strong(self, code):
         """Reverse Strong's cross-query: KRV verses containing the original-
         language word with this code. {code, count, hits:[{book_num, ref,

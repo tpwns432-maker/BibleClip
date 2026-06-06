@@ -9,6 +9,7 @@ consume this same object; nothing here imports tkinter or touches a window,
 so a `Library()` can be constructed and exercised headlessly.
 """
 import os
+import re
 import json
 
 from bibleclip.config import (
@@ -215,6 +216,12 @@ class Library:
             saved_order = list(self.dbs.keys())
         self.settings['viewer_version_order'] = saved_order
 
+        # Normalize the legacy 4-value book_name (long_ko/short_ko/long_en/
+        # short_en) down to the 2-value form the v1.0.6 formatter actually uses
+        # (each version renders its own native book name → only length matters).
+        bn = str(self.settings.get('book_name', 'short_ko'))
+        self.settings['book_name'] = 'long_ko' if bn.startswith('long') else 'short_ko'
+
         # Clamp font size
         try:
             self.settings['viewer_font_size'] = int(self.settings.get('viewer_font_size', 11))
@@ -284,13 +291,8 @@ class Library:
 
         Keys starting with '_' are treated as comments. Picked up on (re)build —
         i.e. after a restart or a DB rescan. Fail-soft: any error → no overrides."""
-        try:
-            path = os.path.join(resolve_data_dir(BIBLE_DIR), 'aliases_override.json')
-            with open(path, 'r', encoding='utf-8') as f:
-                overrides = json.load(f)
-        except Exception:
-            return
-        if not isinstance(overrides, dict):
+        overrides = self.load_alias_overrides()
+        if not overrides:
             return
         from bibleclip.constants import ENGLISH_BOOK_MAP
         for raw, val in overrides.items():
@@ -317,6 +319,105 @@ class Library:
 
     def parse_reference(self, text):
         return Engine.parse_reference(text, self.book_aliases())
+
+    # ---- User alias overrides (앱 내 약칭 관리 UI 백엔드) ----
+    # The UI reads/writes the SAME bible_versions/aliases_override.json the
+    # auto-built alias map merges (manual entries win). After any write we drop
+    # the cache key so book_aliases() rebuilds with the new entry on next parse.
+
+    # Valid alias: digits, if present, only as a LEADING run (1요, 1Jn) — a digit
+    # in the middle/end is rejected (요1·벧1 would clash with chapter numbers in
+    # "요1 5:4"). At least one letter (한글/라틴) is required.
+    _ALIAS_RE = re.compile(r'^\d*\s*[가-힣A-Za-z][^\d]*$')
+
+    def _alias_overrides_path(self):
+        return os.path.join(resolve_data_dir(BIBLE_DIR), 'aliases_override.json')
+
+    def load_alias_overrides(self):
+        """The raw override dict from disk (fail-soft {})."""
+        try:
+            with open(self._alias_overrides_path(), 'r', encoding='utf-8') as f:
+                d = json.load(f)
+            return d if isinstance(d, dict) else {}
+        except Exception:
+            return {}
+
+    def _write_alias_overrides(self, data):
+        try:
+            path = self._alias_overrides_path()
+            os.makedirs(os.path.dirname(path), exist_ok=True)
+            with open(path, 'w', encoding='utf-8') as f:
+                json.dump(data, f, ensure_ascii=False, indent=2)
+            return True
+        except Exception:
+            return False
+
+    def _resolve_override_value(self, val):
+        """An override value (book number, or a name/abbrev to resolve) → book_num
+        or None."""
+        from bibleclip.constants import ENGLISH_BOOK_MAP
+        if isinstance(val, bool):
+            return None
+        if isinstance(val, int):
+            return val
+        if isinstance(val, str):
+            v = val.strip()
+            if v.isdigit():
+                return int(v)
+            vk = Engine._norm_book(v)
+            return self.book_aliases().get(vk) or ENGLISH_BOOK_MAP.get(vk)
+        return None
+
+    def list_alias_overrides(self):
+        """User-defined aliases for the management UI:
+        ``[{alias, book_num, book_name}]`` (comment keys '_…' skipped)."""
+        out = []
+        for k, v in self.load_alias_overrides().items():
+            if not isinstance(k, str) or k.startswith('_'):
+                continue
+            bn = self._resolve_override_value(v)
+            name = self._display_book_name(bn) if bn else None
+            out.append({'alias': k, 'book_num': bn, 'book_name': name or '?'})
+        return out
+
+    def add_alias_override(self, alias, book_num):
+        """Add/replace one alias → book mapping. Validates the number rule and the
+        target book. Returns {ok} or {ok:False, error_code}."""
+        alias = (alias or '').strip()
+        if not alias or len(alias) > 20 or not self._ALIAS_RE.match(alias):
+            return {'ok': False, 'error_code': 'alias.errFormat'}
+        try:
+            bn = int(book_num)
+        except (TypeError, ValueError):
+            return {'ok': False, 'error_code': 'alias.errBook'}
+        if Engine._canon(bn) is None:
+            return {'ok': False, 'error_code': 'alias.errBook'}
+        data = self.load_alias_overrides()
+        data[alias] = bn
+        if not self._write_alias_overrides(data):
+            return {'ok': False, 'error_code': 'alias.errWrite'}
+        self._alias_key = None   # force book_aliases() rebuild
+        return {'ok': True}
+
+    def remove_alias_override(self, alias):
+        """Delete one alias (exact, then normalized-match fallback). {ok}."""
+        alias = (alias or '').strip()
+        data = self.load_alias_overrides()
+        removed = False
+        if alias in data:
+            del data[alias]
+            removed = True
+        else:
+            nk = Engine._norm_book(alias)
+            for k in list(data):
+                if isinstance(k, str) and not k.startswith('_') and Engine._norm_book(k) == nk:
+                    del data[k]
+                    removed = True
+        if removed:
+            if not self._write_alias_overrides(data):
+                return {'ok': False, 'error_code': 'alias.errWrite'}
+            self._alias_key = None
+        return {'ok': removed}
 
     def get_chapters(self, version, book_num):
         db = self.dbs.get(version)
@@ -419,12 +520,16 @@ class Library:
             'n_parts': n_parts,
         }
 
-    def _display_book_name(self, book_num):
-        """Book name for toast/log labels — taken from the PRIMARY output version's
-        own book list so it matches the copied text's language (ESV → 'Ruth', not
-        the parser's canonical Korean). Honors the 정식/약칭 (long/short) setting.
-        None when no version supplies a usable name."""
-        order = self.settings.get('output_order') or []
+    def _display_book_name(self, book_num, order=None):
+        """Book name for toast/log labels — taken from the PRIMARY version of
+        ``order`` (defaults to the configured ``output_order``) so it matches the
+        copied text's language (ESV → 'Ruth', not the parser's canonical Korean).
+        Honors the 정식/약칭 (long/short) setting. A caller that copied with an
+        explicit version set (the viewer's manual copy) passes that order so the
+        label's version matches the text it produced. None when no version
+        supplies a usable name."""
+        if order is None:
+            order = self.settings.get('output_order') or []
         primary = order[0] if order else self.primary_version()
         db = self.dbs.get(primary)
         if db and book_num in db.books:
