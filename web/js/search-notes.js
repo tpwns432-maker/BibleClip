@@ -1144,6 +1144,47 @@
       });
       host.appendChild(t);
     });
+
+    // FEAT-02: 클립보드 매직 포맷터 — 유저 매크로 템플릿. 켜면 위의 표준 서식 대신
+    // 템플릿이 적용되어 복사/미리보기에 즉시 반영된다. 인식 태그는 힌트로 안내.
+    const wrap = document.createElement("div");
+    wrap.className = "set-custom-fmt";
+    const ct = document.createElement("div");
+    ct.className = "set-toggle";
+    const clab = document.createElement("span");
+    clab.className = "set-label";
+    clab.textContent = I18N.t("fmt.customEnable");
+    const csw = document.createElement("span");
+    csw.className = "switch" + (setState.format.custom_format_enabled ? " on" : "");
+    csw.innerHTML = `<span class="knob"></span>`;
+    ct.appendChild(clab); ct.appendChild(csw);
+    const inp = document.createElement("input");
+    inp.type = "text";
+    inp.className = "set-input";
+    inp.placeholder = "[{book_full} {chap}:{verse}] {content}";
+    inp.value = setState.format.custom_format_template || "";
+    inp.disabled = !setState.format.custom_format_enabled;
+    const hint = document.createElement("div");
+    hint.className = "set-hint";
+    hint.textContent = I18N.t("fmt.customHint");
+    wrap.appendChild(ct); wrap.appendChild(inp); wrap.appendChild(hint);
+    host.appendChild(wrap);
+    ct.addEventListener("click", async () => {
+      const next = !setState.format.custom_format_enabled;
+      setState.format.custom_format_enabled = next;
+      csw.classList.toggle("on", next);
+      inp.disabled = !next;
+      await api().set_setting("custom_format_enabled", next);
+      refreshPreview();
+    });
+    const commitTmpl = async () => {
+      if (inp.value === setState.format.custom_format_template) return;  // 무변경 저장 생략
+      setState.format.custom_format_template = inp.value;
+      await api().set_setting("custom_format_template", inp.value);
+      refreshPreview();
+    };
+    inp.addEventListener("change", commitTmpl);   // blur 시 커밋(키 입력마다 저장 방지)
+    inp.addEventListener("keydown", (e) => { if (e.key === "Enter") { e.preventDefault(); inp.blur(); } });
   }
 
   function orderBtn(txt, disabled, fn) {

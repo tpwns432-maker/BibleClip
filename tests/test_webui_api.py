@@ -188,6 +188,19 @@ def main():
     assert api.set_setting('hide_reference', 1)['ok']
     assert api.lib.settings['hide_reference'] is True
 
+    # FEAT-02 클립보드 매직 포맷터: 자유 템플릿 문자열 + 토글. 켜면 매크로 치환 서식이
+    # 표준 조립을 대체해 미리보기/복사에 반영된다. (save_settings는 위에서 스텁됨.)
+    api.set_setting('hide_reference', False)
+    assert api.set_setting('custom_format_template', '[{book_full} {chap}:{verse}] {content}')['ok']
+    assert api.set_setting('custom_format_enabled', True)['ok']
+    api.set_output_order([all_names[0]])
+    prev_tmpl = api.get_preview()
+    assert prev_tmpl.startswith('['), prev_tmpl
+    assert ':' in prev_tmpl.split(']')[0], prev_tmpl       # [책 1:1-3] 형태
+    assert api.set_setting('custom_format_enabled', False)['ok']  # 끄면 표준 서식 복귀
+    assert not api.get_preview().startswith('[요'), api.get_preview()
+    print(f"custom formatter OK -> {prev_tmpl[:24]}…")
+
     # output order: filter bogus, dedup, preserve given order
     picked = api.set_output_order([all_names[0], 'BOGUS', all_names[0]])
     assert picked == [all_names[0]], picked

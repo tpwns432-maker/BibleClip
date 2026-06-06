@@ -39,6 +39,10 @@ class Library:
         'hide_reference': False,
         'output_mode': 'inline',          # inline, newline
         'newline_show_cv': False,         # show chapter:verse on each line
+        # FEAT-02 클립보드 매직 포맷터: 켜면 표준 조립 대신 사용자 매크로 템플릿으로
+        # 복사 서식을 100% 커스터마이즈. 태그: {book_full}{book_short}{chap}{verse}{content}{version}
+        'custom_format_enabled': False,
+        'custom_format_template': '',
         'output_order': [],               # ordered list of version names
         'viewer_versions': [],            # checked versions in viewer (ordered subset)
         'viewer_version_order': [],       # full viewer ordering (checked + unchecked)

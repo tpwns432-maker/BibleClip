@@ -491,6 +491,9 @@ class SystemRoutes:
         'newline_show_cv': None,
         'show_version_header': None,
         'hide_reference': None,
+        # FEAT-02 클립보드 매직 포맷터: 토글(bool) + 자유 템플릿 문자열('str').
+        'custom_format_enabled': None,
+        'custom_format_template': 'str',
     }
 
     def get_settings(self):
@@ -509,6 +512,8 @@ class SystemRoutes:
         allowed = self._FORMAT_KEYS[key]
         if allowed is None:               # boolean setting
             value = bool(value)
+        elif allowed == 'str':            # free-text setting (sanitized + length-capped)
+            value = str(value or '')[:500]
         elif value not in allowed:
             return {'ok': False, 'error': f'invalid value for {key}: {value!r}'}
         self.lib.settings[key] = value

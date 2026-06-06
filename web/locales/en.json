@@ -189,6 +189,8 @@
   "fmt.newlineShowCv": "Show ch:v on each line",
   "fmt.showVersionHeader": "Show version header",
   "fmt.hideReference": "Hide reference (text only)",
+  "fmt.customEnable": "Clipboard magic formatter (custom macro)",
+  "fmt.customHint": "Tags: {book_full} {book_short} {chap} {verse} {content} {version} · e.g. [{book_full} {chap}:{verse}] {content}",
 
   "order.empty": "No versions to copy with. Add one below.",
   "order.addVersion": "＋ Add version",
