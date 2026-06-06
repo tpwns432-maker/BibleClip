@@ -31,6 +31,12 @@ class SystemRoutes:
 
     def get_initial(self):
         """Everything the UI needs on load, in one round-trip."""
+        # First successful bridge call = the local HTTP page loaded and JS+bridge
+        # work. Signals the startup connection watchdog (webui.app) to stand down.
+        try:
+            self._booted.set()
+        except Exception:
+            pass
         primary = self.lib.primary_version()
         s = self.lib.settings
         last_book = s.get('last_book_num')

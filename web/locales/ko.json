@@ -1,4 +1,9 @@
 {
+  "conn.errTitle": "실행이 일시적으로 차단되었습니다",
+  "conn.errIntro": "보안 프로그램이나 방화벽에 의해 BibleClip 화면 로딩이 차단되었습니다. 아래를 차례로 시도해 주세요.",
+  "conn.errAdmin": "프로그램을 마우스 우클릭하여 [관리자 권한으로 실행] 해 보세요.",
+  "conn.errWhitelist": "Windows Defender 또는 백신 프로그램에서 BibleClip을 예외(허용) 등록해 주세요.",
+  "conn.errReboot": "컴퓨터를 재부팅한 후 다시 실행해 보세요.",
   "nav.viewer": "성경 보기",
   "nav.settings": "출력 설정",
   "nav.search": "검색",
