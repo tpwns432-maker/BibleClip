@@ -213,7 +213,7 @@
   "ctx.copyVerse": "Copy verse",
   "ctx.noteEdit": "Edit note",
   "ctx.noteNew": "Write note",
-  "ctx.lookupOriginal": "Look up original-language code",
+  "ctx.lookupOriginal": "Open interlinear breakdown",
 
   "note.title": "Note",
   "note.placeholder": "Write your reflection on this verse…",
