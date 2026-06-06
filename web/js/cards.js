@@ -121,11 +121,10 @@
             x: raw.x, y: raw.y, w: raw.w, h: raw.h, z: raw.z,
           });
           bibleN++;
-        } else if (raw.type === "interlinear" || raw.type === "lexicon" || raw.type === "notes") {
+        } else if (raw.type === "interlinear" || raw.type === "lexicon") {
           out.push({
             rawId: raw.id, id: "", type: raw.type,
-            // 노트 모아보기는 특정 본문에 연결되지 않는 독립 카드(link 무의미).
-            link: (raw.type !== "notes" && typeof raw.link === "string") ? raw.link : null,
+            link: typeof raw.link === "string" ? raw.link : null,
             // 원전 분해 소스 역본(KJV+ 등). 미저장(undefined)이면 로드 시 UI 언어
             // 기준 기본값으로 해석한다. ''(빈문자)=개역한글S 라는 명시적 선택값.
             source: (raw.type === "interlinear" && typeof raw.source === "string")
@@ -163,7 +162,7 @@
       });
       const firstB = (out.find((c) => c.type === "bible") || {}).id || null;
       out.forEach((c) => {
-        if (c.type !== "bible" && c.type !== "notes") {
+        if (c.type !== "bible") {
           c.link = (c.link && idMap[c.link]) || firstB;
         }
         delete c.rawId;
@@ -273,16 +272,6 @@
           `<span class="card-x" data-act="close" data-tip="카드 닫기" data-i18n-tip="card.tip.close">✕</span>` +
         `</div>`;
       }
-      if (card.type === "notes") {
-        // 노트 모아보기: 독립 카드. 새로고침 + 헤더 X. 선택/복사/내보내기는 본문 툴바.
-        return `<div class="card-hd">${grip}<span class="card-title" data-i18n="card.type.notes">${typeLabel("notes")}</span>` +
-          `<span class="card-hd-ctrls">` +
-            `<span class="hd-mini" data-act="notesReload" data-tip="새로고침" data-i18n-tip="card.tip.notesReload">⟳</span>` +
-          `</span>` +
-          `<span class="card-hd-spacer"></span>` +
-          `<span class="card-x" data-act="close" data-tip="카드 닫기" data-i18n-tip="card.tip.close">✕</span>` +
-        `</div>`;
-      }
       // 원전 분해 카드만: 분석 소스 역본 선택 pill (개역한글S / KJV+ …).
       const sourcePill = card.type === "interlinear"
         ? `<span class="hd-pill dropdown" data-act="source" data-tip="원전 분해 소스 역본 선택" data-i18n-tip="card.tip.sourceSelect">${esc(lexSourceLabel(card.source))}</span>`
@@ -317,7 +306,7 @@
       const c = container();
       if (!c) return;
       if (!cards.length) {
-        c.innerHTML = `<div class="panels-empty" data-i18n-html="card.empty">카드가 없습니다.<br>우측 상단의 <b>＋ 본문 · ＋ 원어 · ＋ 사전 · ＋ 노트</b> 버튼으로 카드를 추가하세요.</div>`;
+        c.innerHTML = `<div class="panels-empty" data-i18n-html="card.empty">카드가 없습니다.<br>우측 상단의 <b>＋ 본문 · ＋ 원어 · ＋ 사전</b> 버튼으로 카드를 추가하세요.</div>`;
         if (window.I18N) I18N.apply(c);
         return;
       }
@@ -367,7 +356,6 @@
     function loadCard(card) {
       if (card.type === "bible") return loadBibleCard(card);
       if (card.type === "interlinear") return loadInterlinearCard(card);
-      if (card.type === "notes") return loadNotesCard(card);
       return loadLexiconCard(card);
     }
 
@@ -462,123 +450,6 @@
       }
     }
 
-    // ---- FEAT-03: 묵상 노트 전체 모아보기 카드 ----
-    // 흩어진 절별 노트를 성경 순서로 한데 모아 보고, 클릭 점프·선택 복사·텍스트
-    // 파일 내보내기를 제공하는 독립 카드. user_notes.json 을 역직렬화한다(백엔드
-    // get_all_notes). 선택 상태(card._sel)는 cartKey 처럼 book:chap:verse 키 기준.
-    function notesKeyOf(n) { return `${n.book}:${n.chapter}:${n.verse}`; }
-    function selectedNotes(card) {
-      const sel = card._sel || new Set();
-      return (card._notes || []).filter((n) => sel.has(notesKeyOf(n)));
-    }
-    function buildNotesText(list) {
-      const navVer = state.viewer[0] || state.primary;
-      return list.map((n) => {
-        const short = bookShortFor(navVer, n.book) || "";
-        return `${short} ${n.chapter}:${n.verse}\n${n.text}`;
-      }).join("\n\n");
-    }
-
-    async function loadNotesCard(card) {
-      const body = bodyEl(card.id);
-      if (!body) return;
-      body.innerHTML = `<div class="panel-loading">${I18N.t("card.loading")}</div>`;
-      let notes = [];
-      try { notes = (await api().get_all_notes()) || []; } catch (_) { notes = []; }
-      card._notes = notes;
-      if (!card._sel) card._sel = new Set();
-      const live = new Set(notes.map(notesKeyOf));      // 사라진 노트는 선택에서 정리
-      [...card._sel].forEach((k) => { if (!live.has(k)) card._sel.delete(k); });
-      const b2 = bodyEl(card.id);
-      if (b2) renderNotesInto(card, b2, notes);
-    }
-
-    function renderNotesInto(card, body, notes) {
-      const navVer = state.viewer[0] || state.primary;
-      if (!notes.length) {
-        body.innerHTML = `<div class="notes-empty" data-i18n="notes.empty">${I18N.t("notes.empty")}</div>`;
-        return;
-      }
-      const rows = notes.map((n) => {
-        const k = notesKeyOf(n);
-        const short = esc(bookShortFor(navVer, n.book) || "");
-        const checked = card._sel.has(k) ? " checked" : "";
-        const ts = n.ts ? `<span class="note-ts">${esc(String(n.ts).replace("T", " "))}</span>` : "";
-        return `<div class="note-row" data-k="${esc(k)}" data-b="${n.book}" data-c="${n.chapter}" data-v="${n.verse}" data-tip="${esc(I18N.t("notes.rowTip"))}">` +
-          `<input type="checkbox" class="note-cb"${checked} title="${esc(I18N.t("notes.selectThis"))}">` +
-          `<div class="note-main">` +
-            `<div class="note-ref">${short} ${n.chapter}:${n.verse}${ts}</div>` +
-            `<div class="note-text">${esc(n.text)}</div>` +
-          `</div></div>`;
-      }).join("");
-      body.innerHTML =
-        `<div class="notes-toolbar">` +
-          `<label class="notes-selall"><input type="checkbox" class="notes-selall-cb"> ` +
-            `<span data-i18n="notes.selectAll">${I18N.t("notes.selectAll")}</span></label>` +
-          `<span class="notes-tb-spacer"></span>` +
-          `<button class="notes-btn" data-na="copy" data-i18n="notes.copySel">${I18N.t("notes.copySel")}</button>` +
-          `<button class="notes-btn" data-na="export" data-i18n="notes.exportFile">${I18N.t("notes.exportFile")}</button>` +
-        `</div>` +
-        `<div class="notes-list">${rows}</div>`;
-      wireNotes(card, body);
-    }
-
-    function syncNotesSelAll(card, body) {
-      const all = body.querySelector(".notes-selall-cb");
-      if (!all) return;
-      const n = (card._notes || []).length, sel = card._sel.size;
-      all.checked = n > 0 && sel === n;
-      all.indeterminate = sel > 0 && sel < n;
-    }
-
-    function wireNotes(card, body) {
-      body.querySelectorAll(".note-row").forEach((row) => {
-        row.addEventListener("click", (e) => {
-          if (e.target.closest(".note-cb")) return;     // 체크박스는 선택 전용
-          goToRef(+row.dataset.b, +row.dataset.c, [+row.dataset.v]);  // 본문 점프
-        });
-      });
-      body.querySelectorAll(".note-cb").forEach((cb) => {
-        cb.addEventListener("click", (e) => {
-          e.stopPropagation();
-          const k = cb.closest(".note-row").dataset.k;
-          if (cb.checked) card._sel.add(k); else card._sel.delete(k);
-          syncNotesSelAll(card, body);
-        });
-      });
-      const selAll = body.querySelector(".notes-selall-cb");
-      if (selAll) {
-        selAll.addEventListener("change", () => {
-          card._sel.clear();
-          if (selAll.checked) (card._notes || []).forEach((n) => card._sel.add(notesKeyOf(n)));
-          body.querySelectorAll(".note-row").forEach((row) => {
-            const cb = row.querySelector(".note-cb");
-            if (cb) cb.checked = card._sel.has(row.dataset.k);
-          });
-          syncNotesSelAll(card, body);
-        });
-        syncNotesSelAll(card, body);
-      }
-      // 선택이 없으면 '전체'를 대상으로 한다(빠른 전체 복사/내보내기).
-      const targetNotes = () => { const s = selectedNotes(card); return s.length ? s : (card._notes || []); };
-      const copyBtn = body.querySelector('[data-na="copy"]');
-      if (copyBtn) copyBtn.addEventListener("click", async () => {
-        const list = targetNotes();
-        if (!list.length) return;
-        const r = await api().copy_text(buildNotesText(list));
-        if (r && r.ok) toast(I18N.t("notes.copied", { n: list.length }));
-      });
-      const exBtn = body.querySelector('[data-na="export"]');
-      if (exBtn) exBtn.addEventListener("click", async () => {
-        const list = targetNotes();
-        if (!list.length) return;
-        let r = null;
-        try { r = await api().export_text_file(buildNotesText(list), "bibleclip_notes.txt"); } catch (_) {}
-        if (r && r.ok) toast(I18N.t("notes.exported"));
-        else if (!r || r.error !== "cancelled") toast(I18N.t("notes.exportFail"));
-      });
-    }
-
     function updateBibleHeader(card) {
       const s = sectionEl(card.id);
       if (!s) return;
@@ -649,8 +520,6 @@
           locked: false, ...geom,
         };
         seedHistory(card);
-      } else if (type === "notes") {
-        card = { id, type: "notes", ...geom };   // 독립 카드(연결 없음)
       } else {
         card = { id, type, link: (firstBible() && firstBible().id) || null, ...geom };
       }
@@ -870,7 +739,6 @@
         }
         case "prev": cardChapStep(card, -1); break;
         case "next": cardChapStep(card, 1); break;
-        case "notesReload": loadNotesCard(card); break;
         case "parallel": {
           // FEAT-04: 대조 역본 선택(끄기 + navVer 제외한 역본들). 켜면 기준+대조 쌍 렌더.
           const base = state.viewer[0] || state.primary;

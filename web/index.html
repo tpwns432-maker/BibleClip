@@ -38,6 +38,10 @@
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="20" r="1.3"/><circle cx="18" cy="20" r="1.3"/><path d="M2.5 3.5h2.3l2.2 11.5a1.4 1.4 0 0 0 1.4 1.1h8.6a1.4 1.4 0 0 0 1.4-1.1L21.5 7H6"/></svg>
       <span class="nav-dot" id="cart-dot" hidden></span>
     </div>
+    <div class="nav-icon" id="notes-toggle" title="묵상 노트" aria-label="묵상 노트" data-i18n-title="nav.notes" data-i18n-aria="nav.notes">
+      <!-- notebook -->
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M5 4a2 2 0 0 1 2-2h11a1 1 0 0 1 1 1v18a1 1 0 0 1-1 1H7a2 2 0 0 1-2-2z"/><path d="M9 2v20"/><path d="M12.5 8H16M12.5 12H16"/></svg>
+    </div>
     <div class="nav-icon" title="역본 순서" aria-label="역본 순서" data-i18n-title="nav.order" data-i18n-aria="nav.order">
       <!-- list -->
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M8 6h12M8 12h12M8 18h12"/><circle cx="4" cy="6" r="1"/><circle cx="4" cy="12" r="1"/><circle cx="4" cy="18" r="1"/></svg>
@@ -91,7 +95,6 @@
         <span class="pill add" id="add-bible" title="성경 본문 카드 추가" data-i18n-title="ctrl.addBibleTitle" data-i18n="ctrl.addBible">＋ 본문</span>
         <span class="pill add" id="add-inter" title="원전 분해 카드 추가" data-i18n-title="ctrl.addInterTitle" data-i18n="ctrl.addInter">＋ 원어</span>
         <span class="pill add" id="add-lex" title="사전 카드 추가" data-i18n-title="ctrl.addLexTitle" data-i18n="ctrl.addLex">＋ 사전</span>
-        <span class="pill add" id="add-notes" title="노트 모아보기 카드 추가" data-i18n-title="ctrl.addNotesTitle" data-i18n="ctrl.addNotes">＋ 노트</span>
         <span class="vsep"></span>
         <div class="seg" data-seg="lang" title="사전 기본 언어" data-i18n-title="ctrl.lexLangTitle">
           <div class="opt on" data-i18n="common.korean">한글</div>
@@ -193,6 +196,29 @@
       <span class="cart-foot-spacer"></span>
       <button class="btn" id="cart-extract-sel" data-i18n="cart.extractSelected">선택 추출</button>
       <button class="btn primary" id="cart-extract-all" data-i18n="cart.extractAll">전체 추출</button>
+    </div>
+  </aside>
+
+  <!-- 묵상 노트 레일 패널 (FEAT-03: 슬라이딩 패널). 본문을 넓게 띄운 채 우측에서
+       슬라이드로 열려 흩어진 노트를 성경 순서로 모아본다. 로그/장바구니 드로어와
+       상호배타. 행 클릭 시 본문으로 점프, 선택/전체를 클립보드 복사·파일 저장. -->
+  <aside class="drawer" id="notes-drawer" hidden>
+    <div class="drawer-head">
+      <span data-i18n="notes.title">묵상 노트 모아보기</span>
+      <span class="cart-head-actions">
+        <span class="drawer-mini" id="notes-reload" title="새로고침" data-i18n="notes.reload" data-i18n-title="notes.reload">새로고침</span>
+        <span class="drawer-close" id="notes-close" title="닫기" data-i18n-title="common.close">✕</span>
+      </span>
+    </div>
+    <div class="drawer-body" id="notes-list">
+      <div class="log-empty" data-i18n-html="notes.empty">저장된 묵상 노트가 없습니다.</div>
+    </div>
+    <div class="cart-foot" id="notes-foot" hidden>
+      <label class="cart-selall"><input type="checkbox" id="notes-selall-cb">
+        <span data-i18n="notes.selectAll">전체 선택</span></label>
+      <span class="cart-foot-spacer"></span>
+      <button class="btn" id="notes-copy" data-i18n="notes.copySel">선택 복사</button>
+      <button class="btn primary" id="notes-export" data-i18n="notes.exportFile">파일로 저장</button>
     </div>
   </aside>
 
