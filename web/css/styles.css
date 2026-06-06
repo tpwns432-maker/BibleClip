@@ -248,6 +248,18 @@ body {
 .switch.on { background: var(--accent); }
 .switch.on .knob { left: 19px; }
 
+/* FEAT-02: 클립보드 매직 포맷터(커스텀 매크로) — 토글 + 자유 템플릿 입력 + 태그 힌트 */
+.set-custom-fmt { padding: 4px 0 2px; }
+.set-input {
+  width: 100%; box-sizing: border-box; margin-top: 4px;
+  padding: 7px 10px; font-size: 12px; font-family: var(--mono, monospace);
+  color: var(--text); background: var(--card-bg);
+  border: 1px solid var(--card-border); border-radius: var(--r-md);
+}
+.set-input:focus { outline: none; border-color: var(--accent); }
+.set-input:disabled { opacity: .5; cursor: not-allowed; }
+.set-hint { margin-top: 5px; font-size: 11px; color: var(--text-dim); line-height: 1.5; }
+
 /* output order list */
 .order-row {
   display: flex; align-items: center; gap: 8px;

@@ -1,4 +1,5 @@
 """Formatter: build output text for one bible version from settings."""
+import re
 
 
 class Formatter:
@@ -77,6 +78,15 @@ class Formatter:
                 prev_v = v_num
             body = ''.join(pieces)
 
+        # --- FEAT-02: 유저 매크로 템플릿 (켜져 있으면 표준 조립 규칙을 대체) ---
+        # 지원 태그: {book_full} {book_short} {chap} {verse} {content} {version}.
+        # 사용자가 괄호·위치·구분자 대신 템플릿 문자열로 서식을 100% 제어한다.
+        # 인식 못한 {x} 는 그대로 남겨 오타가 눈에 띄게 한다.
+        tmpl = s.get('custom_format_template') or ''
+        if s.get('custom_format_enabled') and tmpl.strip():
+            return self._apply_template(tmpl, db_long, db_short, chapter,
+                                        verse_list_str, body, db.name)
+
         # --- Assemble with brackets/position ---
         hide_ref = s.get('hide_reference', False)
         if hide_ref:
@@ -112,6 +122,17 @@ class Formatter:
                 main_line = f"{body}{ref_sep}{ref_display}"
 
         return main_line
+
+    @staticmethod
+    def _apply_template(tmpl, book_full, book_short, chapter, verse_list, content, version):
+        """Substitute {tag} macros in a user format template. Unknown tags are
+        left verbatim so a typo is visible rather than silently dropped."""
+        repl = {
+            'book_full': str(book_full), 'book_short': str(book_short),
+            'chap': str(chapter), 'verse': str(verse_list),
+            'content': str(content), 'version': str(version),
+        }
+        return re.sub(r'\{(\w+)\}', lambda m: repl.get(m.group(1), m.group(0)), tmpl)
 
     @staticmethod
     def _format_verse_list(verses, range_sym='-'):
