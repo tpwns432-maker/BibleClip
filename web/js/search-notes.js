@@ -749,55 +749,65 @@
     syncCartSelAll();
   }
 
-  // FEAT-01: 장바구니 항목 드래그앤드롭 순서 재배치. cart 배열을 직접 재정렬하므로
-  // '전체 추출'(cart.slice)·'선택 추출'(cart.filter)이 재배치된 순서를 그대로
-  // 따라간다 — 추출 로직과의 별도 동기화 불필요(상태가 곧 순서). 드롭 위치는 행의
-  // 위/아래 절반으로 판정해 그 앞/뒤로 삽입한다.
-  function clearCartDropMarks(list) {
-    list.querySelectorAll(".cart-item").forEach((r) =>
-      r.classList.remove("drag-over-before", "drag-over-after", "dragging"));
+  // FEAT-01: 장바구니 드래그앤드롭 — 드래그 중 다른 항목이 실시간으로 자리를 비켜주는
+  // FLIP 애니메이션. dragover 마다 끌고 있는 행을 커서 위치(행 위/아래 절반)에 맞춰 DOM
+  // 에서 실제로 옮기고, 밀려난 형제들을 transform 트랜지션으로 부드럽게 이동시킨다.
+  // 마우스를 놓으면(dragend) 눈에 보이는 DOM 순서를 그대로 cart 배열에 커밋하므로
+  // '전체/선택 추출'이 재배치 순서를 그대로 따른다(상태가 곧 순서).
+  function flipReorder(list, mutate) {
+    const before = new Map();
+    list.querySelectorAll(".cart-item").forEach((el) =>
+      before.set(el, el.getBoundingClientRect().top));
+    mutate();                                    // DOM 순서 변경(Last)
+    list.querySelectorAll(".cart-item").forEach((el) => {
+      const oldTop = before.get(el);
+      if (oldTop == null) return;
+      const dy = oldTop - el.getBoundingClientRect().top;   // Invert
+      if (!dy) return;
+      el.style.transition = "none";
+      el.style.transform = `translateY(${dy}px)`;
+      requestAnimationFrame(() => {               // Play
+        el.style.transition = "transform .18s ease";
+        el.style.transform = "";
+      });
+    });
   }
-  function dropTargetIndex(row, clientY) {
-    const over = Number(row.dataset.cart);
-    const rect = row.getBoundingClientRect();
-    const after = (clientY - rect.top) > rect.height / 2;
-    return { over, after };
+  // 화면(DOM)에 보이는 순서를 cart 배열에 반영. data-cart 는 렌더 시점의 원본 인덱스라
+  // 'DOM 순서대로 원본 항목을 다시 모으면' 곧 재배치 결과가 된다.
+  function commitCartFromDOM(list) {
+    const order = [...list.querySelectorAll(".cart-item")].map((el) => Number(el.dataset.cart));
+    const next = order.map((i) => cart[i]).filter(Boolean);
+    if (next.length === cart.length) { cart = next; saveCart(); }
   }
   function wireCartDnD(list) {
     list.querySelectorAll(".cart-item").forEach((row) => {
       row.addEventListener("dragstart", (e) => {
         cartDragFrom = Number(row.dataset.cart);
-        row.classList.add("dragging");
+        requestAnimationFrame(() => row.classList.add("dragging"));  // 드래그 이미지엔 미반영
         try {
           e.dataTransfer.effectAllowed = "move";
           e.dataTransfer.setData("text/plain", String(cartDragFrom));  // Firefox는 데이터 필요
         } catch (_) {}
       });
-      row.addEventListener("dragend", () => { clearCartDropMarks(list); cartDragFrom = null; });
+      row.addEventListener("dragend", () => {
+        row.classList.remove("dragging");
+        commitCartFromDOM(list);
+        cartDragFrom = null;
+        renderCart();                  // data-cart 재동기화 + 리스너 재바인딩 (cartSel 유지)
+      });
       row.addEventListener("dragover", (e) => {
         if (cartDragFrom === null) return;
         e.preventDefault();
         try { e.dataTransfer.dropEffect = "move"; } catch (_) {}
-        const { over, after } = dropTargetIndex(row, e.clientY);
-        list.querySelectorAll(".cart-item").forEach((r) =>
-          r.classList.remove("drag-over-before", "drag-over-after"));
-        if (over !== cartDragFrom) row.classList.add(after ? "drag-over-after" : "drag-over-before");
+        const dragEl = list.querySelector(".cart-item.dragging");
+        if (!dragEl || dragEl === row) return;
+        const rect = row.getBoundingClientRect();
+        const after = (e.clientY - rect.top) > rect.height / 2;
+        const ref = after ? row.nextElementSibling : row;
+        if (ref === dragEl) return;              // 이미 그 자리 → no-op
+        flipReorder(list, () => list.insertBefore(dragEl, ref));
       });
-      row.addEventListener("drop", (e) => {
-        if (cartDragFrom === null) return;
-        e.preventDefault();
-        const from = cartDragFrom;
-        const { over, after } = dropTargetIndex(row, e.clientY);
-        let to = after ? over + 1 : over;
-        const item = cart[from];
-        if (!item) { clearCartDropMarks(list); return; }
-        cart.splice(from, 1);
-        if (from < to) to -= 1;          // 제거로 뒤 인덱스가 한 칸 당겨짐
-        to = Math.max(0, Math.min(cart.length, to));
-        cart.splice(to, 0, item);
-        saveCart();
-        renderCart();                     // cartSel 은 cartKey 기준이라 재배치에도 유지
-      });
+      row.addEventListener("drop", (e) => { e.preventDefault(); });  // 실제 커밋은 dragend
     });
   }
 
