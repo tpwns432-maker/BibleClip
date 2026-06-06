@@ -402,7 +402,10 @@
         api().lookup_strong(cur.code, lexLang, cur.book, cur.chapter, cur.verse || null)
           .then((res) => { const b = bodyEl(card.id); if (b) renderLexEntryInto(b, cur.code, res); });
       } else {
-        body.innerHTML = `<div class="panel-loading">${I18N.t("card.clickStrong")}</div>`;
+        // data-i18n 부착: 사전 카드를 띄운 채 언어를 바꿔도 I18N.apply 전역 스윕이
+        // 이 안내 문구를 즉시 재번역한다(BUG-i18n: 영어 전환 후에도 한국어로 고정되던
+        // 현상). 키는 이미 ko/en 양쪽에 존재하는 card.clickStrong 을 재사용한다.
+        body.innerHTML = `<div class="panel-loading" data-i18n="card.clickStrong">${I18N.t("card.clickStrong")}</div>`;
       }
     }
 
@@ -423,9 +426,13 @@
 
     // Reload interlinear cards that follow the given bible card (its book/chapter
     // changed). Lexicon cards are driven by clicks, so they aren't reloaded here.
+    // Returns a promise that resolves once every linked 원어 card has re-rendered,
+    // so callers can align them to the new position afterwards (BUG-01).
     function reloadDependents(card) {
-      cards.filter((c) => c.type === "interlinear" && linkedBible(c) === card)
-        .forEach(loadInterlinearCard);
+      return Promise.all(
+        cards.filter((c) => c.type === "interlinear" && linkedBible(c) === card)
+          .map(loadInterlinearCard)
+      );
     }
 
     // ---- mutations (add / remove) ----
@@ -540,7 +547,11 @@
       const body = bodyEl(card.id);
       if (!body) return;
       const el = body.querySelector(`.v[data-v="${verse}"]`);
-      if (el) el.scrollIntoView({ block: "start" });
+      if (!el) return;
+      // Body-scoped scroll (NOT el.scrollIntoView, which also nudges the
+      // workspace and drags every other card — see FIX-01 / centerHighlightVerse).
+      const br = body.getBoundingClientRect();
+      body.scrollTop += el.getBoundingClientRect().top - br.top;
     }
 
     // Step the card's reference along its own history (delta -1 back, +1 forward).
@@ -555,8 +566,10 @@
       card.book = ref.book;
       card.chapter = ref.chapter;
       await loadBibleCard(card);
-      reloadDependents(card);
+      await reloadDependents(card);
       scrollVerseToTop(card, ref.verse);   // restore scroll position (작업 5)
+      const hbody = bodyEl(card.id);       // keep linked 원어 aligned (BUG-01)
+      if (hbody) requestAnimationFrame(() => syncInterlinFrom(card, hbody));
       if (card === primaryBible()) api().note_position(card.book, card.chapter);
       updateNavButtons(card);
       saveLayout();
@@ -619,7 +632,13 @@
       }
       // Render (highlight the specific verses).
       await loadBibleCard(target, verses && verses.length ? verses : null);
-      reloadDependents(target);
+      // BUG-01: the linked 원어(interlinear) card re-renders from the chapter top
+      // and would stay pinned at 1절. Wait for its reload, then snap it to the
+      // SAME verse the 본문 just jumped to (matching height), exactly as the
+      // real-time scroll sync would — instead of leaving it at the chapter head.
+      await reloadDependents(target);
+      const tbody = bodyEl(target.id);
+      if (tbody) requestAnimationFrame(() => syncInterlinFrom(target, tbody));
       // A locked card reacts in place (book/chapter unchanged) → recordHistory
       // refreshes the entry's verse; an unlocked card that navigated records the
       // new reference, remembering the first highlighted verse as its anchor.
@@ -1349,6 +1368,19 @@
 
   // ---- Scripture / interlinear / lexicon rendering (into a card body) ----
 
+  // Scroll a card body so its first highlighted verse sits centered, WITHOUT
+  // Element.scrollIntoView — that walks every scrollable ancestor and nudges the
+  // workspace (overflow:hidden but still programmatically scrollable), dragging
+  // every other card's apparent position with it. That entanglement is FIX-01:
+  // F2 점프로 잠금 카드를 띄울 때 메인 카드 스크롤과 엉켜 엉뚱한 절이 보이던 현상.
+  function centerHighlightVerse(body) {
+    const first = body.querySelector(".v.hl");
+    if (!first) return;
+    const br = body.getBoundingClientRect();
+    const fr = first.getBoundingClientRect();
+    body.scrollTop += (fr.top - br.top) - (br.height - fr.height) / 2;
+  }
+
   function renderVersesInto(body, verses, highlight) {
     if (!verses || !verses.length) {
       body.innerHTML = `<div class="panel-loading">${I18N.t("card.noText")}</div>`;
@@ -1358,10 +1390,7 @@
     body.innerHTML = verses
       .map((v) => `<div class="v${hl.has(v.n) ? " hl" : ""}" data-v="${v.n}"><span class="vnum">${v.n}</span>${esc(v.text)}</div>`)
       .join("");
-    if (hl.size) {
-      const first = body.querySelector(".v.hl");
-      if (first) first.scrollIntoView({ block: "center" });
-    }
+    if (hl.size) centerHighlightVerse(body);
   }
 
   // Multi-version parallel rendering for bible cards.
@@ -1393,10 +1422,7 @@
         return `<div class="v${hl.has(v.n) ? " hl" : ""}${multi ? " multi" : ""}" data-v="${v.n}">` +
           `<span class="vnum">${v.n}</span>${content}</div>`;
       }).join("");
-    if (hl.size) {
-      const first = body.querySelector(".v.hl");
-      if (first) first.scrollIntoView({ block: "center" });
-    }
+    if (hl.size) centerHighlightVerse(body);
   }
 
   function renderInterlinearInto(body, data) {
