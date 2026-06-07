@@ -4,10 +4,11 @@
 >
 > **유지보수 규칙 (STRICT)**: `api.py`/`routes/*`에 API 추가, `app.js`(프론트)에 이벤트 디스패처/컴포넌트 추가, 파일 구조·경로 변경 시 **반드시 이 파일을 동시에 갱신**한다. 커밋·작업완료 보고 전 "지명도 파일 업데이트 완료 여부"를 체크포인트로 확인한다.
 
-- **현재 버전**: v1.1.0 (`bibleclip/_version.py` = `__version__`, ASCII-only single source of truth) — 릴리즈 준비 완료
-- **killswitch**: `recommend_version` = 1.0.9 (직전 버전 규칙)
+- **현재 버전**: v1.1.1 (`bibleclip/_version.py` = `__version__`, ASCII-only single source of truth)
+- **killswitch**: `recommend_version` = 1.1.0 (직전 버전 규칙)
+- **v1.1.1 내용**: 실행 실패(빌드 구성) 수정 — CI Windows 빌드 Python 3.12→3.13 + `requirements.txt` 정확 버전 핀(pywebview 6.2.1/pythonnet 3.1.0/clr_loader 0.3.1/PyInstaller 6.20.0)으로 재현성 확보. 시작 실패 안내·로깅: 실제 .NET/WebView2/보안SW 탐지 후 원인별 분기(_diagnostics) + `userdata/startup_error.log` 기록 + 설치본 자동다운 대신 안내 페이지.
 - **v1.1.0 내용**: FEAT-01 장바구니 DnD+FLIP / FEAT-02 매직 포맷터 매크로+태그칩 / FEAT-03 묵상 노트 **슬라이딩 레일 패널**(독립 카드에서 전환) / FEAT-04 카드별 대조 토글(역본 쌍 고정) / FEAT-05 병렬 복사 부스터 / BUG-01·BUG-i18n·FIX-01 핫픽스 / KJV+ 동봉 + 원전 분해 소스 선택
-- **마지막 맵 동기화**: 2026-06-06 (v1.1.0 FEAT-01~05 + 핫픽스 반영, HEAD=1c5fce2)
+- **마지막 맵 동기화**: 2026-06-07 (v1.1.1 시작 진단·빌드 핀 반영)
 
 ---
 
@@ -16,7 +17,7 @@
 ```
 BibleClip Project/
 ├─ bibleclip/                      # Python 패키지 (백엔드 + UI)
-│  ├─ _version.py                  # 버전 단일 소스 ("1.1.0")
+│  ├─ _version.py                  # 버전 단일 소스 ("1.1.1")
 │  ├─ config.py                    # 플랫폼/폰트/경로/GitHub URL/리소스 해석
 │  ├─ constants.py                 # 자모맵 + 책이름 테이블(한/영) + 영어역본 set
 │  ├─ userconfig.py                # 라이선스 게이트(is_premium) — UI설정과 분리
@@ -182,7 +183,7 @@ BibleClip Project/
 | `constants.py` | 정적 데이터 | `QWERTY_TO_HANGUL`, `CHOSEONG`/`JUNGSEONG`/`JONGSEONG`, `KOREAN_BOOK_MAP`{name→(id,abbr,full)}, `ENGLISH_BOOK_MAP`, `ENGLISH_VERSIONS`(set) |
 | `theme.py` | 색상 팔레트 | `LIGHT_THEME`/`DARK_THEME`/`CTK`(각 (light,dark) 튜플) |
 | `update.py` | GitHub 업뎃 체크 | `parse_version(s)`/`urlopen_resilient(req, timeout)`/`fetch_latest_release(timeout=8)`/`select_platform_asset(assets)` |
-| `_version.py` | 버전 단일 소스 | `__version__="1.1.0"` |
+| `_version.py` | 버전 단일 소스 | `__version__="1.1.1"` |
 
 **의존 그래프**: `_version` ← `config` ← (대부분); `korean`/`constants`/`theme` 독립; `morph` Kiwi-옵셔널; `text_utils` ← `constants`.
 
@@ -214,8 +215,11 @@ BibleClip Project/
 > **중요**: HTTP 서버 아님(Flask/http.server 없음). **pywebview** = WebView2/Chromium 임베드 + JS 브리지. JS↔Python 통신은 `pywebview.api.<method>()` 호출. 백→프론트 푸시는 `window.bibleclip.<fn>()` (evaluate_js).
 
 ### webui/app.py — pywebview 창 부트스트랩/생명주기
-- `main()`(공개진입, .NET 에러 캐치) → `_main()`(Library+Api+창생성+워치독). `_index_path()`, `_blocked_html(message)`, `_conn_error_html(lang)`, `_is_runtime_error(exc)`, `_show_runtime_error()`, `_on_closing()`, `_open_popup(title, html)`, `_conn_watchdog()`(15s ERR_CONNECTION_REFUSED 가이드)
-- 상수: `DOTNET_DOWNLOAD_URL`
+- `main()`(공개진입) → `_main()`(Library+Api+창생성+워치독). 시작 실패 시: `_diagnostics(exc)`로 실제 .NET/WebView2/보안SW 탐지 → `_log_startup_error()`(`userdata/startup_error.log` 기록) → `_show_runtime_error(diag)` 원인별 분기(.NET 없음→.NET / WebView2 없음→WebView2 / 둘 다 있으면→보안 차단 안내).
+- 진단 프로브: `_is_runtime_error(exc)`(텍스트 휴리스틱), `_dotnet_release()`(레지스트리 NDP\v4\Full Release≥461808=4.7.2+), `_webview2_version()`(EdgeUpdate Clients GUID `pv`), `_security_software()`(Services 레지스트리에서 안랩/V3/ASTx 등 키워드 매칭)
+- 기타: `_index_path()`, `_blocked_html`, `_conn_error_html(lang)`, `_on_closing()`, `_open_popup(title, html)`, `_conn_watchdog()`(15s ERR_CONNECTION_REFUSED 가이드)
+- 상수: `DOTNET_PAGE_URL`, `WEBVIEW2_PAGE_URL`(설치본 자동다운 대신 안내 페이지), `_SECURITY_KW`
+- locale: `dotnet.errTitle/errBody`, `webview2.errTitle/errBody`, `secblock.errTitle/errBody`
 
 ### webui/api.py — Api 브리지 파사드
 - **class `Api(SystemRoutes, BibleRoutes, NoteRoutes)`** — `__init__(library)`; `set_window(window)`/`set_popup_factory(factory)`/`_push(fn, *args)`
