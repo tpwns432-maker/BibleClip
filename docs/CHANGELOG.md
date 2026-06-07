@@ -4,6 +4,16 @@ BibleClip의 버전별 변경 내용입니다. 최신 버전이 위에 옵니다
 
 ---
 
+## v1.1.3 — KJV(흠정역) 성경 기본 동봉
+- **KJV+ 성경 동봉** — KJV(1769) + Strong's numbers(`bible_versions/KJV+.SQLite3`, 퍼블릭 도메인)를
+  기본 배포에 포함. 이 파일이 `.gitignore`(저작권 가드)로 추적되지 않아 CI checkout에 아예 없었고,
+  로컬 빌드(build_web.ps1)에만 동봉돼 그동안 릴리즈에선 빠져 있었음. `.gitignore` 예외로 추적하고,
+  CI(build.yml) Windows/macOS Assemble 단계에 KJV+ 복사를 추가(로컬↔CI 빌드 드리프트 해소).
+- **exe.config CI 동봉** — v1.1.2에서 로컬 빌드에만 넣었던 `BibleClipWeb.exe.config`
+  (loadFromRemoteSources MOTW 백스톱)을 CI Windows Assemble에도 추가.
+
+---
+
 ## v1.1.2 — 다운로드 차단(MOTW)으로 실행 안 되던 문제 수정 ★ (일부 PC "런타임 에러"의 진범)
 - **다운로드 zip의 Mark-of-the-Web → .NET 어셈블리 로드 거부** 수정. 인터넷에서 받은 zip을 풀면
   내부 모든 파일에 "인터넷에서 옴(Zone.Identifier=3)" 표식이 붙는데, .NET Framework가 표식 달린
