@@ -78,8 +78,12 @@ jobs:
           Copy-Item 사용법.css dist/BibleClipWeb/ -Force
           Copy-Item 사용법.js dist/BibleClipWeb/ -Force
           Copy-Item version_changes.json dist/BibleClipWeb/ -Force
+          # .NET loadFromRemoteSources 백스톱(다운로드 MOTW 대비; app._strip_motw 보완)
+          Copy-Item "packaging/BibleClipWeb.exe.config" dist/BibleClipWeb/ -Force
           New-Item -ItemType Directory -Force dist/BibleClipWeb/bible_versions | Out-Null
           Copy-Item bible_versions/KRV.SQLite3 dist/BibleClipWeb/bible_versions/ -Force
+          # KJV+(King James 1769 + Strong's, public domain) — 영어권 원전 분해 기본 소스
+          Copy-Item "bible_versions/KJV+.SQLite3" dist/BibleClipWeb/bible_versions/ -Force
           New-Item -ItemType Directory -Force dist/BibleClipWeb/original_lang | Out-Null
           # Copyright guard: ship only the copyright-clean 개역한글S (KRV+Strong tags).
           # English/Korean lexicons are user-supplied modules (not redistributed).
@@ -138,6 +142,8 @@ jobs:
           # checks the executable dir, so it's found there even after the app moves.
           MACOS="$APP/Contents/MacOS"
           mkdir -p "$MACOS/bible_versions" && cp bible_versions/KRV.SQLite3 "$MACOS/bible_versions/"
+          # KJV+(King James 1769 + Strong's, public domain) — 영어권 원전 분해 기본 소스
+          cp "bible_versions/KJV+.SQLite3" "$MACOS/bible_versions/"
           # Copyright guard: only the copyright-clean 개역한글S (lexicons are user modules).
           mkdir -p "$MACOS/original_lang" && cp "original_lang/개역한글S.sdb" "$MACOS/original_lang/"
           # Stamp the real version into Info.plist (PyInstaller leaves 0.0.0)

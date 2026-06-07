@@ -35,6 +35,7 @@ image.jpg
 # Only copyright-clean data is tracked / redistributed:
 #   · KRV.SQLite3      개역한글 (대한성서공회, 저작재산권 만료 — royalty-free)
 #   · 개역한글S.sdb     KRV + Strong's tags (자체 원어 엔진의 기반)
+#   · KJV+.SQLite3     KJV 1769 + Strong's numbers (public domain) — 영어 원전 분해 + 동봉
 #   · HebGrkEn.dct     BDB(1906)+Strong's(1890) — public domain. (tracked, but
 #                      EXCLUDED from builds; users opt-in as an external module)
 # Everything else is copyrighted (ESV/NKJV/KNRSV/NRKV/myJB bibles, TWOT-Korean
@@ -43,6 +44,7 @@ image.jpg
 BethlehemWin/
 bible_versions/*
 !bible_versions/KRV.SQLite3
+!bible_versions/KJV+.SQLite3
 !bible_versions/aliases_override.example.json
 original_lang/*
 !original_lang/개역한글S.sdb
