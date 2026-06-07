@@ -4,6 +4,19 @@ BibleClip의 버전별 변경 내용입니다. 최신 버전이 위에 옵니다
 
 ---
 
+## v1.1.2 — 다운로드 차단(MOTW)으로 실행 안 되던 문제 수정 ★ (일부 PC "런타임 에러"의 진범)
+- **다운로드 zip의 Mark-of-the-Web → .NET 어셈블리 로드 거부** 수정. 인터넷에서 받은 zip을 풀면
+  내부 모든 파일에 "인터넷에서 옴(Zone.Identifier=3)" 표식이 붙는데, .NET Framework가 표식 달린
+  번들 `Python.Runtime.dll`(pywebview→pythonnet CLR 브리지) 로드를 기본 거부 → 시작 실패
+  (`Failed to resolve Python.Runtime.Loader.Initialize`). 예외가 winforms/pythonnet 텍스트라
+  그동안 ".NET 누락"으로 오인됐다(실제론 .NET·WebView2 정상). **로컬 복사본은 표식이 없어 멀쩡,
+  다운로드본만 실패**하던 현장 증상과 정확히 일치.
+- **수정**: 시작 시 번들 DLL의 MOTW 표식을 자동 제거(`webui/app.py _strip_motw`, clr import 전 1회).
+  백스톱으로 `BibleClipWeb.exe.config`에 `loadFromRemoteSources` 동봉(읽기전용 설치 위치 대비).
+  → 이제 사용자가 우클릭 '차단 해제'를 하지 않아도 다운로드본이 바로 실행된다.
+
+---
+
 ## v1.1.1 — 실행 실패(빌드 구성) 수정 + 시작 오류 진단·안내 개선
 - **실행 실패 수정 / 빌드 재현성** — 일부 PC에서 v1.1.0 릴리즈가 실행되지 않던 문제. 원인은
   CI가 검증되지 않은 조합(Python 3.12)으로 빌드했기 때문(동일 노트북에서 로컬 Python 3.13

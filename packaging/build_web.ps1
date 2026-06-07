@@ -57,6 +57,9 @@ if ($LASTEXITCODE -ne 0) { throw "PyInstaller failed" }
 $dst = "dist_web\BibleClipWeb"
 Copy-Item icon.ico $dst -Force
 Copy-Item 사용법.txt, 사용법.html, 사용법.css, 사용법.js, version_changes.json $dst -Force
+# .NET 호스팅 설정(loadFromRemoteSources) — 다운로드 zip의 MOTW로 .NET이 번들
+# Python.Runtime.dll 로드를 거부하던 문제의 백스톱(app._strip_motw 보완).
+Copy-Item "packaging\BibleClipWeb.exe.config" "$dst\BibleClipWeb.exe.config" -Force
 # Copyright guard: bundle ONLY copyright-clean data - KRV(개역한글, royalty-free),
 # 개역한글S(KRV+Strong tags), and KJV+(King James 1769 + Strong's, public domain →
 # 영어권 원전 분해 기본 소스). Other bibles (ESV/NKJV/...) and the lexicons
@@ -71,6 +74,7 @@ Copy-Item "original_lang\개역한글S.sdb" "$dst\original_lang\" -Force
 
 # 동봉 검증: 한글 파일명이 PS5.1에서 깨져 누락되는 회귀를 빌드 단계에서 즉시 포착.
 $must = @("$dst\사용법.html","$dst\사용법.css","$dst\사용법.js",
+          "$dst\BibleClipWeb.exe.config",
           "$dst\original_lang\개역한글S.sdb","$dst\bible_versions\KRV.SQLite3",
           "$dst\bible_versions\KJV+.SQLite3")
 foreach ($p in $must) {

@@ -239,11 +239,54 @@ def _show_runtime_error(diag):
             pass
 
 
+def _strip_motw():
+    """Remove the Mark-of-the-Web (NTFS 'Zone.Identifier' ADS) from our bundled
+    binaries BEFORE the .NET CLR import.
+
+    A ZIP downloaded from the web is tagged 'from the Internet'; Windows Explorer
+    propagates that tag to EVERY extracted file. .NET Framework then refuses to
+    load the bundled `Python.Runtime.dll` (pywebview→pythonnet→clr CLR bridge)
+    because loadFromRemoteSources is off by default → the app dies with
+    'Failed to resolve Python.Runtime.Loader.Initialize'. Locally-copied builds
+    (no tag) work; only DOWNLOADED ones break — the exact field symptom.
+
+    Stripping the tag here (before `import webview` → clr) fixes it with no
+    user action (no right-click→Unblock needed). A onedir build keeps its files
+    on disk, so the tag persists across runs → we clear once and drop a marker.
+    Best-effort: no-op when not frozen / not Windows / files read-only (the
+    bundled BibleClipWeb.exe.config's loadFromRemoteSources covers that case)."""
+    if not IS_WINDOWS:
+        return
+    import sys
+    base = getattr(sys, '_MEIPASS', None)
+    if not base:
+        return  # source run, not frozen — nothing bundled to unblock
+    marker = os.path.join(base, '.motw_cleared')
+    if os.path.exists(marker):
+        return
+    for dirpath, _dirs, files in os.walk(base):
+        for name in files:
+            if name.lower().endswith(('.dll', '.pyd', '.exe')):
+                try:
+                    os.remove(os.path.join(dirpath, name) + ':Zone.Identifier')
+                except OSError:
+                    pass  # no ADS on this file, or read-only — skip
+    try:
+        open(marker, 'w').close()   # clear once; later launches skip the walk
+    except OSError:
+        pass
+
+
 def main():
-    """Public entry point. Wraps the real startup: on a Windows startup failure we
-    LOG the real exception + an environment probe, then show a friendly native
-    guide branched on what's ACTUALLY missing (.NET / WebView2 / 보안 차단) instead
-    of always blaming .NET. Non-runtime errors still propagate unchanged."""
+    """Public entry point. Wraps the real startup: first strip the Mark-of-the-Web
+    from bundled DLLs (downloaded ZIPs tag them → .NET blocks Python.Runtime.dll),
+    then on any Windows startup failure LOG the real exception + an environment
+    probe and show a guide branched on what's ACTUALLY wrong (.NET / WebView2 /
+    보안·차단) instead of always blaming .NET. Non-runtime errors propagate."""
+    try:
+        _strip_motw()
+    except Exception:
+        pass
     try:
         _main()
     except Exception as exc:
