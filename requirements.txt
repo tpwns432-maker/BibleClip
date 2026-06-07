@@ -1,13 +1,22 @@
 # BibleClip runtime/build dependencies
 # (stdlib + tkinter cover most; these are the third-party extras)
-customtkinter>=5.2.2
+#
+# ⚠️ v1.1.1: 빌드 재현성을 위해 핵심 의존성을 '정확 버전'으로 핀한다. v1.1.0 릴리즈가
+# 일부 PC에서 실행 실패한 원인은 CI가 검증되지 않은 조합으로 빌드했기 때문 — '>=' 는
+# CI/로컬이 서로 다른 버전을 받게 만든다. 아래 버전 = 동일 노트북에서 작동 검증된 조합.
+customtkinter==5.2.2
 certifi
-# Web UI (High redesign). On Windows pulls pythonnet for the EdgeChromium
+# Web UI (High redesign). On Windows pywebview pulls pythonnet for the EdgeChromium
 # (WebView2) backend; the WebView2 runtime ships with Windows 11.
-pywebview>=5.0
+pywebview==6.2.1
+# pythonnet/clr_loader = pywebview의 Windows 전이 의존(.NET CLR 브리지). pywebview가
+# pythonnet을 버전 미지정으로 끌어오므로 여기서 명시적으로 핀(Windows 전용 마커).
+pythonnet==3.1.0; sys_platform == "win32"
+clr_loader==0.3.1; sys_platform == "win32"
 # Cross-platform clipboard backend for the web UI's monitoring loop
 # (the CustomTkinter app uses tkinter/pbcopy directly instead).
-pyperclip>=1.8
+pyperclip==1.9.0
 # Korean morphological analyzer for smart verse search (조사·어미 제거 후
 # 형태소 다중 키워드 검색). Fail-soft: absence falls back to trigram fuzzy.
+# 프로즌 빌드에서는 --exclude-module 로 제외되므로(네이티브 크래시 방지) 버전 영향 없음.
 kiwipiepy>=0.21
