@@ -74,7 +74,10 @@ def _conn_error_html(lang):
 
 # Microsoft 공식 고정 리다이렉트 → .NET Framework 4.8 오프라인 설치본
 # (NDP48-x86-x64-AllOS-ENU.exe, ~121MB)을 브라우저가 곧바로 내려받는다(검증된 fwlink).
-DOTNET_DOWNLOAD_URL = 'https://go.microsoft.com/fwlink/?linkid=2088631'
+# 설치 파일을 바로 받지 않고 공식 '안내 페이지'를 연다(반복 실행 때마다 설치본이
+# 자동 다운로드되는 불편 제거 — 사용자가 페이지에서 직접 받도록).
+DOTNET_PAGE_URL = 'https://dotnet.microsoft.com/download/dotnet-framework/net48'
+WEBVIEW2_PAGE_URL = 'https://developer.microsoft.com/microsoft-edge/webview2/'
 
 
 def _is_runtime_error(exc):
@@ -88,36 +91,171 @@ def _is_runtime_error(exc):
         'coreclr', 'mscoree', 'winforms', '.net framework'))
 
 
-def _show_runtime_error():
-    """Last-resort guide when the .NET/pywebview backend can't even start. Uses
-    ONLY stdlib (a Win32 message box + the browser) so it works with no .NET, no
-    WebView2, and no local server — exactly the broken state it reports. Without
-    this the user just gets PyInstaller's cryptic 'Failed to execute script' crash.
-    [확인] → the .NET Framework 4.8 installer downloads directly."""
+def _dotnet_release():
+    """Installed .NET Framework 4.x 'Release' DWORD, or None. >= 461808 = 4.7.2+
+    (pywebview/pythonnet 최소요건)."""
+    try:
+        import winreg
+        with winreg.OpenKey(winreg.HKEY_LOCAL_MACHINE,
+                            r'SOFTWARE\Microsoft\NET Framework Setup\NDP\v4\Full') as k:
+            rel, _ = winreg.QueryValueEx(k, 'Release')
+            return int(rel)
+    except Exception:
+        return None
+
+
+def _webview2_version():
+    """Installed Evergreen WebView2 Runtime version string, or None. Reads the
+    EdgeUpdate client key for the stable WebView2 GUID across per-machine(64/32)
+    and per-user locations — Microsoft's documented detection method."""
+    try:
+        import winreg
+    except Exception:
+        return None
+    guid = '{F3017226-FE2A-4295-8BDF-00C3A9A7E4C5}'
+    base = r'SOFTWARE\Microsoft\EdgeUpdate\Clients' + '\\' + guid
+    base32 = r'SOFTWARE\WOW6432Node\Microsoft\EdgeUpdate\Clients' + '\\' + guid
+    for hive, path in ((winreg.HKEY_LOCAL_MACHINE, base32),
+                       (winreg.HKEY_LOCAL_MACHINE, base),
+                       (winreg.HKEY_CURRENT_USER, base)):
+        try:
+            with winreg.OpenKey(hive, path) as k:
+                pv, _ = winreg.QueryValueEx(k, 'pv')
+                if pv and pv != '0.0.0.0':
+                    return pv
+        except Exception:
+            continue
+    return None
+
+
+# 한국 보안/금융 모듈 식별 키워드. 미서명 프로세스의 CLR/네트워크를 가로채 시작 실패를
+# 일으키는 흔한 주범 — 진단 로그에 "무엇이 깔려 있는지"를 남긴다.
+_SECURITY_KW = (
+    'ahnlab', 'v3', '안랩', 'safe transaction', 'astx', 'asdsvc', 'truguard',
+    'nprotect', '알약', 'estsoft', 'veraport', '베라포트', 'magicline', '매직라인',
+    'inisafe', 'touchen', 'wizvera', '위즈베라', 'crossex', 'delfino', 'hauri', '하우리',
+    'tachyon', 'mcafee', 'norton', 'kaspersky', 'avast', 'bitdefender', 'sophos',
+)
+
+
+def _security_software():
+    """Installed security/finance-module Windows services matching known keywords
+    (service name or DisplayName). Sorted list of labels; best-effort."""
+    try:
+        import winreg
+    except Exception:
+        return []
+    found = set()
+    try:
+        with winreg.OpenKey(winreg.HKEY_LOCAL_MACHINE,
+                            r'SYSTEM\CurrentControlSet\Services') as svc:
+            i = 0
+            while True:
+                try:
+                    name = winreg.EnumKey(svc, i)
+                except OSError:
+                    break
+                i += 1
+                disp = ''
+                try:
+                    with winreg.OpenKey(svc, name) as sk:
+                        disp, _ = winreg.QueryValueEx(sk, 'DisplayName')
+                except Exception:
+                    disp = ''
+                hay = (name + ' ' + (disp or '')).lower()
+                if any(kw in hay for kw in _SECURITY_KW):
+                    found.add(disp or name)
+    except Exception:
+        pass
+    return sorted(found)
+
+
+def _diagnostics(exc):
+    """Probe the REAL startup environment so we stop guessing: is .NET present? is
+    WebView2 present? which security software is installed? Drives the log + the
+    guide branch."""
+    rel = _dotnet_release()
+    return {
+        'net_release': rel,
+        'net_ok': bool(rel and rel >= 461808),   # 4.7.2+
+        'webview2': _webview2_version(),
+        'security': _security_software(),
+        'runtime_match': _is_runtime_error(exc),
+    }
+
+
+def _log_startup_error(exc, diag):
+    """Append the REAL exception + environment probe to userdata/startup_error.log.
+    We used to discard the exception and just show the .NET guide (flying blind);
+    this turns any failing PC into a precise diagnosis."""
+    try:
+        import traceback
+        import platform
+        from datetime import datetime
+        from bibleclip.config import get_userdata_dir
+        path = os.path.join(get_userdata_dir(), 'startup_error.log')
+        with open(path, 'a', encoding='utf-8') as f:
+            f.write('=' * 64 + '\n')
+            f.write('[%s] BibleClip v%s 시작 실패\n'
+                    % (datetime.now().isoformat(timespec='seconds'), __version__))
+            f.write('OS: %s\n' % platform.platform())
+            f.write('.NET Release: %s (>=461808/4.7.2+: %s)\n'
+                    % (diag.get('net_release'), diag.get('net_ok')))
+            f.write('WebView2: %s\n' % (diag.get('webview2') or '(미설치/미검출)'))
+            f.write('보안 SW(설치): %s\n'
+                    % (', '.join(diag.get('security') or []) or '(미검출)'))
+            f.write('runtime_match(.NET 휴리스틱): %s\n' % diag.get('runtime_match'))
+            f.write('예외:\n')
+            f.write(''.join(traceback.format_exception(type(exc), exc, exc.__traceback__)))
+            f.write('\n')
+    except Exception:
+        pass
+
+
+def _show_runtime_error(diag):
+    """Native last-resort guide, branched on the ACTUAL environment. Uses ONLY
+    stdlib (Win32 message box + browser) so it works with no .NET/WebView2/server.
+    .NET 없음→.NET 안내, WebView2 없음→WebView2 안내, 둘 다 있으면→보안 차단 안내."""
     lang = i18n.resolve_ui_lang()
-    title = i18n.t('dotnet.errTitle', lang)
-    body = i18n.t('dotnet.errBody', lang)
+    if not diag.get('net_ok'):
+        title, body, url = (i18n.t('dotnet.errTitle', lang),
+                            i18n.t('dotnet.errBody', lang), DOTNET_PAGE_URL)
+    elif not diag.get('webview2'):
+        title, body, url = (i18n.t('webview2.errTitle', lang),
+                            i18n.t('webview2.errBody', lang), WEBVIEW2_PAGE_URL)
+    else:
+        title, body, url = (i18n.t('secblock.errTitle', lang),
+                            i18n.t('secblock.errBody', lang), None)
     try:
         import ctypes
         ctypes.windll.user32.MessageBoxW(0, body, title, 0x10)  # MB_OK | MB_ICONERROR
     except Exception:
         pass
-    try:
-        import webbrowser
-        webbrowser.open(DOTNET_DOWNLOAD_URL)
-    except Exception:
-        pass
+    if url:
+        try:
+            import webbrowser
+            webbrowser.open(url)
+        except Exception:
+            pass
 
 
 def main():
-    """Public entry point. Wraps the real startup so a .NET/CLR backend failure
-    becomes a friendly native guide instead of a raw PyInstaller crash. Unrelated
-    errors propagate unchanged."""
+    """Public entry point. Wraps the real startup: on a Windows startup failure we
+    LOG the real exception + an environment probe, then show a friendly native
+    guide branched on what's ACTUALLY missing (.NET / WebView2 / 보안 차단) instead
+    of always blaming .NET. Non-runtime errors still propagate unchanged."""
     try:
         _main()
     except Exception as exc:
+        diag = None
+        if IS_WINDOWS:
+            try:
+                diag = _diagnostics(exc)
+                _log_startup_error(exc, diag)
+            except Exception:
+                diag = None
         if IS_WINDOWS and _is_runtime_error(exc):
-            _show_runtime_error()
+            _show_runtime_error(diag or {'net_ok': False})
             return
         raise
 
