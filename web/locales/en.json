@@ -75,6 +75,9 @@
   "cart.extractedSelected": "Extracted {n} selected to the clipboard",
   "cart.noneSelected": "No verses selected",
   "cart.extractFail": "Extraction failed",
+  "cart.popout": "Pop out",
+  "cart.windowTitle": "Sermon Cart — BibleClip",
+  "cart.unit": "",
 
   "present.qsPlaceholder": "Type a reference or keyword, then Enter (e.g. Jn 1:1)",
   "present.hint": "F2 search · +/− font size · ESC to exit",
@@ -133,6 +136,7 @@
   "card.tip.close": "Close card",
   "card.tip.linkSelect": "Choose a scripture card to link",
   "card.tip.sourceSelect": "Choose the interlinear source translation",
+  "card.tip.lexLang": "Dictionary display language (KO/EN)",
   "card.tip.parallel": "Parallel view (base + contrast translation pair)",
   "card.parallelOff": "Parallel",
   "notes.title": "Meditation Notes",

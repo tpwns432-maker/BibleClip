@@ -41,5 +41,37 @@ class NoteRoutes:
     def set_cart(self, items):
         """Replace the whole cart with ``items`` and persist (write-through). The
         front-end owns ordering (drag-and-drop) and sends the full list on every
-        change. Returns {ok, items} with the sanitized stored list."""
-        return {'ok': True, 'items': self.lib.cart.replace(items)}
+        change. Broadcasts the new cart to every window that shows it (main drawer
+        + pop-out window) so they stay in sync live (FEAT-07). Returns {ok, items}
+        with the sanitized stored list."""
+        stored = self.lib.cart.replace(items)
+        self._broadcast_cart(stored)
+        return {'ok': True, 'items': stored}
+
+    # ---- 설교 장바구니 팝아웃 창 (FEAT-07) ----
+
+    def open_cart_window(self):
+        """Open the independent pop-out sermon-cart window (or focus the existing
+        one). F11 프리젠테이션 중 메인이 전체화면이라 레일 패널을 못 보던 문제를 위해
+        장바구니를 별도 창으로 분리 — 듀얼 모니터에서 설교 제어. No-op (ok:False)
+        without the factory (headless tests / no window). Returns {ok}."""
+        if self._cart_window_factory is None:
+            return {'ok': False, 'error': 'no factory'}
+        try:
+            self._cart_window_factory()
+        except Exception as e:
+            return {'ok': False, 'error': str(e)}
+        return {'ok': True}
+
+    def cart_goto(self, book, chapter, verses):
+        """Pop-out cart → main viewer jump (FEAT-07 크로스 윈도우 인터랙션). Pushes
+        the navigation to the MAIN window so its bible card focuses the verse —
+        even while the main window is in F11 fullscreen — without stealing focus
+        from the cart window. Returns {ok}."""
+        try:
+            b, c = int(book), int(chapter)
+            vs = [int(v) for v in (verses or [])]
+        except (TypeError, ValueError):
+            return {'ok': False}
+        self._push('cartGoto', b, c, vs)
+        return {'ok': True}

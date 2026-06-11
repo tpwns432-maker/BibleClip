@@ -18,6 +18,25 @@ def _index_path():
     return os.path.join(get_resource_dir(), 'web', 'index.html')
 
 
+def _cart_index_path():
+    """The pop-out sermon-cart window's page (FEAT-07) — a minimal standalone
+    page next to index.html, bundled by the same web/ copy."""
+    return os.path.join(get_resource_dir(), 'web', 'cart.html')
+
+
+def _onscreen(x, y):
+    """True if a saved window position looks on-screen — used to reject the
+    -32000,-32000 that Windows reports for a MINIMIZED window (saving/restoring
+    that opens the window where it can't be seen). The bound is generous so
+    legitimately negative multi-monitor coords still pass; only the minimized
+    sentinel region (and absurd values) are rejected."""
+    try:
+        x, y = int(x), int(y)
+    except (TypeError, ValueError):
+        return False
+    return -30000 < x < 30000 and -30000 < y < 30000
+
+
 def _blocked_html(message):
     """Full-window notice shown when the remote kill switch blocks this build."""
     safe = _html.escape(message).replace('\n', '<br>')
@@ -356,8 +375,11 @@ def _main():
     # tk-format 'geometry' so the two UIs don't clobber each other's window).
     geo = library.settings.get('web_geometry') or {}
     kw = dict(width=int(geo.get('w') or 1100), height=int(geo.get('h') or 780))
-    if geo.get('x') is not None and geo.get('y') is not None:
+    if geo.get('x') is not None and geo.get('y') is not None and \
+            _onscreen(geo.get('x'), geo.get('y')):
         kw['x'], kw['y'] = int(geo['x']), int(geo['y'])
+    # else: a minimized/off-screen saved position (Windows reports minimized
+    # windows at -32000,-32000) is ignored so the window opens where it's visible.
 
     window = webview.create_window(
         f"BibleClip v{__version__}",
@@ -377,10 +399,15 @@ def _main():
 
     def _on_closing():
         # Persist window geometry + any in-memory state (last position, etc.).
+        # Skip a minimized/off-screen position (Windows reports minimized windows
+        # at -32000,-32000) — saving it would reopen the window where it can't be
+        # seen next launch. Keep the prior good geometry in that case.
         try:
-            library.settings['web_geometry'] = {
-                'w': window.width, 'h': window.height, 'x': window.x, 'y': window.y,
-            }
+            if _onscreen(window.x, window.y):
+                library.settings['web_geometry'] = {
+                    'w': window.width, 'h': window.height,
+                    'x': window.x, 'y': window.y,
+                }
         except Exception:
             pass
         library.save_settings()
@@ -412,6 +439,36 @@ def _main():
         return child
 
     api.set_popup_factory(_open_popup)
+
+    def _open_cart_window():
+        # FEAT-07: the independent pop-out sermon-cart window. Unlike the dict
+        # popup it needs the JS bridge (js_api=api) so its list can call
+        # cart_goto/set_cart, and the backend can push live updates to it. Reuse
+        # the open one if present (no portable 'focus', so we just don't dup).
+        # Tracked in _child_windows like every child → the main window's close
+        # tears it down too (no zombie, per BUG-SYS).
+        if api._cart_window is not None:
+            return api._cart_window
+        lang = i18n.resolve_ui_lang(library.settings)
+        win = webview.create_window(
+            i18n.t('cart.windowTitle', lang),
+            url=_cart_index_path(), js_api=api,
+            width=360, height=600, min_size=(300, 380),
+        )
+        api._cart_window = win
+        _child_windows.append(win)
+
+        def _forget_cart(*_):
+            api._cart_window = None
+            if win in _child_windows:
+                _child_windows.remove(win)
+        try:
+            win.events.closed += _forget_cart
+        except Exception:
+            pass
+        return win
+
+    api.set_cart_window_factory(_open_cart_window)
 
     # Startup connection watchdog (Fix-C): if the front-end never reaches the
     # bridge (get_initial) within the timeout, the local HTTP page failed to load

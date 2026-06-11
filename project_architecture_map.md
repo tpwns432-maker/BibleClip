@@ -4,14 +4,15 @@
 >
 > **유지보수 규칙 (STRICT)**: `api.py`/`routes/*`에 API 추가, `app.js`(프론트)에 이벤트 디스패처/컴포넌트 추가, 파일 구조·경로 변경 시 **반드시 이 파일을 동시에 갱신**한다. 커밋·작업완료 보고 전 "지명도 파일 업데이트 완료 여부"를 체크포인트로 확인한다.
 
-- **현재 버전**: v1.1.4 (`bibleclip/_version.py` = `__version__`, ASCII-only single source of truth)
-- **killswitch**: `recommend_version` = 1.1.3 (직전 버전 규칙)
+- **현재 버전**: v1.1.5 (`bibleclip/_version.py` = `__version__`, ASCII-only single source of truth)
+- **killswitch**: `recommend_version` = 1.1.4 (직전 버전 규칙)
+- **★ v1.1.5 내용(다중 창 확장 · 발표 개선 · DnD 재구축 = TODO Part 3)**: ① **FEAT-07 설교 장바구니 팝아웃 창**(`web/cart.html` 신설, 자체완결 미니멀) — 메인과 실시간 양방향 동기화(`set_cart`→`_broadcast_cart`가 메인 `onCartChanged`+팝아웃 `renderCartItems` 동시 푸시), 창 성구 클릭→`cart_goto`→메인 `onReference`로 점프(F11 포함). 자식 창 `_child_windows` 추적(좀비방지). 브리지 `open_cart_window`/`cart_goto`(+`get_cart`/`set_cart`). app.py `_cart_window_factory`/`api._cart_window`. ② **F11 틀고정 헤더** — `.present-banner`(flex `order:-1` 고정, `{book_full} {chap}장`), `cards.js presentBannerText/updatePresentBanner`를 `loadBibleCard` 종료부에 연결. ③ **장바구니 DnD 재구축** — HTML5 native(드래그중 `insertBefore`→WebView2 드래그중단)를 **transform 프리뷰+drop 커밋**(역본 칩과 동일)으로 교체. `wireCartDnD`(위임)/`layoutCartGap`/`commitCartDrag`/`flipCartSettle`, `.cart-item{transition:transform .18s}`. 메인+팝아웃. ④ **사전 언어 표면별 선택**(Part3-1) — toolbar 토글+설정 ⚙ 사전언어 **제거**, 기본=프로그램 언어(`lexLang=I18N.getLang()`), 사전 카드 `한/영` pill(`data-act="lexlang"`, 전역 공유, `setLexLang`) + 사전 팝업 창 드롭다운(`dicthtml._dict_page_html` ko·en 임베드+JS show/hide, 항상 노출). `open_dict_window`가 양 언어 조회. ⑤ **노트 배지 위치**(Part3-2) — `decorateNotes`가 `el.appendChild`(절 끝), F11 `.note-badge{display:none}`. ⑥ **노트 export 구분선**(Part3-5) — `buildNotesText(list, true)`. ⑦ **창 off-screen 수정** — `app.py _onscreen()`가 `(-32000,-32000)`(최소화 sentinel) 복원·저장 차단. (Part3-3 레일 패널 애니는 **보류**, Part3-4가 ③.)
 - **★ v1.1.4 내용(안정화 분리 배포)**: ① **설교 장바구니 영속성(FEAT-08)** — 장바구니를 백엔드 파일(`userdata/sermon_cart.json`, `bibleclip/cart.py` `Cart`)에 저장. 기존 `localStorage`는 pywebview 랜덤 loopback 포트로 origin이 매번 바뀌어 재시작 시 고아가 되던 문제(진짜 원인). `get_initial.cart`로 부팅 복구 + 추가/삭제/재정렬마다 `set_cart` write-through. 브리지 `get_cart`/`set_cart`(NoteRoutes), 프론트 `restoreCart`/`saveCart`(search-notes.js). ② **좀비 자식 창 수정(BUG-SYS)** — `app.py`가 생성 자식 창을 `_child_windows`로 추적, 메인 `closing` 시 일괄 `destroy()`(자식이 먼저 닫히면 `closed` 이벤트로 자동 해제). ③ **설정값 재시작 복귀 수정** — `library.load_settings`: (a) 폰트 클램프 `min(30)`→**`min(400)`**(set_font_size와 정렬; 30 초과 저장이 매 실행 30으로 되돌려지던 버그), (b) **`DEFAULT_SETTINGS`에 `ui_lang`/`reading_font`/`auto_copy_top_result` 추가**(load는 기본값에 있는 키만 수용 → 누락 키는 저장돼도 드롭되어 복귀했음), (c) core.js boot의 `ui_lang` 동기화를 프론트→백엔드에서 **백엔드 권위**(`init.ui_lang`→`I18N.setLang`)로 뒤집음(localStorage 휘발분이 올바른 백엔드 값을 덮던 문제). v1.1.5 예정: FEAT-07 장바구니 팝아웃(실시간 양방향 동기화) + Part 3 UI/UX.
 - **v1.1.3 내용**: **KJV+ 성경 기본 동봉**. `bible_versions/KJV+.SQLite3`(KJV 1769+Strong's, 퍼블릭 도메인)가 `.gitignore`로 미추적이라 CI checkout에 없어 그동안 릴리즈에서 빠졌었음(로컬 build_web.ps1만 동봉). `.gitignore` 예외로 추적 + CI `build.yml` Windows/macOS Assemble에 KJV+ 복사 추가 + exe.config CI 동봉. ⚠️ **빌드 정의가 둘(local `build_web.ps1`/`build_mac.sh` ↔ CI `.github/workflows/build.yml`)이라 동봉물 변경 시 양쪽 다 고쳐야 함**(이번 드리프트의 교훈).
 - **★ v1.1.2 내용(일부 PC "런타임 에러" 진범 해결)**: 다운로드 zip의 **MOTW(Zone.Identifier=3)** 가 번들 `Python.Runtime.dll`에 묻어 .NET이 "인터넷 어셈블리" 로드를 거부(`Failed to resolve Python.Runtime.Loader.Initialize`)하던 문제. **로컬 복사본은 표식 없어 정상, 다운로드본만 실패** → startup_error.log로 확진(ZoneId=3 + ReferrerUrl=zip). 수정: `app.py _strip_motw`(clr import 전 번들 .dll/.pyd/.exe의 Zone.Identifier ADS 1회 제거, `.motw_cleared` 마커) + `BibleClipWeb.exe.config`의 `loadFromRemoteSources`(읽기전용 위치 백스톱, build_web.ps1 동봉). .NET·WebView2·Python 버전·보안SW 전부 무죄였음.
 - **v1.1.1 내용**: 실행 실패 의심으로 CI Windows 빌드 Python 3.12→3.13 + `requirements.txt` 정확 버전 핀(재현성). 시작 실패 안내·로깅: 실제 .NET/WebView2/보안SW 탐지 후 원인별 분기(_diagnostics) + `userdata/startup_error.log` 기록 + 안내 페이지. (실제 진범은 v1.1.2의 MOTW였음 — 이 로깅 덕에 잡음.)
 - **v1.1.0 내용**: FEAT-01 장바구니 DnD+FLIP / FEAT-02 매직 포맷터 매크로+태그칩 / FEAT-03 묵상 노트 **슬라이딩 레일 패널**(독립 카드에서 전환) / FEAT-04 카드별 대조 토글(역본 쌍 고정) / FEAT-05 병렬 복사 부스터 / BUG-01·BUG-i18n·FIX-01 핫픽스 / KJV+ 동봉 + 원전 분해 소스 선택
-- **마지막 맵 동기화**: 2026-06-11 (v1.1.4 장바구니 영속성/좀비 창 수정 반영)
+- **마지막 맵 동기화**: 2026-06-11 (v1.1.5 팝아웃 창/F11 헤더/DnD 재구축/사전 언어/off-screen 반영)
 
 ---
 
@@ -67,6 +68,7 @@ BibleClip Project/
 │        └─ system.py              #     부트/설정/업뎃/폰트/출력포맷 (SystemRoutes)
 ├─ web/                            # ★ 프론트엔드 SPA (vanilla JS, 프레임워크 없음)
 │  ├─ index.html                   #   DOM 셸(.rail/.main/뷰/드로어/모달)
+│  ├─ cart.html                    #   FEAT-07 설교 장바구니 팝아웃 창(자체완결, v1.1.5)
 │  ├─ js/
 │  │  ├─ i18n.js                   #   i18n 엔진(로케일 로드/라이브 전환/DOM스윕)
 │  │  ├─ core.js                   #   부트/전역상태/API브리지/UI헬퍼 (window.BC)
@@ -187,7 +189,7 @@ BibleClip Project/
 | `constants.py` | 정적 데이터 | `QWERTY_TO_HANGUL`, `CHOSEONG`/`JUNGSEONG`/`JONGSEONG`, `KOREAN_BOOK_MAP`{name→(id,abbr,full)}, `ENGLISH_BOOK_MAP`, `ENGLISH_VERSIONS`(set) |
 | `theme.py` | 색상 팔레트 | `LIGHT_THEME`/`DARK_THEME`/`CTK`(각 (light,dark) 튜플) |
 | `update.py` | GitHub 업뎃 체크 | `parse_version(s)`/`urlopen_resilient(req, timeout)`/`fetch_latest_release(timeout=8)`/`select_platform_asset(assets)` |
-| `_version.py` | 버전 단일 소스 | `__version__="1.1.4"` |
+| `_version.py` | 버전 단일 소스 | `__version__="1.1.5"` |
 
 **의존 그래프**: `_version` ← `config` ← (대부분); `korean`/`constants`/`theme` 독립; `morph` Kiwi-옵셔널; `text_utils` ← `constants`.
 
@@ -266,7 +268,9 @@ BibleClip Project/
 | `set_note` | `(book, chapter, verse, text)` | 생성/수정/삭제(빈텍스트=삭제) {ok, note} |
 | `delete_note` | `(book, chapter, verse)` | {ok} |
 | `get_cart` | `()` | 영속 장바구니 [{book_num,chapter,verses,short_name}] (FEAT-08, v1.1.4) |
-| `set_cart` | `(items)` | 전체 교체+저장(write-through) {ok, items} (FEAT-08, v1.1.4) |
+| `set_cart` | `(items)` | 전체 교체+저장(write-through) + `_broadcast_cart`로 모든 창 동기화 {ok, items} (FEAT-08/07) |
+| `open_cart_window` | `()` | 설교 장바구니 팝아웃 창 열기/포커스 {ok} (FEAT-07, v1.1.5) |
+| `cart_goto` | `(book, chapter, verses)` | 팝아웃→메인 뷰어 점프(`_push('cartGoto')`) {ok} (FEAT-07, v1.1.5) |
 
 **SystemRoutes (`routes/system.py`) — 부트/설정/업뎃/폰트/출력포맷:**
 | 메서드 | 인자 | 역할 |

@@ -63,7 +63,7 @@
     <!-- Top bar -->
     <header class="topbar">
       <span class="brand">BibleClip</span>
-      <span class="ver" id="app-ver">v1.1.4</span>
+      <span class="ver" id="app-ver">v1.1.5</span>
       <span class="spacer"></span>
       <button class="btn primary" id="monitor-btn" data-i18n="topbar.monitorStart">모니터링 시작</button>
       <span class="badge" id="status-badge" data-i18n="topbar.statusIdle">대기 중</span>
@@ -96,10 +96,8 @@
         <span class="pill add" id="add-inter" title="원전 분해 카드 추가" data-i18n-title="ctrl.addInterTitle" data-i18n="ctrl.addInter">＋ 원어</span>
         <span class="pill add" id="add-lex" title="사전 카드 추가" data-i18n-title="ctrl.addLexTitle" data-i18n="ctrl.addLex">＋ 사전</span>
         <span class="vsep"></span>
-        <div class="seg" data-seg="lang" title="사전 기본 언어" data-i18n-title="ctrl.lexLangTitle">
-          <div class="opt on" data-i18n="common.korean">한글</div>
-          <div class="opt" data-i18n="common.english">영어</div>
-        </div>
+        <!-- v1.1.5: '사전 기본 언어' 토글 제거 — 사전 언어는 프로그램 언어를 추종하고,
+             사전 카드 헤더 pill / 사전 창 드롭다운에서 표면별로 전환한다. -->
         <span class="mini" id="font-dec" title="글자 작게" data-i18n-title="ctrl.fontDecTitle">A−</span>
         <span class="mini" id="font-inc" title="글자 크게" data-i18n-title="ctrl.fontIncTitle">A+</span>
       </span>
@@ -182,6 +180,7 @@
     <div class="drawer-head">
       <span data-i18n="cart.title">오늘의 설교 성구</span>
       <span class="cart-head-actions">
+        <span class="drawer-mini" id="cart-popout" title="새 창으로 열기" data-i18n="cart.popout" data-i18n-title="cart.popout">새 창</span>
         <span class="drawer-mini" id="cart-clear" title="비우기" data-i18n="cart.clear" data-i18n-title="cart.clear">비우기</span>
         <span class="drawer-close" id="cart-close" title="닫기" data-i18n-title="common.close">✕</span>
       </span>
@@ -269,16 +268,8 @@
         <p class="set-note" data-i18n="modal.pollNote">간격이 짧을수록 빠르게 인식하지만 CPU를 조금 더 씁니다.</p>
       </div>
 
-      <div class="set-group">
-        <div class="set-group-h" data-i18n="modal.grpLex">사전</div>
-        <div class="set-row">
-          <span class="set-label" data-i18n="modal.lexLabel">기본 언어</span>
-          <div class="seg" id="opt-lex-lang">
-            <div class="opt" data-val="ko" data-i18n="common.korean">한글</div>
-            <div class="opt" data-val="en" data-i18n="common.english">영어</div>
-          </div>
-        </div>
-      </div>
+      <!-- v1.1.5: '사전 기본 언어' 설정 제거 — 사전 언어는 프로그램 언어를 추종하고,
+           사전 카드 pill / 사전 창 드롭다운에서 표면별로 전환한다. -->
 
       <div class="set-group">
         <div class="set-group-h" data-i18n="modal.grpRef">참조 입력</div>

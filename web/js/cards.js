@@ -251,6 +251,22 @@
       return match ? match.name : (list[0].name || "");
     }
 
+    // 사전 카드 표시 언어(전역 lexLang) — 라벨/전환. 사전 카드는 전역을 공유한다(여러
+    // 개면 같이 바뀜). 독립적으로 다른 언어를 보려면 단어 우클릭 → 사전 창(창별 선택).
+    function lexLangLabel() { return lexLang === "en" ? "English" : "한국어"; }
+    function setLexLang(lang) {
+      lang = lang === "en" ? "en" : "ko";
+      if (lang === lexLang) return;
+      lexLang = lang;
+      // 헤더 pill 라벨 갱신 + 떠 있는 사전 카드 재조회(새 언어로).
+      cards.filter((c) => c.type === "lexicon").forEach((c) => {
+        const sec = sectionEl(c.id);
+        const pill = sec && sec.querySelector('[data-act="lexlang"]');
+        if (pill) pill.textContent = lexLangLabel();
+        loadLexiconCard(c);
+      });
+    }
+
     function headerHTML(card) {
       const grip = `<span class="card-grip" data-tip="드래그하여 이동" data-i18n-tip="card.tip.move">⠿</span>`;
       if (card.type === "bible") {
@@ -276,10 +292,16 @@
       const sourcePill = card.type === "interlinear"
         ? `<span class="hd-pill dropdown" data-act="source" data-tip="원전 분해 소스 역본 선택" data-i18n-tip="card.tip.sourceSelect">${esc(lexSourceLabel(card.source))}</span>`
         : "";
+      // 사전 카드만: 표시 언어(한/영) 선택 pill. 전역 lexLang 을 바꾼다(사전 카드 공유).
+      // 다른 언어를 동시에 보려면 단어 우클릭으로 독립 사전 창을 띄운다(창마다 독립 선택).
+      const lexLangPill = card.type === "lexicon"
+        ? `<span class="hd-pill dropdown" data-act="lexlang" data-tip="사전 표시 언어" data-i18n-tip="card.tip.lexLang">${lexLangLabel()}</span>`
+        : "";
       return `<div class="card-hd">${grip}<span class="card-title" data-i18n="card.type.${card.type}">${typeLabel(card.type)}</span>` +
         `<span class="card-hd-ctrls">` +
           `<span class="hd-pill dropdown" data-act="link" data-tip="연결할 성경 카드 선택" data-i18n-tip="card.tip.linkSelect">${esc(card.link || I18N.t("card.linkNone"))}</span>` +
           sourcePill +
+          lexLangPill +
         `</span>` +
         `<span class="card-hd-spacer"></span>` +
         `<span class="card-x" data-act="close" data-tip="카드 닫기" data-i18n-tip="card.tip.close">✕</span>` +
@@ -378,6 +400,7 @@
       updateBibleHeader(card);
       updateNavButtons(card);
       decorateNotes(card);   // 묵상 노트 배지 (Phase 3, async)
+      updatePresentBanner(card);  // F11 틀고정 헤더 — 장 이동 시 위치 동기화
     }
 
     // Fetch this chapter's notes and stamp a 📄 badge on each noted verse.
@@ -399,8 +422,10 @@
           b.textContent = "📄";
           b.title = txt.length > 80 ? txt.slice(0, 80) + "…" : txt;  // hover preview
           b.dataset.v = el.dataset.v;
-          const vnum = el.querySelector(".vnum");
-          if (vnum) vnum.after(b); else el.prepend(b);
+          // Part3-2: 절 맨 앞이 아니라 본문 문장이 끝나는 최종 지점 뒤에 배치
+          // (예: "~천지를 창조하시니라. 📄"). .v 끝에 붙이면 단일 역본은 텍스트
+          // 바로 뒤(인라인), 다역본(.vline)은 마지막 줄 뒤에 온다.
+          el.appendChild(b);
         }
       });
     }
@@ -775,6 +800,13 @@
             (name) => { card.source = name; loadInterlinearCard(card); saveLayout(); });
           break;
         }
+        case "lexlang":
+          // 사전 표시 언어(한/영) 선택 — 전역 lexLang 전환(사전 카드 공유).
+          openMenu(actEl, [
+            { label: "한국어", value: "ko", on: lexLang === "ko" },
+            { label: "English", value: "en", on: lexLang === "en" },
+          ], (lang) => setLexLang(lang));
+          break;
       }
     }
 
@@ -836,6 +868,30 @@
     }
 
     // ---- F11 presentation: fullscreen the active bible card (성구만 가득) ----
+    // F11 "틀고정" 헤더: 현재 위치를 "{book_full} {chap}장"(예: "창세기 3장")으로 상단에
+    // 고정해 발표 중 "지금 어디를 보는지" 항상 보이게 한다. 책이름은 viewer 기준 정식명
+    // (헤더 pill과 동일 출처), 장 라벨은 i18n card.chapterLabel("{n}장"/"Ch. {n}").
+    function presentBannerText(card) {
+      const navVer = state.viewer[0] || state.primary;
+      const book = bookLongFor(navVer, card.book) || "";
+      const chap = window.I18N
+        ? I18N.t("card.chapterLabel", { n: card.chapter })
+        : card.chapter + "장";
+      return (book + " " + chap).trim();
+    }
+    // Create/refresh the frozen banner on the fullscreen card. No-op unless we're
+    // presenting that exact card — so loadBibleCard can call it unconditionally
+    // (◀▶ / F2 navigation keeps the banner in sync as the chapter changes).
+    function updatePresentBanner(card) {
+      if (!document.fullscreenElement || !fsCardId) return;
+      if (card && card.id !== fsCardId) return;
+      const fc = card || cards.find((c) => c.id === fsCardId);
+      const el = sectionEl(fsCardId);
+      if (!fc || fc.type !== "bible" || !el) return;
+      let b = el.querySelector(".present-banner");
+      if (!b) { b = document.createElement("div"); b.className = "present-banner"; el.appendChild(b); }
+      b.textContent = presentBannerText(fc);
+    }
     function presentToggle() {
       if (document.fullscreenElement) { document.exitFullscreen().catch(() => {}); return; }
       const card = activeBibleCard();
@@ -848,12 +904,13 @@
         hint.className = "present-hint";
         hint.textContent = window.I18N ? I18N.t("present.hint") : "F2 검색 · ESC 나가기";
         el.appendChild(hint);
+        updatePresentBanner(card);   // 틀고정 위치 헤더
       }).catch(() => { fsCardId = null; });
     }
-    // Exiting fullscreen (ESC / F11): drop the hint + tracking.
+    // Exiting fullscreen (ESC / F11): drop the hint + banner + tracking.
     document.addEventListener("fullscreenchange", () => {
       if (!document.fullscreenElement) {
-        document.querySelectorAll(".present-hint").forEach((h) => h.remove());
+        document.querySelectorAll(".present-hint, .present-banner").forEach((h) => h.remove());
         fsCardId = null;
       }
     });

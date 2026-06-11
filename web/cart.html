@@ -1,0 +1,289 @@
+<!DOCTYPE html>
+<!--
+  설교 장바구니 팝아웃 창 (FEAT-07) — 메인과 분리된 독립 윈도우.
+  자체완결(self-contained): index.html 의 무거운 SPA(core/cards/search-notes)를 끌어오지
+  않고, pywebview 브리지(window.pywebview.api)만으로 동작하는 미니멀 큐시트.
+  · 메인과 실시간 양방향 동기화: 백엔드 set_cart 가 양 창에 renderCartItems 푸시.
+  · 성구 클릭 → api.cart_goto → 메인 뷰어가 해당 장/절로 점프(F11 전체화면 포함).
+  · ✕ → api.set_cart(빼고 남은 목록) → 메인에도 즉시 반영.
+-->
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>설교 장바구니</title>
+<style>
+  :root {
+    --bg: #f4f5f7; --fg: #1b1d22; --card: #ffffff; --line: #e2e4e9;
+    --muted: #8a8f99; --accent: #4a6cf7; --hover: #eef1fb; --flash: #d9e4ff;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #1b1d22; --fg: #e8e8ea; --card: #23262d; --line: #33373f;
+      --muted: #8a8f99; --accent: #7d92ff; --hover: #2c3140; --flash: #354063;
+    }
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; }
+  body {
+    background: var(--bg); color: var(--fg);
+    font-family: 'Pretendard','Malgun Gothic','Apple SD Gothic Neo','Noto Sans CJK KR',sans-serif;
+    display: flex; flex-direction: column; font-size: 14px;
+  }
+  header {
+    display: flex; align-items: center; gap: 8px;
+    padding: 12px 14px; border-bottom: 1px solid var(--line);
+  }
+  header .ttl { font-weight: 700; font-size: 15px; }
+  header .count { color: var(--muted); font-size: 12px; }
+  header .sp { flex: 1; }
+  #list { flex: 1; overflow-y: auto; padding: 8px; }
+  .row {
+    display: flex; align-items: center; gap: 8px;
+    padding: 10px 10px; border-radius: 8px; cursor: grab;
+    border: 1px solid transparent;
+    user-select: none; -webkit-user-select: none;
+    transition: transform .18s ease;   /* 재배치 중 비켜주는 슬라이드 */
+  }
+  .row:hover { background: var(--hover); }
+  .row.flash { background: var(--flash); }
+  .row.dragging { opacity: .4; cursor: grabbing; }
+  .row .ref { flex: 1; line-height: 1.4; }
+  .row .del {
+    color: var(--muted); font-size: 14px; padding: 2px 6px; border-radius: 6px;
+    visibility: hidden; flex: none;
+  }
+  .row:hover .del { visibility: visible; }
+  .row .del:hover { color: #e0556b; background: rgba(224,85,107,.12); }
+  .empty { color: var(--muted); text-align: center; padding: 40px 16px; line-height: 1.6; }
+  footer {
+    display: flex; gap: 8px; padding: 10px 12px; border-top: 1px solid var(--line);
+  }
+  .btn {
+    flex: 1; padding: 9px 10px; border-radius: 8px; border: 1px solid var(--line);
+    background: var(--card); color: var(--fg); cursor: pointer; font-size: 13px;
+  }
+  .btn.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+  .btn:active { transform: translateY(1px); }
+  .status {
+    position: fixed; left: 50%; bottom: 64px; transform: translateX(-50%);
+    background: rgba(0,0,0,.82); color: #fff; padding: 8px 14px; border-radius: 999px;
+    font-size: 12.5px; opacity: 0; transition: opacity .2s; pointer-events: none;
+  }
+  .status.show { opacity: 1; }
+</style>
+</head>
+<body>
+  <header>
+    <span class="ttl" id="ttl">설교 장바구니</span>
+    <span class="count" id="count"></span>
+    <span class="sp"></span>
+  </header>
+  <div id="list"><div class="empty" id="empty"></div></div>
+  <footer>
+    <button class="btn primary" id="extract-all">전체 추출</button>
+  </footer>
+  <div class="status" id="status"></div>
+
+<script>
+(function () {
+  "use strict";
+  var L = {};                 // locale table (key -> string)
+  var items = [];             // current cart (mirror of backend)
+  var statusTimer = null;
+  var drag = null;            // 진행 중인 드래그 재배치 상태
+  function cartKey(it) { return it.book_num + "|" + it.chapter + "|" + (it.verses || []).join(","); }
+
+  function api() {
+    return (window.pywebview && window.pywebview.api) || null;
+  }
+  function t(key, fallback) {
+    return (L && L[key]) || fallback;
+  }
+  function esc(s) {
+    return String(s == null ? "" : s)
+      .replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+  }
+  // Collapse [1,2,3,5] -> "1-3,5" for a clean cue label.
+  function vlist(verses) {
+    var v = (verses || []).slice().sort(function (a, b) { return a - b; });
+    if (!v.length) return "";
+    var out = [], start = v[0], prev = v[0];
+    for (var i = 1; i <= v.length; i++) {
+      if (i < v.length && v[i] === prev + 1) { prev = v[i]; continue; }
+      out.push(start === prev ? String(start) : start + "-" + prev);
+      if (i < v.length) { start = prev = v[i]; }
+    }
+    return out.join(",");
+  }
+  function refLabel(it) {
+    var vs = vlist(it.verses);
+    return (it.short_name || "") + " " + it.chapter + (vs ? ":" + vs : "");
+  }
+  function showStatus(msg) {
+    var el = document.getElementById("status");
+    if (!el) return;
+    el.textContent = msg; el.classList.add("show");
+    if (statusTimer) clearTimeout(statusTimer);
+    statusTimer = setTimeout(function () { el.classList.remove("show"); }, 1500);
+  }
+
+  function render() {
+    var list = document.getElementById("list");
+    document.getElementById("count").textContent =
+      items.length ? items.length + (t("cart.unit", "개")) : "";
+    if (!items.length) {
+      list.innerHTML = '<div class="empty">' +
+        esc(t("cart.empty", "담은 성구가 여기에 쌓입니다.")) + "</div>";
+      return;
+    }
+    list.innerHTML = items.map(function (it, i) {
+      return '<div class="row" data-i="' + i + '" draggable="true">' +
+        '<div class="ref">' + esc(refLabel(it)) + "</div>" +
+        '<span class="del" data-del="' + i + '" title="' +
+          esc(t("cart.remove", "빼기")) + '">✕</span>' +
+      "</div>";
+    }).join("");
+    list.querySelectorAll(".row").forEach(function (row) {
+      row.addEventListener("click", function (ev) {
+        if (ev.target.closest("[data-del]")) return;
+        var it = items[Number(row.dataset.i)];
+        if (!it) return;
+        var a = api(); if (!a) return;
+        // re-copy to clipboard (parity with the main row) + jump the main viewer
+        try { a.copy_reference(it.book_num, it.chapter, it.verses || []); } catch (_) {}
+        try { a.cart_goto(it.book_num, it.chapter, it.verses || []); } catch (_) {}
+        row.classList.add("flash");
+        setTimeout(function () { row.classList.remove("flash"); }, 500);
+        showStatus(refLabel(it));
+      });
+    });
+    list.querySelectorAll("[data-del]").forEach(function (x) {
+      x.addEventListener("click", function (ev) {
+        ev.stopPropagation();
+        var i = Number(x.dataset.del);
+        if (isNaN(i) || i < 0 || i >= items.length) return;
+        items = items.slice(0, i).concat(items.slice(i + 1));
+        render();                                  // optimistic; echo reconciles
+        var a = api(); if (a) { try { a.set_cart(items); } catch (_) {} }
+      });
+    });
+  }
+
+  // Backend push channel (set_cart broadcasts the full list to every window).
+  window.renderCartItems = function (next) {
+    next = Array.isArray(next) ? next : [];
+    // 순서·구성이 같으면 재렌더 생략 — 드래그 직후 자기 set_cart 에코가 settle 을
+    // 끊어 깜빡이는 것을 막는다.
+    if (next.length === items.length &&
+        next.every(function (it, i) { return cartKey(it) === cartKey(items[i]); })) {
+      items = next; return;
+    }
+    items = next;
+    render();
+  };
+
+  // ---- 드래그 재배치 (메인 창과 동일한 검증된 패턴: HTML5 draggable + transform
+  // 프리뷰 + drop 커밋). 드래그 중 DOM 을 옮기면 WebView2 에서 드래그가 끊기므로,
+  // 위치는 transform 으로만 미리보고 drop 시점에 한 번만 set_cart 로 커밋한다. ----
+  function wireDnD() {
+    var list = document.getElementById("list");
+    if (!list || list._dndWired) return;
+    list._dndWired = true;
+    list.addEventListener("dragstart", function (e) {
+      var row = e.target.closest(".row");
+      if (!row || !list.contains(row)) return;
+      if (e.target.closest("[data-del]")) { e.preventDefault(); return; }
+      var rows = [].slice.call(list.querySelectorAll(".row")).map(function (el) {
+        var r = el.getBoundingClientRect();
+        return { el: el, idx: Number(el.dataset.i), top: r.top, height: r.height };
+      });
+      drag = { el: row, idx: Number(row.dataset.i), rows: rows, lastIdx: null };
+      row.classList.add("dragging");
+      try { e.dataTransfer.effectAllowed = "move"; e.dataTransfer.setData("text/plain", String(drag.idx)); } catch (_) {}
+    });
+    list.addEventListener("dragover", function (e) {
+      if (!drag) return;
+      e.preventDefault();
+      try { e.dataTransfer.dropEffect = "move"; } catch (_) {}
+      var others = drag.rows.filter(function (c) { return c.el !== drag.el; });
+      var idx = others.length;
+      for (var i = 0; i < others.length; i++) {
+        if (e.clientY < others[i].top + others[i].height / 2) { idx = i; break; }
+      }
+      if (idx === drag.lastIdx) return;
+      drag.lastIdx = idx;
+      layoutGap(idx);
+    });
+    list.addEventListener("drop", function (e) { if (drag) { e.preventDefault(); commitDrag(); } });
+    list.addEventListener("dragend", function () { if (drag) commitDrag(); });
+  }
+  function layoutGap(insertIdx) {
+    var dragRow = null, others = [];
+    drag.rows.forEach(function (c) { if (c.el === drag.el) dragRow = c; else others.push(c); });
+    var newOrder = others.slice(0, insertIdx).concat([dragRow], others.slice(insertIdx));
+    var slotTops = drag.rows.map(function (c) { return c.top; });
+    newOrder.forEach(function (c, i) {
+      var shift = slotTops[i] - c.top;
+      c.el.style.transform = shift ? "translateY(" + shift + "px)" : "";
+    });
+  }
+  function commitDrag() {
+    var d = drag; drag = null;
+    d.el.classList.remove("dragging");
+    var others = d.rows.filter(function (c) { return c.el !== d.el; });
+    var next;
+    if (d.lastIdx == null) { next = items.slice(); }
+    else {
+      var its = others.map(function (c) { return items[c.idx]; });
+      next = its.slice(0, d.lastIdx).concat([items[d.idx]], its.slice(d.lastIdx));
+    }
+    if (next.length === items.length) {
+      items = next;
+      var a = api(); if (a) { try { a.set_cart(items); } catch (_) {} }
+    }
+    render();
+  }
+
+  function extractAll() {
+    var a = api();
+    if (!a || !items.length) { showStatus(t("cart.noneSelected", "담은 성구가 없습니다")); return; }
+    var payload = items.map(function (e) {
+      return { book: e.book_num, chapter: e.chapter, verses: e.verses || [] };
+    });
+    Promise.resolve(a.copy_references(payload)).then(function (r) {
+      if (r && r.ok) showStatus(t("cart.extractedAll", "전체 {n}개를 추출했습니다").replace("{n}", r.n_items));
+      else showStatus(t("cart.extractFail", "추출에 실패했습니다"));
+    }).catch(function () { showStatus(t("cart.extractFail", "추출에 실패했습니다")); });
+  }
+
+  function applyStaticLabels() {
+    document.title = t("cart.windowTitle", "설교 장바구니");
+    document.getElementById("ttl").textContent = t("cart.title", "오늘의 설교 성구");
+    document.getElementById("extract-all").textContent = t("cart.extractAll", "전체 추출");
+    var emp = document.getElementById("empty");
+    if (emp) emp.textContent = t("cart.empty", "담은 성구가 여기에 쌓입니다.");
+  }
+
+  async function boot() {
+    var a = api();
+    if (!a) return;
+    // resolve UI language + its locale table for labels (best-effort)
+    try {
+      var s = await a.get_app_settings();
+      var lang = (s && s.ui_lang) === "en" ? "en" : "ko";
+      document.documentElement.lang = lang;
+      if (a.get_locale) L = (await a.get_locale(lang)) || {};
+    } catch (_) {}
+    applyStaticLabels();
+    try { window.renderCartItems(await a.get_cart()); } catch (_) {}
+  }
+
+  if (window.pywebview && window.pywebview.api) boot();
+  else window.addEventListener("pywebviewready", boot);
+  document.getElementById("extract-all").addEventListener("click", extractAll);
+  wireDnD();   // #list 위임 1회 바인딩 (drag-reorder)
+})();
+</script>
+</body>
+</html>
