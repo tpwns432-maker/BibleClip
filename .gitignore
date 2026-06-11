@@ -31,6 +31,9 @@ image.jpg
 *.png
 !icon.png
 
+# 유지보수자 로컬 인계 산출물(미추적 보존): 제미나이 리포트/diff, 핸드오프, 미사용 외장 모듈
+_local/
+
 # Bible versions + original-language data — copyright guard (v1.0.3~).
 # Only copyright-clean data is tracked / redistributed:
 #   · KRV.SQLite3      개역한글 (대한성서공회, 저작재산권 만료 — royalty-free)
