@@ -369,6 +369,12 @@ def _main():
     )
     api.set_window(window)  # lets the clipboard monitor push events back to JS
 
+    # Every child window we spawn (right-click 사전 팝업 등) is tracked here so the
+    # main window's close can tear them all down (BUG-SYS). pywebview's event loop
+    # (webview.start) runs until ALL windows close, so a lingering child kept the
+    # process alive with an orphaned window on the desktop ('zombie').
+    _child_windows = []
+
     def _on_closing():
         # Persist window geometry + any in-memory state (last position, etc.).
         try:
@@ -378,17 +384,32 @@ def _main():
         except Exception:
             pass
         library.save_settings()
+        # Tear down any open child windows so closing the main window exits the
+        # whole app cleanly (no orphaned 사전/장바구니 popups left on the desktop).
+        for child in list(_child_windows):
+            try:
+                child.destroy()
+            except Exception:
+                pass  # already closed by the user, or destroy unsupported
+        _child_windows.clear()
 
     window.events.closing += _on_closing
 
-    _popup_count = [0]
-
     def _open_popup(title, html):
         # Independent dict window (right-click). Unique name per call so
-        # pywebview doesn't reuse/replace an existing window.
-        _popup_count[0] += 1
-        webview.create_window(title, html=html, width=460, height=560,
-                              min_size=(360, 360))
+        # pywebview doesn't reuse/replace an existing window. Tracked + self-
+        # unregistering so the main window's close can destroy any still open.
+        child = webview.create_window(title, html=html, width=460, height=560,
+                                      min_size=(360, 360))
+        _child_windows.append(child)
+        def _forget(*_):  # pywebview may pass the window to the handler
+            if child in _child_windows:
+                _child_windows.remove(child)
+        try:
+            child.events.closed += _forget
+        except Exception:
+            pass
+        return child
 
     api.set_popup_factory(_open_popup)
 

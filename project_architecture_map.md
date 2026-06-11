@@ -4,13 +4,14 @@
 >
 > **유지보수 규칙 (STRICT)**: `api.py`/`routes/*`에 API 추가, `app.js`(프론트)에 이벤트 디스패처/컴포넌트 추가, 파일 구조·경로 변경 시 **반드시 이 파일을 동시에 갱신**한다. 커밋·작업완료 보고 전 "지명도 파일 업데이트 완료 여부"를 체크포인트로 확인한다.
 
-- **현재 버전**: v1.1.3 (`bibleclip/_version.py` = `__version__`, ASCII-only single source of truth)
-- **killswitch**: `recommend_version` = 1.1.2 (직전 버전 규칙)
+- **현재 버전**: v1.1.4 (`bibleclip/_version.py` = `__version__`, ASCII-only single source of truth)
+- **killswitch**: `recommend_version` = 1.1.3 (직전 버전 규칙)
+- **★ v1.1.4 내용(안정화 분리 배포)**: ① **설교 장바구니 영속성(FEAT-08)** — 장바구니를 백엔드 파일(`userdata/sermon_cart.json`, `bibleclip/cart.py` `Cart`)에 저장. 기존 `localStorage`는 pywebview 랜덤 loopback 포트로 origin이 매번 바뀌어 재시작 시 고아가 되던 문제(진짜 원인). `get_initial.cart`로 부팅 복구 + 추가/삭제/재정렬마다 `set_cart` write-through. 브리지 `get_cart`/`set_cart`(NoteRoutes), 프론트 `restoreCart`/`saveCart`(search-notes.js). ② **좀비 자식 창 수정(BUG-SYS)** — `app.py`가 생성 자식 창을 `_child_windows`로 추적, 메인 `closing` 시 일괄 `destroy()`(자식이 먼저 닫히면 `closed` 이벤트로 자동 해제). ③ **설정값 재시작 복귀 수정** — `library.load_settings`: (a) 폰트 클램프 `min(30)`→**`min(400)`**(set_font_size와 정렬; 30 초과 저장이 매 실행 30으로 되돌려지던 버그), (b) **`DEFAULT_SETTINGS`에 `ui_lang`/`reading_font`/`auto_copy_top_result` 추가**(load는 기본값에 있는 키만 수용 → 누락 키는 저장돼도 드롭되어 복귀했음), (c) core.js boot의 `ui_lang` 동기화를 프론트→백엔드에서 **백엔드 권위**(`init.ui_lang`→`I18N.setLang`)로 뒤집음(localStorage 휘발분이 올바른 백엔드 값을 덮던 문제). v1.1.5 예정: FEAT-07 장바구니 팝아웃(실시간 양방향 동기화) + Part 3 UI/UX.
 - **v1.1.3 내용**: **KJV+ 성경 기본 동봉**. `bible_versions/KJV+.SQLite3`(KJV 1769+Strong's, 퍼블릭 도메인)가 `.gitignore`로 미추적이라 CI checkout에 없어 그동안 릴리즈에서 빠졌었음(로컬 build_web.ps1만 동봉). `.gitignore` 예외로 추적 + CI `build.yml` Windows/macOS Assemble에 KJV+ 복사 추가 + exe.config CI 동봉. ⚠️ **빌드 정의가 둘(local `build_web.ps1`/`build_mac.sh` ↔ CI `.github/workflows/build.yml`)이라 동봉물 변경 시 양쪽 다 고쳐야 함**(이번 드리프트의 교훈).
 - **★ v1.1.2 내용(일부 PC "런타임 에러" 진범 해결)**: 다운로드 zip의 **MOTW(Zone.Identifier=3)** 가 번들 `Python.Runtime.dll`에 묻어 .NET이 "인터넷 어셈블리" 로드를 거부(`Failed to resolve Python.Runtime.Loader.Initialize`)하던 문제. **로컬 복사본은 표식 없어 정상, 다운로드본만 실패** → startup_error.log로 확진(ZoneId=3 + ReferrerUrl=zip). 수정: `app.py _strip_motw`(clr import 전 번들 .dll/.pyd/.exe의 Zone.Identifier ADS 1회 제거, `.motw_cleared` 마커) + `BibleClipWeb.exe.config`의 `loadFromRemoteSources`(읽기전용 위치 백스톱, build_web.ps1 동봉). .NET·WebView2·Python 버전·보안SW 전부 무죄였음.
 - **v1.1.1 내용**: 실행 실패 의심으로 CI Windows 빌드 Python 3.12→3.13 + `requirements.txt` 정확 버전 핀(재현성). 시작 실패 안내·로깅: 실제 .NET/WebView2/보안SW 탐지 후 원인별 분기(_diagnostics) + `userdata/startup_error.log` 기록 + 안내 페이지. (실제 진범은 v1.1.2의 MOTW였음 — 이 로깅 덕에 잡음.)
 - **v1.1.0 내용**: FEAT-01 장바구니 DnD+FLIP / FEAT-02 매직 포맷터 매크로+태그칩 / FEAT-03 묵상 노트 **슬라이딩 레일 패널**(독립 카드에서 전환) / FEAT-04 카드별 대조 토글(역본 쌍 고정) / FEAT-05 병렬 복사 부스터 / BUG-01·BUG-i18n·FIX-01 핫픽스 / KJV+ 동봉 + 원전 분해 소스 선택
-- **마지막 맵 동기화**: 2026-06-07 (v1.1.3 KJV+ 동봉/추적 반영)
+- **마지막 맵 동기화**: 2026-06-11 (v1.1.4 장바구니 영속성/좀비 창 수정 반영)
 
 ---
 
@@ -134,7 +135,7 @@ BibleClip Project/
   - **약칭 오버라이드**: `parse_reference(text)` / `load_alias_overrides()` / `list_alias_overrides()` / `add_alias_override(alias, book_num)` / `remove_alias_override(alias)`
   - **참조→출력**: `build_output(text)` → {kind:'reference'|'keyword',...} / `format_reference(book_num, chapter, verses, order=None)` → (text, n_parts) — 템플릿에 `{content2}`/`{version2}`가 있고 2개 이상 역본이면 `Formatter.format_parallel()`로 병렬 결합(FEAT-05), (text, 2) 반환
   - **모니터링**: `start_monitoring(read_fn, write_fn, on_reference, on_keyword)` / `stop_monitoring()` / `set_poll_interval(seconds)` / `notify_clipboard_written(text)`
-  - 상태: `dbs`{name:BibleDB}, `bethlehem_strongs`/`bethlehem_wonjun`, `lexicon_ko`/`lexicon_en`, `settings`, `user_config`, `is_premium`, `notes`(Notes), `_monitor`
+  - 상태: `dbs`{name:BibleDB}, `bethlehem_strongs`/`bethlehem_wonjun`, `lexicon_ko`/`lexicon_en`, `settings`, `user_config`, `is_premium`, `notes`(Notes), `cart`(Cart, v1.1.4 설교 장바구니 영속성), `_monitor`
   - 상수: `DEFAULT_SETTINGS`(20+ 키)
 
 ### core/installer.py — 업뎃 zip 다운/추출 + 업데이터 스크립트 (순수/테스트가능)
@@ -181,11 +182,12 @@ BibleClip Project/
 | `korean.py` | 순수파이썬 한국어 정규화 | `_PARTICLES`/`_STOPWORDS`; `strip_particle(token)`/`tokenize(text)` |
 | `i18n.py` | 백엔드 i18n(웹로케일 공유) | `DEFAULT_LANG='ko'`; `_table(lang)`/`t(key, lang, **fmt)`/`resolve_ui_lang(settings=None)` |
 | `notes.py` | 묵상 노트(절-단위) | `NOTES_FILE="user_notes.json"`; **class `Notes`**: `get/set/delete(book,chapter,verse)`, `all()`, `for_chapter(book,chapter)` |
+| `cart.py` | 설교 장바구니 영속성(FEAT-08, v1.1.4) | `CART_FILE="sermon_cart.json"`; `_sanitize(items)`; **class `Cart`**: `all()`, `replace(items)`(write-through). localStorage가 랜덤 포트로 휘발하던 문제를 백엔드 파일로 대체 |
 | `text_utils.py` | 한글조합/정제/검색 | `convert_qwerty_to_hangul(text)`/`assemble_hangul(jamo)`/`clean_text(text)`/`despace(s)`/`trigrams(s)` |
 | `constants.py` | 정적 데이터 | `QWERTY_TO_HANGUL`, `CHOSEONG`/`JUNGSEONG`/`JONGSEONG`, `KOREAN_BOOK_MAP`{name→(id,abbr,full)}, `ENGLISH_BOOK_MAP`, `ENGLISH_VERSIONS`(set) |
 | `theme.py` | 색상 팔레트 | `LIGHT_THEME`/`DARK_THEME`/`CTK`(각 (light,dark) 튜플) |
 | `update.py` | GitHub 업뎃 체크 | `parse_version(s)`/`urlopen_resilient(req, timeout)`/`fetch_latest_release(timeout=8)`/`select_platform_asset(assets)` |
-| `_version.py` | 버전 단일 소스 | `__version__="1.1.3"` |
+| `_version.py` | 버전 단일 소스 | `__version__="1.1.4"` |
 
 **의존 그래프**: `_version` ← `config` ← (대부분); `korean`/`constants`/`theme` 독립; `morph` Kiwi-옵셔널; `text_utils` ← `constants`.
 
@@ -219,7 +221,7 @@ BibleClip Project/
 ### webui/app.py — pywebview 창 부트스트랩/생명주기
 - `main()`(공개진입) → **`_strip_motw()`(시작 즉시, clr import 전: 다운로드 zip이 번들 .dll/.pyd/.exe에 남긴 MOTW=Zone.Identifier ADS를 제거 → .NET이 Python.Runtime.dll 로드 거부하던 문제 해소. `_MEIPASS` 기준, `.motw_cleared` 마커로 1회)** → `_main()`(Library+Api+창생성+워치독). 시작 실패 시: `_diagnostics(exc)`로 실제 .NET/WebView2/보안SW 탐지 → `_log_startup_error()`(`userdata/startup_error.log` 기록) → `_show_runtime_error(diag)` 원인별 분기(.NET 없음→.NET / WebView2 없음→WebView2 / 둘 다 있으면→보안 차단 안내).
 - 진단 프로브: `_is_runtime_error(exc)`(텍스트 휴리스틱), `_dotnet_release()`(레지스트리 NDP\v4\Full Release≥461808=4.7.2+), `_webview2_version()`(EdgeUpdate Clients GUID `pv`), `_security_software()`(Services 레지스트리에서 안랩/V3/ASTx 등 키워드 매칭)
-- 기타: `_index_path()`, `_blocked_html`, `_conn_error_html(lang)`, `_on_closing()`, `_open_popup(title, html)`, `_conn_watchdog()`(15s ERR_CONNECTION_REFUSED 가이드)
+- 기타: `_index_path()`, `_blocked_html`, `_conn_error_html(lang)`, `_on_closing()`(geometry 저장 + **자식 창 일괄 destroy=BUG-SYS v1.1.4**), `_open_popup(title, html)`(생성 창을 `_child_windows`에 추적+`closed`로 자동 해제, 반환), `_conn_watchdog()`(15s ERR_CONNECTION_REFUSED 가이드)
 - 상수: `DOTNET_PAGE_URL`, `WEBVIEW2_PAGE_URL`(설치본 자동다운 대신 안내 페이지), `_SECURITY_KW`
 - locale: `dotnet.errTitle/errBody`, `webview2.errTitle/errBody`, `secblock.errTitle/errBody`
 
@@ -263,11 +265,13 @@ BibleClip Project/
 | `get_note` | `(book, chapter, verse)` | {text, ts}|None |
 | `set_note` | `(book, chapter, verse, text)` | 생성/수정/삭제(빈텍스트=삭제) {ok, note} |
 | `delete_note` | `(book, chapter, verse)` | {ok} |
+| `get_cart` | `()` | 영속 장바구니 [{book_num,chapter,verses,short_name}] (FEAT-08, v1.1.4) |
+| `set_cart` | `(items)` | 전체 교체+저장(write-through) {ok, items} (FEAT-08, v1.1.4) |
 
 **SystemRoutes (`routes/system.py`) — 부트/설정/업뎃/폰트/출력포맷:**
 | 메서드 | 인자 | 역할 |
 |---|---|---|
-| `get_initial` | `()` | ★부트 1회 페이로드(versions/primary/viewer/books/last/dark_mode/font_size/lex_lang/ui_lang/reading_font/interlin_sources/is_premium/web_cards_layout/version…), `_booted` set |
+| `get_initial` | `()` | ★부트 1회 페이로드(versions/primary/viewer/books/last/dark_mode/font_size/lex_lang/ui_lang/reading_font/interlin_sources/is_premium/web_cards_layout/**cart**(v1.1.4)/version…), `_booted` set |
 | `get_locale` | `(lang)` | 프론트 i18n 문자열 테이블 |
 | `list_fonts` / `get_font` | `()` / `(file)` | 커스텀 읽기폰트 목록 / base64 폰트 바이트 |
 | `set_dark_mode` | `(on)` | 다크모드 저장 |
@@ -335,7 +339,7 @@ BibleClip Project/
 - 앱설정모달: `openAppSettings()`/`closeAppSettings()`/`setSeg(...)`/`setSwitch(...)`/`wireAppSettings()`/`wireSettingsActions()`
 - 버전칩(FLIP애니): `renderVerChips()`/`flipChips(prev)`/`updateViewerVersions(newViewer)`/`wireChipDrag()`/`layoutChipGap(insertIdx)`/`commitChipDrag()`
 - 모니터링: `setStatus(active)`/`wireMonitor()`/`logReference(entry)`/`renderLog()`/`flagUnread()`
-- **장바구니(FEAT-01 DnD+FLIP)**: `addToCart(item)`/`removeFromCart(i)`/`clearCart()`/`saveCart()`/`cartKey(it)`/`renderCart()`/`wireCartDnD(list)`/`flipReorder(list, mutate)`(드래그 중 FLIP 실시간 위치 애니메이션)/`commitCartFromDOM(list)`(DnD 후 DOM 순서→카트 배열 동기화, dragend)/`extractCart(items, allMode)`/`extractAllCart()`/`extractSelectedCart()`/`toggleSelectAll(on)`/`openCart()`/`closeCart()`/`wireCart()`
+- **장바구니(FEAT-01 DnD+FLIP, +FEAT-08 영속성 v1.1.4)**: `addToCart(item)`/`removeFromCart(i)`/`clearCart()`/`saveCart()`(**백엔드 `set_cart` write-through + localStorage 캐시**)/`restoreCart(items)`(부팅 시 `get_initial.cart`로 복구, core.js boot에서 호출)/`cartKey(it)`/`renderCart()`/`wireCartDnD(list)`/`flipReorder(list, mutate)`(드래그 중 FLIP 실시간 위치 애니메이션)/`commitCartFromDOM(list)`(DnD 후 DOM 순서→카트 배열 동기화, dragend)/`extractCart(items, allMode)`/`extractAllCart()`/`extractSelectedCart()`/`toggleSelectAll(on)`/`openCart()`/`closeCart()`/`wireCart()`
 - F2 빠른검색: `openQuickSearch()`/`closeQuickSearch()`/`quickJump(q)`
 - 커스텀 읽기폰트: `loadFontsList()`/`injectFont(family, file)`/`applyReadingFont(family)`/`selectReadingFont(...)`/`bootReadingFont(family)`/`fontStep(size)`/`nextFontSize(size, d)`/`wireReadingFontMenu()`
 - 약칭관리: `setAliasBook(num)`/`renderAliasList()`/`addAlias()`/`openAliasManager()`/`closeAliasManager()`/`wireAliasManager()`
