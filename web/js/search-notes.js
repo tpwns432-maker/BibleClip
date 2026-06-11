@@ -263,14 +263,8 @@
   }
 
   // ---- App settings modal (⚙ gear) ----
-
-  function syncLangSeg() {
-    const seg = document.querySelector('.seg[data-seg="lang"]');
-    if (!seg) return;
-    const opts = seg.querySelectorAll(".opt");
-    if (opts[0]) opts[0].classList.toggle("on", lexLang === "ko");
-    if (opts[1]) opts[1].classList.toggle("on", lexLang === "en");
-  }
+  // v1.1.5: 사전 언어 toolbar 토글/설정 제거 — syncLangSeg 폐기. 사전 언어는 프로그램
+  // 언어 추종 + 사전 카드 pill / 사전 창 드롭다운에서 표면별 전환.
 
   function setSeg(seg, current, onPick, eq) {
     if (!seg) return;
@@ -333,12 +327,8 @@
       (val) => api().set_app_setting("poll_interval", parseFloat(val)),
       (a, b) => parseFloat(a) === parseFloat(b));
 
-    setSeg($("opt-lex-lang"), s.lex_lang, (val) => {
-      lexLang = val;
-      syncLangSeg();
-      if (lexCur) showStrong(lexCur.code, lexCur.verse, lexCur.book, lexCur.chapter);
-      api().set_app_setting("lex_lang", val);
-    });
+    // v1.1.5: 사전 '기본 언어' 설정 제거 — 사전 언어는 프로그램 언어 추종 + 사전 카드
+    // pill / 사전 창 드롭다운에서 표면별 전환(opt-lex-lang UI 삭제됨).
 
     setSwitch($("opt-search-nav"), s.search_click_navigates, (on) => {
       state.searchClickNav = on;
@@ -651,6 +641,23 @@
         showView("search");
         runSearch(keyword);
       },
+      // FEAT-07: live cart sync from another window (the pop-out, or our own
+      // set_cart echo). RE-RENDER ONLY — never write back, so there's no echo
+      // loop. Skip mid-drag so an in-progress reorder isn't yanked out.
+      onCartChanged(items) {
+        if (cartDragFrom !== null) return;
+        cart = Array.isArray(items) ? items : [];
+        pruneCartSel();
+        renderCart();
+        const cd = $("cart-drawer");
+        if (cd && cd.hidden) { const dot = $("cart-dot"); if (dot) dot.hidden = false; }
+      },
+      // FEAT-07: pop-out cart clicked a verse → jump the main viewer (works even
+      // in F11 fullscreen; the cart window keeps focus on the other monitor).
+      cartGoto(book, chapter, verses) {
+        showView("viewer");
+        CardManager.goToRef(book, chapter, verses);
+      },
       onUpdateProgress,
       onUpdateReady,
       onUpdateError,
@@ -693,6 +700,7 @@
   // 삭제/재정렬에도 유지). 세션 한정(localStorage 미영속).
   const cartSel = new Set();
   let cartDragFrom = null;   // FEAT-01: 드래그 중인 항목의 원본 인덱스(드롭 시 재배치)
+  let cartDrag = null;       // FEAT-01 재구축(v1.1.5): 현재 진행 중인 칩 드래그 상태
   // cart 에 더 이상 없는 키는 선택 집합에서 정리.
   function pruneCartSel() {
     const live = new Set(cart.map(cartKey));
@@ -765,70 +773,116 @@
     list.querySelectorAll("[data-del]").forEach((x) => {
       x.addEventListener("click", (ev) => { ev.stopPropagation(); removeFromCart(Number(x.dataset.del)); });
     });
-    wireCartDnD(list);
+    // DnD 리스너는 #cart-list 위임으로 wireCart()에서 1회만 — 매 렌더 재바인딩 불필요.
     if (foot) foot.hidden = false;
     syncCartSelAll();
   }
 
-  // FEAT-01: 장바구니 드래그앤드롭 — 드래그 중 다른 항목이 실시간으로 자리를 비켜주는
-  // FLIP 애니메이션. dragover 마다 끌고 있는 행을 커서 위치(행 위/아래 절반)에 맞춰 DOM
-  // 에서 실제로 옮기고, 밀려난 형제들을 transform 트랜지션으로 부드럽게 이동시킨다.
-  // 마우스를 놓으면(dragend) 눈에 보이는 DOM 순서를 그대로 cart 배열에 커밋하므로
-  // '전체/선택 추출'이 재배치 순서를 그대로 따른다(상태가 곧 순서).
-  function flipReorder(list, mutate) {
-    const before = new Map();
-    list.querySelectorAll(".cart-item").forEach((el) =>
-      before.set(el, el.getBoundingClientRect().top));
-    mutate();                                    // DOM 순서 변경(Last)
-    list.querySelectorAll(".cart-item").forEach((el) => {
-      const oldTop = before.get(el);
-      if (oldTop == null) return;
-      const dy = oldTop - el.getBoundingClientRect().top;   // Invert
+  // FEAT-01 DnD 재구축(v1.1.5) — 역본 칩과 동일한 검증된 패턴.
+  // ★ 진단: 기존 cart DnD 는 dragover 마다 끌고 있는 행을 insertBefore 로 DOM 에서 직접
+  // 옮겼는데, Chromium/WebView2 에서 **드래그 중인 엘리먼트를 DOM 이동하면 진행 중인
+  // HTML5 드래그가 중단**된다 → 고스트만 뜨고 재배치/커밋이 안 됐다. 역본 칩(정상 동작)은
+  // 이를 피해 드래그 중엔 DOM 을 건드리지 않고 transform(translateY) 프리뷰만, drop 시점에
+  // 한 번만 실제 순서를 커밋한다. cart 도 같은 방식으로 재구축한다.
+  // 리스너는 #cart-list 에 위임으로 1회 바인딩(renderCart 가 innerHTML 만 교체).
+  function wireCartDnD() {
+    const list = $("cart-list");
+    if (!list || list._cartDnDWired) return;
+    list._cartDnDWired = true;
+
+    list.addEventListener("dragstart", (e) => {
+      const row = e.target.closest(".cart-item");
+      if (!row || !list.contains(row)) return;
+      if (e.target.closest("[data-del]") || e.target.closest(".cart-cb")) { e.preventDefault(); return; }
+      const rows = [...list.querySelectorAll(".cart-item")].map((el) => {
+        const r = el.getBoundingClientRect();
+        return { el, idx: Number(el.dataset.cart), top: r.top, height: r.height };
+      });
+      cartDrag = { el: row, idx: Number(row.dataset.cart), rows, lastIdx: null };
+      cartDragFrom = cartDrag.idx;                 // onCartChanged 재렌더 가드
+      row.classList.add("dragging");
+      try {
+        e.dataTransfer.effectAllowed = "move";
+        e.dataTransfer.setData("text/plain", String(cartDrag.idx));
+      } catch (_) {}
+    });
+
+    list.addEventListener("dragover", (e) => {
+      if (!cartDrag) return;
+      e.preventDefault();
+      try { e.dataTransfer.dropEffect = "move"; } catch (_) {}
+      // 끌고 있는 행을 제외한 형제들의 중점과 커서 Y 를 비교해 삽입 인덱스 산출.
+      const others = cartDrag.rows.filter((c) => c.el !== cartDrag.el);
+      let idx = others.length;
+      for (let i = 0; i < others.length; i++) {
+        if (e.clientY < others[i].top + others[i].height / 2) { idx = i; break; }
+      }
+      if (idx === cartDrag.lastIdx) return;
+      cartDrag.lastIdx = idx;
+      layoutCartGap(idx);
+    });
+
+    list.addEventListener("drop", (e) => { if (cartDrag) { e.preventDefault(); commitCartDrag(); } });
+    list.addEventListener("dragend", () => { if (cartDrag) commitCartDrag(); });  // 밖에 떨궈도 정착
+  }
+
+  // 라이브 프리뷰: 모든 행(투명해진 드래그 원본 포함)이 insertIdx 로 드롭됐을 때의
+  // 자리로 translateY 슬라이드 — DOM 순서는 그대로 두고 transform 만(드래그 안 끊김).
+  // 원래 슬롯 top 들을 그대로 재사용하므로 행 간 간격에 의존하지 않는다(gap-agnostic).
+  function layoutCartGap(insertIdx) {
+    const dragRow = cartDrag.rows.find((c) => c.el === cartDrag.el);
+    const others = cartDrag.rows.filter((c) => c.el !== cartDrag.el);
+    const newOrder = [...others.slice(0, insertIdx), dragRow, ...others.slice(insertIdx)];
+    const slotTops = cartDrag.rows.map((c) => c.top);   // 원래 슬롯 위치
+    newOrder.forEach((c, i) => {
+      const shift = slotTops[i] - c.top;
+      c.el.style.transform = shift ? `translateY(${shift}px)` : "";
+    });
+  }
+
+  function commitCartDrag() {
+    const drag = cartDrag;
+    cartDrag = null;
+    cartDragFrom = null;
+    drag.el.classList.remove("dragging");
+    const others = drag.rows.filter((c) => c.el !== drag.el);
+    const next = drag.lastIdx == null
+      ? cart.slice()
+      : (() => {
+          const items = others.map((c) => cart[c.idx]);
+          return [...items.slice(0, drag.lastIdx), cart[drag.idx], ...items.slice(drag.lastIdx)];
+        })();
+    // 화면(transform 프리뷰)에서 보이던 위치 → 재렌더 후 자연 위치로 FLIP 정착(점프 방지).
+    const prev = new Map();
+    drag.rows.forEach((c) => {
+      const it = cart[c.idx];
+      if (it) prev.set(cartKey(it), c.el.getBoundingClientRect().top);
+    });
+    if (next.length === cart.length) { cart = next; saveCart(); }
+    renderCart();
+    flipCartSettle(prev);
+  }
+
+  // FLIP 정착: 재렌더된 행을 직전(프리뷰) 위치에서 자연 위치로 부드럽게 안착시킨다.
+  function flipCartSettle(prev) {
+    const list = $("cart-list");
+    if (!list) return;
+    const els = [...list.querySelectorAll(".cart-item")];
+    els.forEach((el) => {
+      const it = cart[Number(el.dataset.cart)];
+      const before = it && prev.get(cartKey(it));
+      if (before == null) return;
+      const dy = before - el.getBoundingClientRect().top;
       if (!dy) return;
       el.style.transition = "none";
       el.style.transform = `translateY(${dy}px)`;
-      requestAnimationFrame(() => {               // Play
-        el.style.transition = "transform .18s ease";
+    });
+    requestAnimationFrame(() => {
+      els.forEach((el) => {
+        if (!el.style.transform) return;
+        el.style.transition = "transform .2s cubic-bezier(.2,.8,.25,1)";
         el.style.transform = "";
       });
-    });
-  }
-  // 화면(DOM)에 보이는 순서를 cart 배열에 반영. data-cart 는 렌더 시점의 원본 인덱스라
-  // 'DOM 순서대로 원본 항목을 다시 모으면' 곧 재배치 결과가 된다.
-  function commitCartFromDOM(list) {
-    const order = [...list.querySelectorAll(".cart-item")].map((el) => Number(el.dataset.cart));
-    const next = order.map((i) => cart[i]).filter(Boolean);
-    if (next.length === cart.length) { cart = next; saveCart(); }
-  }
-  function wireCartDnD(list) {
-    list.querySelectorAll(".cart-item").forEach((row) => {
-      row.addEventListener("dragstart", (e) => {
-        cartDragFrom = Number(row.dataset.cart);
-        requestAnimationFrame(() => row.classList.add("dragging"));  // 드래그 이미지엔 미반영
-        try {
-          e.dataTransfer.effectAllowed = "move";
-          e.dataTransfer.setData("text/plain", String(cartDragFrom));  // Firefox는 데이터 필요
-        } catch (_) {}
-      });
-      row.addEventListener("dragend", () => {
-        row.classList.remove("dragging");
-        commitCartFromDOM(list);
-        cartDragFrom = null;
-        renderCart();                  // data-cart 재동기화 + 리스너 재바인딩 (cartSel 유지)
-      });
-      row.addEventListener("dragover", (e) => {
-        if (cartDragFrom === null) return;
-        e.preventDefault();
-        try { e.dataTransfer.dropEffect = "move"; } catch (_) {}
-        const dragEl = list.querySelector(".cart-item.dragging");
-        if (!dragEl || dragEl === row) return;
-        const rect = row.getBoundingClientRect();
-        const after = (e.clientY - rect.top) > rect.height / 2;
-        const ref = after ? row.nextElementSibling : row;
-        if (ref === dragEl) return;              // 이미 그 자리 → no-op
-        flipReorder(list, () => list.insertBefore(dragEl, ref));
-      });
-      row.addEventListener("drop", (e) => { e.preventDefault(); });  // 실제 커밋은 dragend
     });
   }
 
@@ -879,11 +933,14 @@
     const tog = $("cart-toggle");
     if (tog) tog.addEventListener("click", () => $("cart-drawer").hidden ? openCart() : closeCart());
     const cl = $("cart-close"); if (cl) cl.addEventListener("click", closeCart);
+    const po = $("cart-popout");   // FEAT-07: 분리된 장바구니 독립 창 열기
+    if (po) po.addEventListener("click", () => { try { api().open_cart_window(); } catch (_) {} });
     const clr = $("cart-clear"); if (clr) clr.addEventListener("click", clearCart);
     const exAll = $("cart-extract-all"); if (exAll) exAll.addEventListener("click", extractAllCart);
     const exSel = $("cart-extract-sel"); if (exSel) exSel.addEventListener("click", extractSelectedCart);
     const selAll = $("cart-selall-cb");
     if (selAll) selAll.addEventListener("change", (e) => toggleSelectAll(e.target.checked));
+    wireCartDnD();   // #cart-list 위임 1회 바인딩 (drag-reorder)
     renderCart();
   }
 
@@ -895,9 +952,14 @@
   const notesSel = new Set();   // book:chapter:verse 키 기준 선택(세션 한정)
   function noteRowKey(n) { return `${n.book}:${n.chapter}:${n.verse}`; }
   function notesNavVer() { return state.viewer[0] || state.primary; }
-  function buildNotesText(list) {
+  // Part3-5: 텍스트 파일 익스포트 시 구절 덩어리 사이에 명확한 구분선을 강제 주입해,
+  // 줄바꿈이 섞인 긴 메모에서도 구절 경계가 또렷하게 보이도록 한다. 클립보드 복사는
+  // 기존대로 빈 줄(\n\n)만 — 구분선은 파일 저장 경로에서만 쓴다(divider=true).
+  const NOTES_DIVIDER = "--------------------------------------------------";  // 50
+  function buildNotesText(list, divider) {
     const v = notesNavVer();
-    return list.map((n) => `${bookShortFor(v, n.book) || ""} ${n.chapter}:${n.verse}\n${n.text}`).join("\n\n");
+    const sep = divider ? `\n\n${NOTES_DIVIDER}\n\n` : "\n\n";
+    return list.map((n) => `${bookShortFor(v, n.book) || ""} ${n.chapter}:${n.verse}\n${n.text}`).join(sep);
   }
   function notesTargets() {              // 선택분, 없으면 전체
     const sel = notesData.filter((n) => notesSel.has(noteRowKey(n)));
@@ -990,7 +1052,7 @@
       const list = notesTargets();
       if (!list.length) return;
       let r = null;
-      try { r = await api().export_text_file(buildNotesText(list), "bibleclip_notes.txt"); } catch (_) {}
+      try { r = await api().export_text_file(buildNotesText(list, true), "bibleclip_notes.txt"); } catch (_) {}
       if (r && r.ok) toast(I18N.t("notes.exported"));
       else if (!r || r.error !== "cancelled") toast(I18N.t("notes.exportFail"));
     });
@@ -1765,16 +1827,8 @@
       if (btn) btn.addEventListener("click", () => CardManager.addCard(type));
     });
 
-    // Dictionary language toggle (한글/영어) — also re-renders open lexicon cards.
-    const langSeg = document.querySelector('.seg[data-seg="lang"]');
-    if (langSeg) {
-      langSeg.querySelectorAll(".opt").forEach((opt, i) => {
-        opt.addEventListener("click", () => {
-          lexLang = i === 0 ? "ko" : "en";
-          if (lexCur) showStrong(lexCur.code, lexCur.verse, lexCur.book, lexCur.chapter);
-        });
-      });
-    }
+    // v1.1.5: 사전 언어 toolbar 토글 제거 — 사전 언어는 프로그램 언어 추종 + 사전 카드
+    // 헤더 pill / 사전 창 드롭다운에서 표면별 전환(CardManager 가 처리).
 
     // Font size A− / A+ (persisted as viewer_font_size).
     const changeFont = (d) => {

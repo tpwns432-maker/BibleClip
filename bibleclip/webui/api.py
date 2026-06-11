@@ -41,6 +41,10 @@ class Api(SystemRoutes, BibleRoutes, NoteRoutes):
         self.lib = library
         self._window = None        # pywebview window, injected by webui.app.main()
         self._popup_factory = None  # callable(title, html) -> new native window
+        # FEAT-07 설교 장바구니 팝아웃 창(독립 윈도우). 메인과 실시간 양방향 동기화 +
+        # 창에서 성구 클릭 시 메인 뷰어 점프(cart_goto). 팩토리는 webui.app 가 주입한다.
+        self._cart_window = None        # the pop-out cart window (for pushes), or None
+        self._cart_window_factory = None  # callable() -> opens/returns the cart window
         self._update = None        # last fetch_latest_release info (for install)
         self.monitoring = False
         # Set when the front-end first reaches the bridge (get_initial) — proof
@@ -59,6 +63,29 @@ class Api(SystemRoutes, BibleRoutes, NoteRoutes):
         """Receive a callable that opens a new native window from (title, html).
         Supplied by webui.app (which owns `webview`); None in headless tests."""
         self._popup_factory = factory
+
+    def set_cart_window_factory(self, factory):
+        """Receive a callable() that opens (or returns the already-open) pop-out
+        sermon-cart window (FEAT-07). Supplied by webui.app; None in headless
+        tests, so open_cart_window degrades to a no-op there."""
+        self._cart_window_factory = factory
+
+    def _broadcast_cart(self, items):
+        """Push the current cart to EVERY window that shows it — the main window's
+        drawer (``onCartChanged``) and the pop-out window (its own
+        ``renderCartItems`` global) — so add/remove/reorder in either stays in
+        sync live (FEAT-07 실시간 양방향 동기화). The receivers only RE-RENDER (they
+        never write back), so there's no echo loop."""
+        self._push('onCartChanged', items)
+        win = self._cart_window
+        if win is not None:
+            try:
+                payload = json.dumps(items, ensure_ascii=False)
+                win.evaluate_js(
+                    f"window.renderCartItems && window.renderCartItems({payload})")
+            except Exception:
+                # Window was closed out from under us — drop the stale handle.
+                self._cart_window = None
 
     def _push(self, fn, *args):
         """Invoke ``window.bibleclip.<fn>(...args)`` in the web view.

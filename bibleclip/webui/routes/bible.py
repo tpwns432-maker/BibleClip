@@ -175,17 +175,20 @@ class BibleRoutes:
                     lines.append(txt[:80] + ('…' if len(txt) > 80 else ''))
         return {'code': code, 'headword': headword, 'reading': reading, 'lines': lines}
 
-    def open_dict_window(self, code, lang='ko', book=None, chapter=None,
+    def open_dict_window(self, code, lang=None, book=None, chapter=None,
                          verse=None, theme='light'):
-        """Open an independent native window with the full dict entry (the
-        right-click behaviour from the desktop app). No-op without a factory."""
+        """Open an independent native window with the dict entry (right-click
+        behaviour). Fetches BOTH ko/en entries so the popup can offer an in-window
+        한국어/English 선택 리스트(둘 다 설치됐을 때). The default shown language
+        follows the program language(ui); ``lang`` (the surface's current choice)
+        takes precedence when given. No-op without a factory."""
         if self._popup_factory is None:
             return {'ok': False}
-        entry = self.lookup_strong(code, lang, book, chapter, verse)
-        # `lang` above is the dictionary (lexicon) language; the popup chrome
-        # (title, headings) uses the separate UI language.
         ui = i18n.resolve_ui_lang(self.lib.settings)
-        html = _dict_page_html(code, entry, theme, ui)
+        entries = {lg: self.lookup_strong(code, lg, book, chapter, verse)
+                   for lg in ('ko', 'en')}
+        initial = lang if lang in ('ko', 'en') else ui   # 기본 = 프로그램 언어
+        html = _dict_page_html(code, entries, theme, ui, initial)
         try:
             self._popup_factory(i18n.t('dict.popupTitle', ui, code=code), html)
         except Exception:

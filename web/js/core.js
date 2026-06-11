@@ -252,10 +252,11 @@ window.BC = window.BC || {};
     state.fontSize = init.font_size || 11;
     applyFontScale();
     bootReadingFont(init.reading_font || "");   // inject+apply saved custom reading font
-    lexLang = init.lex_lang === "en" ? "en" : "ko";
+    // 사전 기본 표시 언어 = 프로그램 언어(ui_lang) 추종 (v1.1.5: 별도 lex_lang 토글 폐기).
+    // I18N 은 위에서 init.ui_lang 으로 이미 정렬됨 → getLang() 이 곧 프로그램 언어.
+    lexLang = (window.I18N && I18N.getLang() === "en") ? "en" : "ko";
     if (init.lex) state.lexAvail = init.lex;
     state.isPremium = init.is_premium !== false;  // default premium unless backend says false
-    syncLangSeg();
     state.searchClickNav = !!init.search_click_navigates;
     state.autoCopyTop = !!init.auto_copy_top_result;
     const verLabel = $("app-ver");

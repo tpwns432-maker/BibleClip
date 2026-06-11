@@ -659,12 +659,15 @@ html[data-theme="dark"] .search-highlight {
 
 /* ---- 묵상 노트 (Phase 3): badge · context menu · editor modal ---- */
 .note-badge {
-  cursor: pointer; margin: 0 5px 0 1px; font-size: .82em; vertical-align: middle;
+  /* Part3-2: 절 텍스트 끝 뒤에 오므로 왼쪽에 간격(이전엔 절 앞이라 오른쪽 간격) */
+  cursor: pointer; margin: 0 1px 0 5px; font-size: .82em; vertical-align: middle;
   opacity: .85; transition: transform .12s, opacity .12s; line-height: 1;
   /* 드래그-선택 복사 시 📄 가 클립보드 텍스트에 섞이지 않도록 선택 대상에서 제외 */
   -webkit-user-select: none; user-select: none;
 }
 .note-badge:hover { opacity: 1; transform: scale(1.18); }
+/* Part3-2: F11 프리젠테이션에서는 순수 성경 텍스트만 — 노트 알림 아이콘 숨김 */
+.mcard:fullscreen .note-badge { display: none !important; }
 
 .ctx-menu {
   position: fixed; z-index: 1200; min-width: 148px;
@@ -834,7 +837,11 @@ html[data-theme="dark"] .note-modal-back { background: rgba(0,0,0,.55); }
 .note-ts { font-size: 10px; font-weight: 400; color: var(--text-dim); }
 .note-text { font-size: 12px; color: var(--text); margin-top: 3px; white-space: pre-wrap; word-break: break-word; line-height: 1.5; }
 
-.cart-item { display: flex; align-items: center; gap: 9px; padding-right: 28px; cursor: grab; }
+.cart-item { display: flex; align-items: center; gap: 9px; padding-right: 28px; cursor: grab;
+  user-select: none; -webkit-user-select: none;
+  /* 재배치 중 다른 칩이 비켜주는 슬라이드(역본 칩 .ver-chips .pill.sel 과 동일) — 이게
+     없으면 layoutCartGap 의 transform 이 툭툭 점프한다. */
+  transition: transform .18s ease; }
 .cart-item .log-ref { flex: 1; min-width: 0; }
 /* FEAT-01: 드래그앤드롭 — 끌리는 항목은 흐리게(자리는 유지), 밀려난 항목은 FLIP 으로
    transform 트랜지션 이동(JS에서 인라인 부여). 별도 삽입선 불필요(실시간 이동이 곧 표시). */
@@ -874,6 +881,20 @@ html[data-theme="dark"] .note-modal-back { background: rgba(0,0,0,.55); }
   background: var(--card-bg); border: 1px solid var(--card-border);
   border-radius: 999px; padding: 5px 14px; opacity: .72;
   pointer-events: none; z-index: 10;
+}
+/* F11 "틀고정" 헤더 — 현재 위치({book_full} {chap}장)를 상단에 고정해 발표 중 어디를
+   보는지 항상 보이게 한다. flex 컬럼(.mcard:fullscreen)의 order:-1 자식이라 맨 위에
+   고정되고, 그 아래 .card-body(flex:1; overflow)만 스크롤 → 진짜 엑셀식 틀고정. */
+.present-banner {
+  order: -1; flex: none;
+  padding: 2.2vh 9vw 1.7vh;
+  /* 본문 성구와 동일한 읽기 글꼴로 통일(.scripture 와 같은 var) */
+  font-family: var(--reading-font, var(--font-ui));
+  font-size: clamp(17px, 2.3vw, 40px); font-weight: 800;
+  color: var(--text); background: var(--card-bg);
+  border-bottom: 1.5px solid var(--card-border);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  letter-spacing: .01em; z-index: 9;
 }
 .qs-overlay {
   position: fixed; inset: 0; z-index: 320;

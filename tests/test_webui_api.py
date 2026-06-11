@@ -432,6 +432,37 @@ def main():
     assert api.get_initial()['cart'] == r['items']     # boot payload restores it
     print("cart persistence (set/get/get_initial round-trip) OK")
 
+    # 설교 장바구니 팝아웃 창 + 양방향 동기화 (FEAT-07, v1.1.5). Fake windows record
+    # evaluate_js so we can assert the broadcast/jump without a real webview.
+    class _FakeWin:
+        def __init__(self):
+            self.calls = []
+
+        def evaluate_js(self, js):
+            self.calls.append(js)
+
+    main_win, cart_win = _FakeWin(), _FakeWin()
+    api.set_window(main_win)
+    assert api.open_cart_window()['ok'] is False        # no factory yet → no-op
+    opened = []
+
+    def _factory():
+        api._cart_window = cart_win
+        opened.append(1)
+        return cart_win
+    api.set_cart_window_factory(_factory)
+    assert api.open_cart_window()['ok'] is True and opened == [1]
+    api.set_cart([{'book_num': 10, 'chapter': 1, 'verses': [1], 'short_name': '창'}])
+    assert any('onCartChanged' in c for c in main_win.calls)   # main drawer synced
+    assert any('renderCartItems' in c for c in cart_win.calls)  # pop-out synced
+    main_win.calls.clear()
+    assert api.cart_goto(10, 1, [1])['ok'] is True
+    assert any('cartGoto' in c for c in main_win.calls)        # jumps the main viewer
+    api._cart_window = None
+    api.set_cart([])                                           # closed window → no raise
+    api.set_window(None)                                       # restore headless state
+    print("cart pop-out window (open/broadcast/cart_goto) OK")
+
     # 패치노트 모달 가드 (Phase 4): show once, then dismissed. Stub save_settings
     # so the test never writes to disk.
     api.lib.save_settings = lambda: None
