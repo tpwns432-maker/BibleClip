@@ -658,14 +658,35 @@
   }
 
   // ---- Sermon cart / cue sheet (오늘의 설교 성구, 2순위) ----
-  // Items persist in localStorage; clicking one re-copies it (same path as a log
-  // row). Added via the hover ＋ on search results / activity-log rows. The cart
-  // drawer is mutually exclusive with the activity-log drawer.
+  // Clicking an item re-copies it (same path as a log row). Added via the hover
+  // ＋ on search results / activity-log rows. The cart drawer is mutually
+  // exclusive with the activity-log drawer.
+  //
+  // FEAT-08 영속성: the cart is persisted BACKEND-side (userdata/sermon_cart.json,
+  // surfaced via get_initial.cart and restoreCart below). localStorage was
+  // unreliable — pywebview serves from 127.0.0.1 on a random port each launch, so
+  // its origin (and thus localStorage) changed every run and orphaned the cart.
+  // We keep a localStorage cache only as a pre-boot fast-paint; the backend list
+  // is authoritative and replaces it on boot.
   const CART_KEY = "bibleclip_cart";
   let cart = [];
   try { cart = JSON.parse(localStorage.getItem(CART_KEY) || "[]"); if (!Array.isArray(cart)) cart = []; } catch (_) { cart = []; }
 
-  function saveCart() { try { localStorage.setItem(CART_KEY, JSON.stringify(cart)); } catch (_) {} }
+  // Write-through: backend file (authoritative, origin-independent) + a
+  // localStorage cache. saveCart() is sync everywhere; the bridge call is
+  // fire-and-forget so reorder/add/remove stay snappy.
+  function saveCart() {
+    try { localStorage.setItem(CART_KEY, JSON.stringify(cart)); } catch (_) {}
+    try { api().set_cart(cart); } catch (_) {}
+  }
+  // Restore the persisted cart from the boot payload (get_initial.cart). Backend
+  // is the source of truth, so this REPLACES the localStorage fast-paint.
+  function restoreCart(items) {
+    cart = Array.isArray(items) ? items.slice() : [];
+    cartSel.clear();
+    try { localStorage.setItem(CART_KEY, JSON.stringify(cart)); } catch (_) {}
+    renderCart();
+  }
   function cartKey(it) { return `${it.book_num}|${it.chapter}|${(it.verses || []).join(",")}`; }
 
   // 선택 추출용 체크 상태 — cartKey 기준(인덱스가 아니라 항목 동일성으로 추적해

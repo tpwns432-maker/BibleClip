@@ -227,10 +227,15 @@ window.BC = window.BC || {};
     // Runs first so static UI is translated before the data-driven render starts.
     if (window.I18N) { try { await I18N.boot(); } catch (_) {} }
     const init = await api().get_initial();
-    // Keep the backend's ui_lang aligned with the front-end's saved choice, so
-    // Python-rendered surfaces (kill-switch, dict popups, preview) match the UI.
-    if (window.I18N && init.ui_lang !== I18N.getLang()) {
-      try { api().set_app_setting("ui_lang", I18N.getLang()); } catch (_) {}
+    // Language persistence: the BACKEND settings file is authoritative. The
+    // front-end's i18n stores its choice in localStorage, but pywebview serves
+    // from 127.0.0.1 on a random port each launch, so that localStorage origin
+    // changes every run and the saved language is orphaned → reverted to ko.
+    // The backend (bibleclip_settings.json) survives, so apply ITS ui_lang to the
+    // front-end when they diverged (was backwards: we used to push the front-end's
+    // reverted value back, clobbering the correctly-persisted backend choice).
+    if (window.I18N && init.ui_lang && init.ui_lang !== I18N.getLang()) {
+      try { await I18N.setLang(init.ui_lang); } catch (_) {}
     }
     state.versions = init.versions;
     state.versionsNames = init.versions.map((v) => v.name);
@@ -263,6 +268,11 @@ window.BC = window.BC || {};
 
     // 라이브 UI 언어 전환은 search-notes.js 의 retranslateViewport(단일 진입점)가
     // 처리한다 — 카드 헤더 라벨/툴팁 + 동적 뷰를 한 곳에서 다시 그린다(훅 누락 방지).
+
+    // FEAT-08: restore the backend-persisted sermon cart (survives restart;
+    // replaces the localStorage fast-paint, which the random loopback port made
+    // unreliable). Must run before/with wireCart so the drawer renders restored.
+    restoreCart(init.cart || []);
 
     wireGlobalControls();
     wireMonitor();

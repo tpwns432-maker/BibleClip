@@ -183,8 +183,46 @@ def main():
         print("(kiwipiepy absent — morpheme search no-ops, trigram fallback) OK")
 
     alias_check(lib)
+    settings_persist_check()
 
     print("\nALL CORE CHECKS PASSED ✅")
+
+
+def settings_persist_check():
+    """Settings must survive a save → reload round-trip (v1.1.4 fix). load_settings
+    only accepts keys present in DEFAULT_SETTINGS and used to clamp the font to 30,
+    so a big font + reading_font/ui_lang/auto_copy_top_result silently reverted on
+    restart. Redirects the settings file to a temp path so the real one is safe."""
+    import tempfile
+    import bibleclip.core.library as libmod
+    from bibleclip.core.library import Library
+
+    orig_base, orig_file = libmod.BASE_DIR, libmod.SETTINGS_FILE
+    libmod.BASE_DIR = tempfile.mkdtemp()
+    libmod.SETTINGS_FILE = 'test_settings.json'
+    try:
+        # the previously-dropped keys must exist in the defaults now
+        for k in ('ui_lang', 'reading_font', 'auto_copy_top_result'):
+            assert k in Library.DEFAULT_SETTINGS, k
+        lib = Library()
+        lib.settings['viewer_font_size'] = 80          # big-screen / 방송 송출
+        lib.settings['reading_font'] = 'MyBroadcastFont'
+        lib.settings['ui_lang'] = 'en'
+        lib.settings['auto_copy_top_result'] = True
+        lib.save_settings()
+        r = Library().settings                          # fresh load from disk
+        assert r['viewer_font_size'] == 80, r['viewer_font_size']
+        assert r['reading_font'] == 'MyBroadcastFont', r['reading_font']
+        assert r['ui_lang'] == 'en', r['ui_lang']
+        assert r['auto_copy_top_result'] is True, r['auto_copy_top_result']
+        # clamp matches set_font_size (8–400), not the stale 30
+        lib2 = Library()
+        lib2.settings['viewer_font_size'] = 9999
+        lib2.save_settings()
+        assert Library().settings['viewer_font_size'] == 400
+        print("settings persistence (font80/reading_font/ui_lang/auto_copy; clamp=400) OK")
+    finally:
+        libmod.BASE_DIR, libmod.SETTINGS_FILE = orig_base, orig_file
 
 
 def alias_check(lib):

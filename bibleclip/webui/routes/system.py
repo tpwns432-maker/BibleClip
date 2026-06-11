@@ -79,6 +79,9 @@ class SystemRoutes:
             # Persisted modular-card layout (None until the web UI saves one; the
             # front-end builds a sensible default when this is null).
             'web_cards_layout': s.get('web_cards_layout'),
+            # 설교 장바구니 — restored on boot (FEAT-08). Backend-persisted so it
+            # survives the random loopback port that orphaned localStorage.
+            'cart': self.lib.cart.all(),
             'version': __version__,
         }
 

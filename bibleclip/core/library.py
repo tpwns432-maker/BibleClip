@@ -52,6 +52,12 @@ class Library:
         'seen_version': None,            # last version whose patch-note modal was acknowledged
         'dismissed_patches': [],         # versions with "다시 보지 않기" checked
         'lex_lang': 'ko',                 # default dictionary language (ko/en)
+        # UI 표시 언어 (i18n) 및 커스텀 읽기 글꼴 — 반드시 여기 있어야 load_settings 가
+        # 디스크 값을 받아들인다(없으면 'k in self.settings' 가 False → 저장돼도 드롭되어
+        # 재시작마다 기본값으로 되돌아가던 버그). reading_font='' = 기본 Pretendard.
+        'ui_lang': 'ko',                  # UI display language (ko/en) — persisted
+        'reading_font': '',               # custom reading font family ('' = default)
+        'auto_copy_top_result': False,    # 검색 최고 점수 결과 자동 클립보드 복사
         'poll_interval': 0.5,             # clipboard polling interval (seconds)
         'search_click_navigates': False,  # search hit click also jumps the viewer
         'dark_mode': False,
@@ -85,6 +91,12 @@ class Library:
         # 묵상 노트 store (userdata/user_notes.json). Fail-soft.
         from bibleclip.notes import Notes
         self.notes = Notes()
+
+        # 설교 장바구니 store (userdata/sermon_cart.json) — survives restart
+        # (FEAT-08). localStorage was unreliable (random loopback port → origin
+        # changes each launch), so persistence is backend-side. Fail-soft.
+        from bibleclip.cart import Cart
+        self.cart = Cart()
 
         self.load_databases()
         self.load_bethlehem()
@@ -226,12 +238,15 @@ class Library:
         bn = str(self.settings.get('book_name', 'short_ko'))
         self.settings['book_name'] = 'long_ko' if bn.startswith('long') else 'short_ko'
 
-        # Clamp font size
+        # Clamp font size. The cap MUST match set_font_size's 8–400 (v1.0.6 lifted
+        # it for big-screen/방송 송출). It was left at 30 here, so any size >30 the
+        # user saved was silently clamped back to 30 on the next launch — the
+        # "글씨 크기가 재시작하면 되돌아온다" bug.
         try:
             self.settings['viewer_font_size'] = int(self.settings.get('viewer_font_size', 11))
         except (TypeError, ValueError):
             self.settings['viewer_font_size'] = 11
-        self.settings['viewer_font_size'] = max(8, min(30, self.settings['viewer_font_size']))
+        self.settings['viewer_font_size'] = max(8, min(400, self.settings['viewer_font_size']))
 
     def save_settings(self):
         """Persist settings to disk. The caller is responsible for stamping any

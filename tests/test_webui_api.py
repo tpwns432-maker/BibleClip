@@ -414,6 +414,24 @@ def main():
     assert api.get_note(10, 1, 1) is None
     print("notes CRUD (set/get/chapter/delete) OK")
 
+    # 설교 장바구니 영속성 (FEAT-08, v1.1.4) — stub the disk write and start empty
+    # so the test never touches userdata/sermon_cart.json. set_cart replaces the
+    # whole list (sanitizing junk); get_cart + get_initial.cart reflect it.
+    api.lib.cart._save = lambda: True
+    api.lib.cart.items = []
+    assert api.get_cart() == []
+    r = api.set_cart([
+        {'book_num': 10, 'chapter': 1, 'verses': ['1', '2', 3], 'short_name': '창'},
+        {'book': 470, 'chapter': 3, 'verses': [16]},   # book→book_num alias
+        'garbage', {'no_book': True},                  # dropped
+    ])
+    assert r['ok'] and len(r['items']) == 2, r
+    assert r['items'][0] == {'book_num': 10, 'chapter': 1,
+                             'verses': [1, 2, 3], 'short_name': '창'}, r['items'][0]
+    assert api.get_cart() == r['items']
+    assert api.get_initial()['cart'] == r['items']     # boot payload restores it
+    print("cart persistence (set/get/get_initial round-trip) OK")
+
     # 패치노트 모달 가드 (Phase 4): show once, then dismissed. Stub save_settings
     # so the test never writes to disk.
     api.lib.save_settings = lambda: None

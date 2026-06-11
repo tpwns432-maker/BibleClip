@@ -4,6 +4,26 @@ BibleClip의 버전별 변경 내용입니다. 최신 버전이 위에 옵니다
 
 ---
 
+## v1.1.4 — 안정화: 설정/장바구니 영속성 + 좀비 자식 창 수정
+- **설정값이 재시작 시 되돌아가던 문제 수정** — ① `load_settings`의 글꼴 크기 클램프가 `min(30)`로
+  남아 있어, `set_font_size`(8–400, 방송 송출용으로 캡 해제)로 30 초과 크기를 저장해도 다음 실행에
+  30으로 되돌려지던 버그를 `min(400)`로 정렬. ② `reading_font`(읽기 글꼴)·`ui_lang`(화면 언어)·
+  `auto_copy_top_result`(검색 자동복사)가 `DEFAULT_SETTINGS`에 없어 — `load_settings`는 기본값에
+  존재하는 키만 받아들이므로 — 저장돼도 로드 시 드롭되어 매번 기본값으로 복귀하던 문제를 키 추가로
+  해결. ③ 부팅 시 `ui_lang`을 프론트(localStorage, 랜덤 포트로 휘발)→백엔드로 거꾸로 밀어 올바른
+  백엔드 값을 덮어쓰던 동기화를 **백엔드 권위**(`init.ui_lang`→`I18N.setLang`)로 뒤집음.
+- **설교 장바구니 영속성(FEAT-08)** — 장바구니를 백엔드 파일(`userdata/sermon_cart.json`)에
+  저장하도록 전환. 기존엔 `localStorage`에만 저장했는데, pywebview가 매 실행 시 127.0.0.1의
+  **랜덤 포트**로 페이지를 서빙해 origin(= localStorage 격리 키)이 매번 바뀌면서 이전 장바구니가
+  고아가 되어 재시작 시 비워지던 문제를 해결. `get_initial.cart`로 부팅 시 복구하고, 추가·삭제·
+  재정렬마다 `set_cart`로 write-through. (브리지: `get_cart`/`set_cart`, `bibleclip/cart.py`)
+- **좀비 자식 창 수정(BUG-SYS)** — 메인 창을 닫아도 우클릭으로 열어둔 '원전 분해' 사전 팝업 창이
+  바탕화면에 남던 문제 수정. 생성한 자식 창을 추적(`_child_windows`)했다가 메인 창 `closing` 시
+  모두 `destroy()` → pywebview 이벤트 루프(모든 창이 닫혀야 종료)가 깔끔히 종료. 자식 창이
+  사용자에 의해 먼저 닫히면 `closed` 이벤트로 추적 목록에서 자동 해제.
+
+---
+
 ## v1.1.3 — KJV(흠정역) 성경 기본 동봉
 - **KJV+ 성경 동봉** — KJV(1769) + Strong's numbers(`bible_versions/KJV+.SQLite3`, 퍼블릭 도메인)를
   기본 배포에 포함. 이 파일이 `.gitignore`(저작권 가드)로 추적되지 않아 CI checkout에 아예 없었고,
