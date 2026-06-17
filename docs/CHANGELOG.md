@@ -4,6 +4,21 @@ BibleClip의 버전별 변경 내용입니다. 최신 버전이 위에 옵니다
 
 ---
 
+## v1.1.7 — 읽던 위치 유지(역본 변경·F11) + 기본 글꼴(나눔고딕/나눔명조) 동봉
+- **읽기 위치 보존** — 카드를 다시 그리는 동작에서 보던 절을 유지(장 맨 위로 튐 방지). 폰트 변경에
+  쓰던 절 앵커 스냅샷/복원 인프라(BUG-01: `snapshotAnchors`/`realignAnchors`, v1.1.6에서 split 컬럼까지
+  일반화)를 다음에도 적용: ① 역본 추가/제거(`updateViewerVersions`) ② 역본 순서 변경(`commitChipDrag`)
+  ③ 보기 모드 전환(view_mode 세그). `reloadAllBible()`을 Promise 반환으로 바꿔 재렌더 완료 후 복원.
+- **F11 전체화면 진입/해제 위치 보존** — 전체화면 시 글자가 커지며 본문이 reflow돼 보던 절이 앞쪽으로
+  밀리던 문제 수정(`presentToggle` 진입 전 스냅샷→전환 후 realign; `fullscreenchange` 해제 시 마지막
+  읽던 절 `card.verse`로 복원). interleave·split·연동 원어 모두 적용.
+- **기본 읽기 글꼴 동봉(나눔고딕/나눔명조)** — 저작권 무료(OFL) 한국어 본문 글꼴 2종을
+  `web/fonts/reading/`에 동봉. `web/`가 `--add-data`로 통째 번들이라 빌드 스크립트 추가 수정 없이 모든
+  플랫폼에 포함. 백엔드 `list_fonts`/`get_font`가 **번들 built-in 폴더 + 사용자 fonts 폴더**를 함께
+  스캔(built-in 우선, family=파일명이라 한글 메뉴 라벨). 설정 ▸ 읽기 ▸ 읽기 글꼴에서 즉시 선택.
+
+---
+
 ## v1.1.6 — 본문 보기 모드(절별 대조 / 병렬 독서) + 장바구니 명칭 정리
 - **본문 보기 모드 신설(view_mode)** — 설정 ▸ 읽기 ▸ [본문 보기] 세그먼트로 여러 역본 표출 방식을 선택.
   `'interleave'`(절별 대조; 기존 `renderMultiVersesInto` 세로 교차, 기본값) / `'split'`(병렬 독서; 역본별
