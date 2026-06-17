@@ -76,6 +76,8 @@ class SystemRoutes:
             'is_premium': bool(getattr(self.lib, 'is_premium', True)),
             'search_click_navigates': bool(s.get('search_click_navigates', False)),
             'auto_copy_top_result': bool(s.get('auto_copy_top_result', False)),
+            # v1.1.6 본문 보기 모드 (절별 대조 'interleave' / 병렬 독서 'split').
+            'view_mode': 'split' if s.get('view_mode') == 'split' else 'interleave',
             # Persisted modular-card layout (None until the web UI saves one; the
             # front-end builds a sensible default when this is null).
             'web_cards_layout': s.get('web_cards_layout'),
@@ -193,6 +195,8 @@ class SystemRoutes:
         # UI 표시 언어 (i18n). 프론트가 전환 시 기록 → Python-렌더 표면(킬스위치·사전
         # 팝업·미리보기)이 같은 언어로 출력. 새 언어 추가 시 프론트 SUPPORTED 와 동반 확장.
         'ui_lang': {'ko', 'en'},
+        # v1.1.6 본문 보기 모드 (view-only): 절별 대조 / 병렬 독서 좌우 컬럼.
+        'view_mode': {'interleave', 'split'},
         'reading_font': 'any',   # 읽기 글꼴 family 이름('' = 기본 Pretendard)
         'poll_interval': 'float',
         # The web card layout is an opaque, front-end-owned blob (a list of card
@@ -212,6 +216,7 @@ class SystemRoutes:
             'reading_font': s.get('reading_font') or '',
             'poll_interval': float(s.get('poll_interval', 0.5) or 0.5),
             'auto_copy_top_result': bool(s.get('auto_copy_top_result', False)),
+            'view_mode': 'split' if s.get('view_mode') == 'split' else 'interleave',
             'web_cards_layout': s.get('web_cards_layout'),
             'version': __version__,
             'repo_url': REPO_HOME_URL,

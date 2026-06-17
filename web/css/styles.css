@@ -527,6 +527,33 @@ body {
   vertical-align: middle; letter-spacing: .02em; font-family: var(--font-ui);
 }
 
+/* ---- v1.1.6 병렬 독서(split) 컬럼 레이아웃 ----
+   split 모드에서 .card-body.scripture 는 스크롤하지 않는 가로 flex 컨테이너가 되고,
+   그 안의 역본별 .scol 컬럼이 각자 독립 스크롤한다(절 앵커 기반 양방향 싱크). */
+.card-body.scripture.split-cols {
+  display: flex; gap: 0; padding: 0; overflow: hidden;
+}
+.scol {
+  flex: 1 1 0; min-width: 200px;        /* 좁아지면(3+ 역본) 가로 스크롤 허용 */
+  overflow-y: auto; overflow-x: hidden;
+  padding: 2px 14px 16px;
+}
+.scol + .scol { border-left: 1px solid var(--card-border); }
+.scol-head {
+  position: sticky; top: 0; z-index: 1;
+  background: var(--card-bg);
+  font-family: var(--font-ui); font-size: 10.5px; font-weight: 800;
+  color: var(--accent); letter-spacing: .02em;
+  padding: 6px 0 5px; margin-bottom: 4px;
+  border-bottom: 1px solid var(--card-border);
+}
+.scol::-webkit-scrollbar { width: 10px; }
+.scol::-webkit-scrollbar-thumb {
+  background: var(--card-border); border-radius: 999px;
+  border: 3px solid var(--card-bg);
+}
+.scol::-webkit-scrollbar-thumb:hover { background: var(--text-dim); }
+
 /* Strong's number chip (inline, in scripture + interlinear) */
 .strong {
   display: inline-block; font-family: var(--font-ui);
@@ -875,6 +902,10 @@ html[data-theme="dark"] .note-modal-back { background: rgba(0,0,0,.55); }
   font-size: calc(clamp(26px, 3.4vw, 60px) * var(--reading-scale)); line-height: 1.7;
 }
 .mcard:fullscreen .card-body .v { margin-bottom: .5em; }
+/* 전체화면 병렬 독서(split): 컬럼 레이아웃 유지 + 컬럼별 여백/스크롤 */
+.mcard:fullscreen .card-body.split-cols { display: flex; overflow: hidden; padding: 0; }
+.mcard:fullscreen .scol { padding: 5vh 4vw; }
+.mcard:fullscreen .scol-head { font-size: calc(14px * var(--reading-scale)); margin-bottom: 2vh; }
 .present-hint {
   position: absolute; bottom: 16px; left: 50%; transform: translateX(-50%);
   font-size: 13px; color: var(--text-dim);

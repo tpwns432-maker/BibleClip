@@ -327,6 +327,15 @@
       (val) => api().set_app_setting("poll_interval", parseFloat(val)),
       (a, b) => parseFloat(a) === parseFloat(b));
 
+    // v1.1.6 본문 보기 모드 — 절별 대조 / 병렬 독서(좌우 컬럼). 즉시 재렌더(재시작 불필요).
+    setSeg($("opt-view-mode"), state.viewMode, (val) => {
+      const next = val === "split" ? "split" : "interleave";
+      if (next === state.viewMode) return;
+      state.viewMode = next;
+      api().set_app_setting("view_mode", next);
+      CardManager.reloadAllBible();
+    });
+
     // v1.1.5: 사전 '기본 언어' 설정 제거 — 사전 언어는 프로그램 언어 추종 + 사전 카드
     // pill / 사전 창 드롭다운에서 표면별 전환(opt-lex-lang UI 삭제됨).
 

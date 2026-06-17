@@ -4,6 +4,23 @@ BibleClip의 버전별 변경 내용입니다. 최신 버전이 위에 옵니다
 
 ---
 
+## v1.1.6 — 본문 보기 모드(절별 대조 / 병렬 독서) + 장바구니 명칭 정리
+- **본문 보기 모드 신설(view_mode)** — 설정 ▸ 읽기 ▸ [본문 보기] 세그먼트로 여러 역본 표출 방식을 선택.
+  `'interleave'`(절별 대조; 기존 `renderMultiVersesInto` 세로 교차, 기본값) / `'split'`(병렬 독서; 역본별
+  좌우 컬럼 `.scol` 분할). `DEFAULT_SETTINGS` + `_APP_KEYS` + `get_initial`에 등재, 변경 시 즉시 재렌더
+  (`reloadAllBible`). **view-only — 복사/클립보드 출력은 보기 모드와 무관**.
+- **병렬 독서 스크롤 동기화** — 컬럼은 각자 독립 스크롤하되, 어느 컬럼을 움직여도 형제 컬럼 + 연동
+  '원전 분해' 카드가 **절 앵커(절 ID + 뷰포트 분율) 기준으로 양방향 추종**. 기존 BUG-01 인프라
+  (`anchorVerseOf`/`verseTopFraction`/`progScroll`)를 컬럼 단위로 일반화(`syncFrom`/`scriptureScrollers`/
+  `scrollElToVerse`). 역본 간 절 분할·결손 차이는 가장 가까운 절로 정렬(`findVerseEl`).
+- **카드별 [대조] 버튼(FEAT-04) 제거** — `card.parallel`/`parallelVersion` 및 헤더 pill·`handleAction`
+  분기 삭제, 보기 방식은 전역 설정으로 일원화. 구버전 레이아웃의 `parallel` 필드는 `restore`에서 조용히
+  무시(마이그레이션 안전).
+- **'설교 장바구니' → '장바구니' 명칭 단순화** — 사용자 노출 문자열(nav·드로어 제목·팝아웃 창·담기
+  메뉴, ko/en)을 정리(백엔드 파일명 `sermon_cart.json` 등 내부 식별자는 유지).
+
+---
+
 ## v1.1.5 — 다중 창 확장 · 발표(F11) 개선 · 장바구니 DnD 재구축 (TODO Part 3)
 - **FEAT-07 설교 장바구니 팝아웃 창** — 장바구니를 독립 창(`web/cart.html`)으로 분리. 메인과 **실시간
   양방향 동기화**(`set_cart`가 모든 창에 `onCartChanged`/`renderCartItems` 브로드캐스트), 창에서 성구

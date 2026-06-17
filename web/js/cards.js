@@ -58,9 +58,6 @@
         };
         if (c.type === "bible") {
           o.version = c.version; o.book = c.book; o.chapter = c.chapter; o.locked = !!c.locked;
-          if (c.parallel && c.parallelVersion) {   // FEAT-04 대조 쌍 영속화
-            o.parallel = true; o.parallelVersion = c.parallelVersion;
-          }
         } else {
           o.link = c.link || null;
           if (c.type === "interlinear" && typeof c.source === "string") o.source = c.source;
@@ -116,8 +113,8 @@
             rawId: raw.id, id: "", type: "bible", version,
             book: raw.book || state.lastBook, chapter: raw.chapter || state.lastChapter,
             locked: !!raw.locked,
-            parallel: !!raw.parallel,             // FEAT-04 대조 쌍 복원
-            parallelVersion: typeof raw.parallelVersion === "string" ? raw.parallelVersion : null,
+            // v1.1.6: 구버전 레이아웃의 parallel/parallelVersion(FEAT-04)은 조용히 무시
+            // (보기 방식은 전역 view_mode로 일원화 — 마이그레이션 안전).
             x: raw.x, y: raw.y, w: raw.w, h: raw.h, z: raw.z,
           });
           bibleN++;
@@ -270,9 +267,8 @@
     function headerHTML(card) {
       const grip = `<span class="card-grip" data-tip="드래그하여 이동" data-i18n-tip="card.tip.move">⠿</span>`;
       if (card.type === "bible") {
-        // FEAT-04: 다국어 대조(parallel) 토글 pill. 켜지면 대조 역본명을, 꺼지면 "대조".
-        const parOn = !!(card.parallel && card.parallelVersion);
-        const parLabel = parOn ? esc(card.parallelVersion) : I18N.t("card.parallelOff");
+        // v1.1.6: 카드별 대조(parallel) pill 제거 — 보기 방식은 전역 설정(view_mode:
+        // 절별 대조 / 병렬 독서)으로 일원화. 역본 선택은 상단 칩바가 담당.
         return `<div class="card-hd">${grip}<span class="card-title" data-i18n="card.type.bible">${typeLabel("bible")}</span>` +
           `<span class="hd-mini hd-nav disabled" data-act="back" data-tip="이전 구절로" data-i18n-tip="card.tip.prevVerse">◀</span>` +
           `<span class="hd-mini hd-nav disabled" data-act="forward" data-tip="다음 구절로" data-i18n-tip="card.tip.nextVerse">▶</span>` +
@@ -281,7 +277,6 @@
             `<span class="hd-pill dropdown" data-act="chapter">${I18N.t("card.chapterLabel", { n: card.chapter || 1 })}</span>` +
             `<span class="hd-mini" data-act="prev" data-tip="이전 장" data-i18n-tip="card.tip.prevChapter">‹</span>` +
             `<span class="hd-mini" data-act="next" data-tip="다음 장" data-i18n-tip="card.tip.nextChapter">›</span>` +
-            `<span class="hd-pill dropdown${parOn ? " on" : ""}" data-act="parallel" data-tip="다국어 대조 보기 (역본 쌍)" data-i18n-tip="card.tip.parallel">${parLabel}</span>` +
           `</span>` +
           `<span class="card-hd-spacer"></span>` +
           `<span class="card-lock" data-act="lock">${LOCK_OPEN}</span>` +
@@ -389,14 +384,24 @@
       await booksFor(navVer);
       const chs = await chaptersFor(navVer, card.book);
       if (!chs.includes(card.chapter)) card.chapter = chs[0] || 1;
-      // Versions to show: the card's 대조(parallel) pair when on, else the global
-      // viewer selection (cardVersions decides — render + copy agree).
+      // Versions to show: the global viewer selection (cardVersions — render +
+      // copy agree). v1.1.6: view_mode decides the layout.
       const viewerVers = cardVersions(card);
       const chapDataArr = await Promise.all(
         viewerVers.map((v) => api().get_chapter(v, card.book, card.chapter))
       );
       const b2 = bodyEl(card.id);
-      if (b2) renderMultiVersesInto(b2, viewerVers, chapDataArr, highlight);
+      if (b2) {
+        // 'split'(병렬 독서)은 역본 2개 이상일 때만 의미 — 좌우 컬럼으로 분할한다.
+        // 그 외(절별 대조 / 단일 역본)는 기존 세로 교차 렌더.
+        if (state.viewMode === "split" && viewerVers.length > 1) {
+          b2.classList.add("split-cols");
+          renderSplitVersesInto(b2, viewerVers, chapDataArr, highlight);
+        } else {
+          b2.classList.remove("split-cols");
+          renderMultiVersesInto(b2, viewerVers, chapDataArr, highlight);
+        }
+      }
       updateBibleHeader(card);
       updateNavButtons(card);
       decorateNotes(card);   // 묵상 노트 배지 (Phase 3, async)
@@ -481,12 +486,6 @@
       const navVer = state.viewer[0] || state.primary;
       const bp = s.querySelector('[data-act="book"]'); if (bp) bp.textContent = bookShortFor(navVer, card.book) || "…";
       const cp = s.querySelector('[data-act="chapter"]'); if (cp) cp.textContent = I18N.t("card.chapterLabel", { n: card.chapter });
-      const pp = s.querySelector('[data-act="parallel"]');
-      if (pp) {                                  // FEAT-04 대조 pill 라벨/활성 갱신
-        const on = !!(card.parallel && card.parallelVersion);
-        pp.textContent = on ? card.parallelVersion : I18N.t("card.parallelOff");
-        pp.classList.toggle("on", on);
-      }
     }
     function updateLinkHeader(card) {
       const s = sectionEl(card.id);
@@ -587,7 +586,7 @@
     // history entry, dropping any forward entries — we're branching. When the
     // book+chapter already match the current entry, just refresh its verse (e.g.
     // a clipboard hit on the same chapter) without growing the stack. The verse
-    // a user scrolled to before leaving is captured live by syncInterlinFrom.
+    // a user scrolled to before leaving is captured live by lockHistoryVerse.
     function recordHistory(card, verse) {
       if (!card || card.type !== "bible") return;
       if (!Array.isArray(card.history)) seedHistory(card);
@@ -616,18 +615,13 @@
       if (fwd) fwd.classList.toggle("disabled", i >= len - 1);
     }
 
-    // Scroll a bible card's body so the given verse sits at the TOP of the
-    // scrollport (block:'start'). No-op for a falsy verse (stay at natural top).
+    // Scroll a bible card's scripture so the given verse sits at the TOP of every
+    // column (split → 전 컬럼) + align linked 원어. No-op for a falsy verse. Element-
+    // scoped scroll (NOT el.scrollIntoView, which nudges the workspace — FIX-01).
     function scrollVerseToTop(card, verse) {
       if (!verse) return;
-      const body = bodyEl(card.id);
-      if (!body) return;
-      const el = body.querySelector(`.v[data-v="${verse}"]`);
-      if (!el) return;
-      // Body-scoped scroll (NOT el.scrollIntoView, which also nudges the
-      // workspace and drags every other card — see FIX-01 / centerHighlightVerse).
-      const br = body.getBoundingClientRect();
-      body.scrollTop += el.getBoundingClientRect().top - br.top;
+      scriptureScrollers(card).forEach((el) => scrollElToVerse(el, verse, true, 0));
+      alignInterlin(card, verse, 0);
     }
 
     // Step the card's reference along its own history (delta -1 back, +1 forward).
@@ -643,9 +637,8 @@
       card.chapter = ref.chapter;
       await loadBibleCard(card);
       await reloadDependents(card);
-      scrollVerseToTop(card, ref.verse);   // restore scroll position (작업 5)
-      const hbody = bodyEl(card.id);       // keep linked 원어 aligned (BUG-01)
-      if (hbody) requestAnimationFrame(() => syncInterlinFrom(card, hbody));
+      // restore scroll position across columns + linked 원어 (작업 5 / BUG-01)
+      requestAnimationFrame(() => scrollVerseToTop(card, ref.verse));
       if (card === primaryBible()) api().note_position(card.book, card.chapter);
       updateNavButtons(card);
       saveLayout();
@@ -709,12 +702,11 @@
       // Render (highlight the specific verses).
       await loadBibleCard(target, verses && verses.length ? verses : null);
       // BUG-01: the linked 원어(interlinear) card re-renders from the chapter top
-      // and would stay pinned at 1절. Wait for its reload, then snap it to the
-      // SAME verse the 본문 just jumped to (matching height), exactly as the
-      // real-time scroll sync would — instead of leaving it at the chapter head.
+      // and would stay pinned at 1절. Wait for its reload, then snap sibling
+      // columns + 원어 to the SAME verse the 본문 just jumped to (matching height),
+      // exactly as the real-time scroll sync would — not the chapter head.
       await reloadDependents(target);
-      const tbody = bodyEl(target.id);
-      if (tbody) requestAnimationFrame(() => syncInterlinFrom(target, tbody));
+      requestAnimationFrame(() => syncFrom(target, primaryScroller(target)));
       // A locked card reacts in place (book/chapter unchanged) → recordHistory
       // refreshes the entry's verse; an unlocked card that navigated records the
       // new reference, remembering the first highlighted verse as its anchor.
@@ -764,23 +756,6 @@
         }
         case "prev": cardChapStep(card, -1); break;
         case "next": cardChapStep(card, 1); break;
-        case "parallel": {
-          // FEAT-04: 대조 역본 선택(끄기 + navVer 제외한 역본들). 켜면 기준+대조 쌍 렌더.
-          const base = state.viewer[0] || state.primary;
-          const items = [{ label: I18N.t("card.parallelOff"), value: "", on: !card.parallel }];
-          state.versions.filter((v) => v.name !== base).forEach((v) =>
-            items.push({ label: v.display, value: v.name,
-                         on: !!(card.parallel && card.parallelVersion === v.name) }));
-          openMenu(actEl, items, async (name) => {
-            if (!name) { card.parallel = false; }
-            else { card.parallel = true; card.parallelVersion = name; }
-            await loadBibleCard(card);
-            reloadDependents(card);
-            updateBibleHeader(card);
-            saveLayout();
-          });
-          break;
-        }
         case "back": cardHistoryNav(card, -1); break;
         case "forward": cardHistoryNav(card, 1); break;
         case "lock": toggleLock(card); break;
@@ -1183,14 +1158,38 @@
       document.addEventListener("mouseup", onUp);
     }
 
-    // ---- 본문 → 원어 실시간 스크롤 동기화 ----
-    // Keyed to the topmost FULLY-visible verse in the bible card (a verse whose
-    // top edge is cut off doesn't count); linked interlinear cards scroll so the
-    // same verse sits at their top. One-way (bible → interlinear), rAF-throttled.
+    // ---- 본문 스크롤 동기화 (절 앵커 기반) ----
+    // 두 레이어를 절 앵커(절 ID + 뷰포트 분율)로 묶는다:
+    //   ① split(병렬 독서) 컬럼 ↔ 컬럼: 어느 컬럼을 스크롤하든 형제 컬럼이 추종(완전 양방향)
+    //   ② 성경 카드 → 연동 원어(interlinear) 카드: 같은 절을 같은 높이로 추종
+    // 절 앵커는 역본 무관(절 번호 기준)이라 어느 컬럼/역본이든 일관. rAF 스로틀.
 
     let syncRaf = null;
     let scrollTimer = null;   // 500ms debounce for locking the history verse (7차-2)
-    const progScroll = new Set();  // card ids being programmatically scrolled (sync guard)
+    // 프로그램적으로 스크롤 중인 스크롤 '요소'들(피드백 루프 가드). v1.1.6: 카드 id 단위가
+    // 아니라 요소 단위 — split 컬럼이 한 카드 id를 공유하므로 컬럼별로 가드해야 한다.
+    const progScroll = new Set();
+
+    // 한 성경 카드의 스크립처 스크롤 컨테이너들: split이면 컬럼(.scol) N개, 아니면 본문 1개.
+    function scriptureScrollers(card) {
+      const body = bodyEl(card.id);
+      if (!body) return [];
+      const cols = body.querySelectorAll(".scol");
+      return cols.length ? [...cols] : [body];
+    }
+    // 정규 앵커(히스토리/점프 기준) = 첫 컬럼(= 주 역본). split이 아니면 본문 자체.
+    function primaryScroller(card) { return scriptureScrollers(card)[0] || null; }
+    // 이 성경 카드에 연동된 원어 카드의 스크롤 바디들(원어는 단일 본문).
+    function linkedInterlinScrollers(card) {
+      return cards
+        .filter((c) => c.type === "interlinear" && linkedBible(c) === card)
+        .map((c) => bodyEl(c.id))
+        .filter(Boolean);
+    }
+    // 연동 원어 카드를 절 n에 분율 frac로 정렬.
+    function alignInterlin(card, n, frac) {
+      linkedInterlinScrollers(card).forEach((ib) => scrollElToVerse(ib, n, false, frac));
+    }
 
     // The topmost fully-visible verse number in a scripture body (or null).
     // 시선 중심선: 스크롤 바디의 위에서 40% 지점. 이 밴드를 품은 절이 앵커.
@@ -1217,42 +1216,52 @@
       return best;
     }
 
-    // Align another scroll body so verse `n` sits at fraction `align` down its
-    // viewport (0 = top). `markId` (when the target is a bible card) is flagged
-    // in progScroll so the resulting scroll event is ignored — preventing an
-    // A→B→A sync feedback loop.
-    function scrollBodyToVerse(targetBody, n, markId, align = 0) {
-      const target = targetBody.querySelector(`.v[data-v="${n}"]`);
-      if (!target) return;
-      if (markId) progScroll.add(markId);
-      const br = targetBody.getBoundingClientRect();
-      targetBody.scrollTop += target.getBoundingClientRect().top - br.top - br.height * align;
-      if (markId) setTimeout(() => progScroll.delete(markId), 150);
+    // 결손 절 fallback: 컬럼/역본에 절 n이 없으면(역본 간 절 분할·결손 차이) 가장 가까운
+    // 존재 절로 대체한다 — n 이하 중 최댓값(below), 없으면 n 초과 중 최솟값(above).
+    function findVerseEl(scrollEl, n) {
+      let el = scrollEl.querySelector(`.v[data-v="${n}"]`);
+      if (el) return el;
+      let below = null, above = null;
+      scrollEl.querySelectorAll(".v[data-v]").forEach((v) => {
+        const k = +v.dataset.v;
+        if (k <= n && (!below || k > +below.dataset.v)) below = v;
+        if (k > n && (!above || k < +above.dataset.v)) above = v;
+      });
+      return below || above;
     }
 
-    // Real-time (every frame): keep ONLY this card's linked 원어(interlinear)
-    // cards aligned to its anchor verse, placed at the SAME viewport fraction the
-    // anchor occupies in the bible card. Aligning the 원어 verse to its own TOP
-    // (the old behavior) shoved the bible's leading verses above the fold — the
-    // "1절 스킵". Matching the fraction makes the two read in lockstep, and being
-    // verse-DOM + fraction based it's immune to font family/size differences
-    // between the cards. Does NOT touch history (debounced, 7차-2).
+    // Align a scroll element so verse `n` sits at fraction `align` down its
+    // viewport (0 = top). `guard` true (bible columns) flags the element in
+    // progScroll so the resulting scroll event is ignored — preventing a sync
+    // feedback loop. Linked interlinear bodies pass guard=false (their scroll
+    // events aren't acted on anyway — the handler only reacts to bible cards).
+    function scrollElToVerse(targetEl, n, guard, align = 0) {
+      if (!targetEl) return;
+      const target = findVerseEl(targetEl, n);
+      if (!target) return;
+      if (guard) progScroll.add(targetEl);
+      const br = targetEl.getBoundingClientRect();
+      targetEl.scrollTop += target.getBoundingClientRect().top - br.top - br.height * align;
+      if (guard) setTimeout(() => progScroll.delete(targetEl), 150);
+    }
+
+    // Real-time sync driven by a scrolled scripture element (`scrollEl` = a split
+    // column or the single body). Aligns ① this card's sibling columns and ②
+    // linked 원어(interlinear) cards to the scrolled element's anchor verse, at the
+    // SAME viewport fraction. Verse-DOM + fraction based → immune to font/version
+    // height differences. Does NOT touch history (debounced, 7차-2).
     //
-    // BUG-02 (v1.0.7 격리): a bible card NEVER drives another bible card. Two
-    // cards on the same book/chapter scroll/navigate independently — the old
-    // same-chapter cross-sync made them move together like magnets. Each card
-    // owns only its own scroll + the interlinear cards explicitly linked to it.
-    function syncInterlinFrom(card, body) {
-      const n = anchorVerseOf(body);
-      if (!n) return;
-      const frac = verseTopFraction(body, n);
-      cards.forEach((c) => {
-        if (c === card) return;
-        if (c.type === "interlinear" && linkedBible(c) === card) {
-          const ib = bodyEl(c.id);
-          if (ib) scrollBodyToVerse(ib, n, null, frac);  // 동일 절을 동일 높이로 정렬
-        }
+    // BUG-02 (v1.0.7 격리): a bible card NEVER drives another bible card. Only its
+    // own sibling columns + explicitly linked interlinear cards follow.
+    function syncFrom(card, scrollEl) {
+      if (!scrollEl) return;
+      const n = anchorVerseOf(scrollEl);
+      if (n == null) return;
+      const frac = verseTopFraction(scrollEl, n);
+      scriptureScrollers(card).forEach((el) => {
+        if (el !== scrollEl) scrollElToVerse(el, n, true, frac);  // 형제 컬럼 추종
       });
+      alignInterlin(card, n, frac);                                // 연동 원어 추종
     }
 
     // The viewport fraction (0 = top) at which verse n's top currently sits in a
@@ -1277,21 +1286,21 @@
     function snapshotAnchors() {
       const m = new Map();
       bibleCards().forEach((c) => {
-        const b = bodyEl(c.id);
-        if (!b) return;
-        const n = anchorVerseOf(b);
-        if (n) m.set(c.id, { n, frac: verseTopFraction(b, n) });
+        const el = primaryScroller(c);   // 첫 컬럼(= 주 역본)을 정규 앵커로
+        if (!el) return;
+        const n = anchorVerseOf(el);
+        if (n != null) m.set(c.id, { n, frac: verseTopFraction(el, n) });
       });
       return m;
     }
     function realignAnchors(anchors) {
       requestAnimationFrame(() => {
         bibleCards().forEach((c) => {
-          const b = bodyEl(c.id);
-          if (!b) return;
           const a = anchors && anchors.get(c.id);
-          if (a) scrollBodyToVerse(b, a.n, c.id, a.frac);  // restore bible position
-          syncInterlinFrom(c, b);                          // realign linked 원어
+          if (!a) return;
+          // 전 컬럼 복원 + 연동 원어 재정렬(글꼴/크기 reflow 후 절 위치 보존).
+          scriptureScrollers(c).forEach((el) => scrollElToVerse(el, a.n, true, a.frac));
+          alignInterlin(c, a.n, a.frac);
         });
       });
     }
@@ -1383,28 +1392,31 @@
         if (e.target.closest(".strong[data-code]")) hideTip();
       });
 
-      // Scroll inside a scripture body → hide tooltips + sync linked interlinear
-      // cards to the topmost fully-visible verse (실시간 동기화). The history
-      // verse is locked only once scrolling settles for 500ms (7차-2): the rAF
-      // keeps the interlinear alignment live, the timer holds off history writes.
+      // Scroll inside a scripture scroller → hide tooltips + sync(형제 컬럼 + 연동
+      // 원어). 스크롤 요소는 split 컬럼(.scol) 또는 단일 본문(.scripture). 히스토리 절은
+      // 500ms 정착 후에만 잠근다(7차-2): rAF는 실시간 정렬, 타이머는 히스토리 쓰기 보류.
       c.addEventListener("scroll", (e) => {
         hideTip();
-        const body = e.target;
-        if (!body.classList || !body.classList.contains("scripture")) return;
-        const sec = body.closest(".mcard");
+        const el = e.target;
+        if (!el.classList) return;
+        // split 컬럼이거나 단일 본문(.scripture)인 경우만. split 본문(.split-cols)은
+        // overflow:hidden이라 스크롤 이벤트를 내지 않으므로 컬럼만 잡힌다.
+        const isCol = el.classList.contains("scol");
+        if (!isCol && !el.classList.contains("scripture")) return;
+        const sec = el.closest(".mcard");
         if (!sec || sec.dataset.type !== "bible") return;
         const card = cardById(sec.dataset.id);
         if (!card) return;
-        if (progScroll.has(card.id)) return;  // this scroll was programmatic (sibling sync)
+        if (progScroll.has(el)) return;  // programmatic (sibling/interlinear sync)
         if (syncRaf) cancelAnimationFrame(syncRaf);
         syncRaf = requestAnimationFrame(() => {
           syncRaf = null;
-          syncInterlinFrom(card, body);
+          syncFrom(card, el);
         });
         if (scrollTimer) clearTimeout(scrollTimer);
         scrollTimer = setTimeout(() => {
           scrollTimer = null;
-          lockHistoryVerse(card, body);
+          lockHistoryVerse(card, el);
         }, 500);
       }, true);
 
@@ -1512,13 +1524,11 @@
   // on, it's a fixed pair [기준 역본(viewer[0]), 대조 역본] independent of the
   // global viewer selection; otherwise the global viewer set. Shared by render
   // AND copy so both stay in lockstep (copy keeps the per-version block format).
+  // 카드가 보여줄(그리고 복사할) 역본 목록 = 전역 칩바 선택(state.viewer). v1.1.6:
+  // 카드별 대조(FEAT-04)가 제거되어 모든 성경 카드가 동일 역본 집합을 공유한다. 보기
+  // 방식(절별 대조 / 병렬 독서)만 view_mode로 갈린다. card 인자는 시그니처 호환용.
   function cardVersions(card) {
     const navVer = state.viewer[0] || state.primary;
-    if (card && card.parallel && card.parallelVersion
-        && state.versionsNames.includes(card.parallelVersion)
-        && card.parallelVersion !== navVer) {
-      return [navVer, card.parallelVersion].filter(Boolean);
-    }
     return state.viewer.length ? state.viewer.slice() : [navVer].filter(Boolean);
   }
 
@@ -1572,6 +1582,25 @@
           `<span class="vnum">${v.n}</span>${content}</div>`;
       }).join("");
     if (hl.size) centerHighlightVerse(body);
+  }
+
+  // v1.1.6 병렬 독서(split) 렌더링: 역본별 좌우 컬럼(.scol)으로 분할한다. 각 컬럼은
+  // 독립 스크롤 컨테이너(.scol)이고 상단에 역본명 sticky 헤더(.scol-head)를 단다.
+  // 컬럼 간 + 연동 원어 카드 추종은 절 앵커 기반 스크롤 싱크가 담당(syncFrom).
+  function renderSplitVersesInto(body, versions, chapDataArr, highlight) {
+    const hl = new Set(highlight || []);
+    body.innerHTML = versions.map((ver, vi) => {
+      const verses = (chapDataArr[vi] && chapDataArr[vi].verses) || [];
+      const inner = verses.length
+        ? verses.map((v) =>
+            `<div class="v${hl.has(v.n) ? " hl" : ""}" data-v="${v.n}">` +
+            `<span class="vnum">${v.n}</span>${esc(v.text)}</div>`).join("")
+        : `<div class="panel-loading">${I18N.t("card.noText")}</div>`;
+      return `<div class="scol" data-ver="${esc(ver)}">` +
+             `<div class="scol-head">${esc(displayName(ver))}</div>${inner}</div>`;
+    }).join("");
+    // 하이라이트가 있으면 각 컬럼이 자기 하이라이트 절을 중앙 정렬(같은 절이므로 정렬됨).
+    if (hl.size) body.querySelectorAll(".scol").forEach(centerHighlightVerse);
   }
 
   function renderInterlinearInto(body, data) {
@@ -1698,9 +1727,9 @@
 
   async function copyVersesFromCard(card, verses) {
     if (!verses.length) return;
-    // Copy the versions the card is actually SHOWING — its 대조 쌍 when parallel
-    // mode is on, else the global viewer (cardVersions). Block format unchanged
-    // (format_reference joins per-version blocks). A stale per-card card.version
+    // Copy the versions the card is SHOWING = the global viewer (cardVersions).
+    // Block format unchanged (format_reference joins per-version blocks) and is
+    // independent of view_mode (보기 모드와 무관). A stale per-card card.version
     // would copy the wrong text AND miss the book-name cache → "?".
     const versions = cardVersions(card);
     const r = await api().copy_reference(card.book, card.chapter, verses, versions);
@@ -1715,8 +1744,10 @@
     const body = CardManager.bodyEl(card.id);
     if (!body) return;
     verses.forEach((n) => {
-      const el = body.querySelector(`.v[data-v="${n}"]`);
-      if (el) { el.classList.add("copied"); setTimeout(() => el.classList.remove("copied"), 700); }
+      // split 모드면 컬럼마다 같은 data-v 가 있으므로 전 컬럼을 플래시(querySelectorAll).
+      body.querySelectorAll(`.v[data-v="${n}"]`).forEach((el) => {
+        el.classList.add("copied"); setTimeout(() => el.classList.remove("copied"), 700);
+      });
     });
   }
 
