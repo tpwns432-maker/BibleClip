@@ -59,3 +59,6 @@ fonts/*
 
 # Mac source package (assembled artifact, contains data)
 AutoBible-mac-source.zip
+
+# 작업용 참고 영상(슬라이드 애니메이션 등) — 용량 커서 추적 안 함
+sample video/

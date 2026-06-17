@@ -29,6 +29,11 @@ body {
   height: 100vh;
   min-height: 0;
   position: relative;  /* anchors the activity-log drawer overlay */
+  /* 레일 드로어가 닫힘/슬라이드 중 translateX(100%)로 화면 밖까지 나가면 문서에
+     가로 오버플로가 생겨 윈도우 스크롤바가 반짝였다 사라진다. 앱 셸은 고정 크기라
+     스크롤될 일이 없으므로 화면 밖 드로어를 클립한다(모달·토스트·메뉴는 .app 바깥
+     body 직계라 영향 없음). */
+  overflow: hidden;
 }
 
 /* ---- Left rail ---- */
@@ -800,12 +805,22 @@ html[data-theme="dark"] .note-modal-back { background: rgba(0,0,0,.55); }
   box-shadow: -18px 0 50px -22px rgba(40, 25, 70, .5);
   display: flex; flex-direction: column;
   z-index: 90;
-  animation: drawer-in .18s ease-out;
+  /* 닫힘 상태 = 오른쪽 화면 밖. 닫기 이징은 열기(아래 .open)의 시간-역재생 미러
+     — 살짝 안쪽으로 당겼다가(anticipation) 오른쪽으로 슬라이드 아웃. */
+  transform: translateX(100%);
+  transition: transform .45s cubic-bezier(.36, 0, .66, -.2);
+  will-change: transform;
+}
+/* 열림 = 제자리. 끝에서 살짝 오버슈트(탄성)하는 ease-out-back. JS(slideOpen/
+   slideClose)가 .open 토글 + hidden 해제/설정으로 양방향 슬라이드를 구동한다. */
+.drawer.open {
+  transform: translateX(0);
+  transition: transform .45s cubic-bezier(.34, 1.2, .64, 1);
 }
 /* `display: flex` above outranks the UA [hidden] rule, so restore it
-   explicitly — otherwise the drawer is stuck visible. */
+   explicitly — otherwise the drawer is stuck visible. 슬라이드 아웃이 끝난 뒤
+   slideClose 가 hidden 을 세팅한다(닫힘 중에는 display:flex 유지). */
 .drawer[hidden] { display: none; }
-@keyframes drawer-in { from { transform: translateX(20px); opacity: 0; } to { transform: none; opacity: 1; } }
 .drawer-head {
   display: flex; align-items: center; justify-content: space-between;
   padding: 16px 18px 12px;
