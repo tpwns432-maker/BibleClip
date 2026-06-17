@@ -33,7 +33,7 @@
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="8" y="3" width="8" height="4" rx="1"/><path d="M16 5h2a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2h2"/></svg>
       <span class="nav-dot" id="log-dot" hidden></span>
     </div>
-    <div class="nav-icon" id="cart-toggle" title="설교 장바구니" aria-label="설교 장바구니" data-i18n-title="nav.cart" data-i18n-aria="nav.cart">
+    <div class="nav-icon" id="cart-toggle" title="장바구니" aria-label="장바구니" data-i18n-title="nav.cart" data-i18n-aria="nav.cart">
       <!-- shopping cart -->
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="20" r="1.3"/><circle cx="18" cy="20" r="1.3"/><path d="M2.5 3.5h2.3l2.2 11.5a1.4 1.4 0 0 0 1.4 1.1h8.6a1.4 1.4 0 0 0 1.4-1.1L21.5 7H6"/></svg>
       <span class="nav-dot" id="cart-dot" hidden></span>
@@ -178,7 +178,7 @@
        localStorage; clicking one re-copies it to the clipboard. -->
   <aside class="drawer" id="cart-drawer" hidden>
     <div class="drawer-head">
-      <span data-i18n="cart.title">오늘의 설교 성구</span>
+      <span data-i18n="cart.title">장바구니</span>
       <span class="cart-head-actions">
         <span class="drawer-mini" id="cart-popout" title="새 창으로 열기" data-i18n="cart.popout" data-i18n-title="cart.popout">새 창</span>
         <span class="drawer-mini" id="cart-clear" title="비우기" data-i18n="cart.clear" data-i18n-title="cart.clear">비우기</span>
@@ -253,6 +253,14 @@
           <span class="pill dropdown" id="opt-reading-font">기본</span>
         </div>
         <p class="set-note" data-i18n-html="modal.readingFontNote">데이터 폴더의 <b>fonts</b> 폴더에 .ttf/.otf 글꼴을 넣으면 목록에 나타납니다.</p>
+        <div class="set-row">
+          <span class="set-label" data-i18n="modal.viewModeLabel">본문 보기</span>
+          <div class="seg" id="opt-view-mode">
+            <div class="opt" data-val="interleave" data-i18n="modal.viewModeInterleave">절별 대조</div>
+            <div class="opt" data-val="split" data-i18n="modal.viewModeSplit">병렬 독서</div>
+          </div>
+        </div>
+        <p class="set-note" data-i18n="modal.viewModeNote">여러 역본을 선택했을 때 한 카드에 절마다 겹쳐 볼지(절별 대조), 역본별 좌우 컬럼으로 나눠 볼지(병렬 독서) 정합니다.</p>
       </div>
 
       <div class="set-group">

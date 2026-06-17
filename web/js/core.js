@@ -187,6 +187,7 @@ window.BC = window.BC || {};
     searchVersion: null,    // version used for keyword search (default = primary)
     searchClickNav: false,  // search hit click also jumps a bible card
     autoCopyTop: false,     // 검색 시 최고 점수 결과를 클립보드에 자동 복사
+    viewMode: "interleave", // v1.1.6 본문 보기 모드: 'interleave'(절별 대조) | 'split'(병렬 독서)
     booksCache: {},         // version -> [{num,short,long}]
     chapCache: {},          // "version:book" -> [chapters]
     primaryBooks: [],       // primary version's book list (for search autocomplete)
@@ -259,6 +260,7 @@ window.BC = window.BC || {};
     state.isPremium = init.is_premium !== false;  // default premium unless backend says false
     state.searchClickNav = !!init.search_click_navigates;
     state.autoCopyTop = !!init.auto_copy_top_result;
+    state.viewMode = init.view_mode === "split" ? "split" : "interleave";
     const verLabel = $("app-ver");
     if (verLabel && init.version) verLabel.textContent = "v" + init.version;
 

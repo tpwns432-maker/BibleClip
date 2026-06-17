@@ -39,6 +39,10 @@ class Library:
         'hide_reference': False,
         'output_mode': 'inline',          # inline, newline
         'newline_show_cv': False,         # show chapter:verse on each line
+        # v1.1.6 본문 보기 모드 (view-only; 복사/클립보드 출력과 무관):
+        #   'interleave' = 절별 대조(한 카드 안에 역본을 절마다 세로 교차, 기존 기본)
+        #   'split'      = 병렬 독서(역본별 좌우 컬럼 분할 + 절 앵커 양방향 스크롤 동기화)
+        'view_mode': 'interleave',
         # FEAT-02 클립보드 매직 포맷터: 켜면 표준 조립 대신 사용자 매크로 템플릿으로
         # 복사 서식을 100% 커스터마이즈. 태그: {book_full}{book_short}{chap}{verse}{content}{version}
         'custom_format_enabled': False,

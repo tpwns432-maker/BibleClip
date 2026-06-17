@@ -11,7 +11,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>설교 장바구니</title>
+<title>장바구니</title>
 <style>
   :root {
     --bg: #f4f5f7; --fg: #1b1d22; --card: #ffffff; --line: #e2e4e9;
@@ -75,7 +75,7 @@
 </head>
 <body>
   <header>
-    <span class="ttl" id="ttl">설교 장바구니</span>
+    <span class="ttl" id="ttl">장바구니</span>
     <span class="count" id="count"></span>
     <span class="sp"></span>
   </header>
@@ -258,8 +258,8 @@
   }
 
   function applyStaticLabels() {
-    document.title = t("cart.windowTitle", "설교 장바구니");
-    document.getElementById("ttl").textContent = t("cart.title", "오늘의 설교 성구");
+    document.title = t("cart.windowTitle", "장바구니");
+    document.getElementById("ttl").textContent = t("cart.title", "장바구니");
     document.getElementById("extract-all").textContent = t("cart.extractAll", "전체 추출");
     var emp = document.getElementById("empty");
     if (emp) emp.textContent = t("cart.empty", "담은 성구가 여기에 쌓입니다.");
