@@ -669,7 +669,7 @@
         pruneCartSel();
         renderCart();
         const cd = $("cart-drawer");
-        if (cd && cd.hidden) { const dot = $("cart-dot"); if (dot) dot.hidden = false; }
+        if (cd && !drawerOpen(cd)) { const dot = $("cart-dot"); if (dot) dot.hidden = false; }
       },
       // FEAT-07: pop-out cart clicked a verse → jump the main viewer (works even
       // in F11 fullscreen; the cart window keeps focus on the other monitor).
@@ -736,7 +736,7 @@
     cart.push(it);
     saveCart();
     renderCart();
-    if ($("cart-drawer") && $("cart-drawer").hidden) {
+    if (!drawerOpen($("cart-drawer"))) {
       const dot = $("cart-dot"); if (dot) dot.hidden = false;  // unread badge
     }
     toast(I18N.t("cart.added"));
@@ -938,19 +938,18 @@
     if (!cd) return;
     if (typeof closeDrawer === "function") closeDrawer();   // 상호배타: 로그 드로어 닫기
     if (typeof closeNotes === "function") closeNotes();     // 상호배타: 노트 레일 닫기
-    cd.hidden = false;
+    slideOpen(cd);
     $("cart-toggle").classList.add("on");
     const dot = $("cart-dot"); if (dot) dot.hidden = true;
     renderCart();
   }
   function closeCart() {
-    const cd = $("cart-drawer");
-    if (cd) cd.hidden = true;
+    slideClose($("cart-drawer"));
     const t = $("cart-toggle"); if (t) t.classList.remove("on");
   }
   function wireCart() {
     const tog = $("cart-toggle");
-    if (tog) tog.addEventListener("click", () => $("cart-drawer").hidden ? openCart() : closeCart());
+    if (tog) tog.addEventListener("click", () => drawerOpen($("cart-drawer")) ? closeCart() : openCart());
     const cl = $("cart-close"); if (cl) cl.addEventListener("click", closeCart);
     const po = $("cart-popout");   // FEAT-07: 분리된 장바구니 독립 창 열기
     if (po) po.addEventListener("click", () => { try { api().open_cart_window(); } catch (_) {} });
@@ -1040,17 +1039,17 @@
     if (!d) return;
     if (typeof closeDrawer === "function") closeDrawer();        // 상호배타: 로그 닫기
     closeCart();                                                 // 상호배타: 장바구니 닫기
-    d.hidden = false;
+    slideOpen(d);
     const t = $("notes-toggle"); if (t) t.classList.add("on");
     renderNotes();
   }
   function closeNotes() {
-    const d = $("notes-drawer"); if (d) d.hidden = true;
+    slideClose($("notes-drawer"));
     const t = $("notes-toggle"); if (t) t.classList.remove("on");
   }
   function wireNotesRail() {
     const tog = $("notes-toggle");
-    if (tog) tog.addEventListener("click", () => $("notes-drawer").hidden ? openNotes() : closeNotes());
+    if (tog) tog.addEventListener("click", () => drawerOpen($("notes-drawer")) ? closeNotes() : openNotes());
     const cl = $("notes-close"); if (cl) cl.addEventListener("click", closeNotes);
     const rl = $("notes-reload"); if (rl) rl.addEventListener("click", renderNotes);
     const sa = $("notes-selall-cb");
@@ -1902,7 +1901,7 @@
     try { renderLog(); } catch (_) {}
     try { renderCart(); } catch (_) {}
     // 노트 레일이 열려 있으면 재렌더(닫혀 있으면 불필요한 fetch 회피).
-    try { const nd = $("notes-drawer"); if (nd && !nd.hidden) renderNotes(); } catch (_) {}
+    try { const nd = $("notes-drawer"); if (drawerOpen(nd)) renderNotes(); } catch (_) {}
     if (settingsLoaded && setState) {
       try { renderFormat(); } catch (_) {}
       try { renderOrder(); } catch (_) {}

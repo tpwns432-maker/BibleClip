@@ -123,6 +123,32 @@ window.BC = window.BC || {};
     if (e.target.closest("[data-tip]")) hideTooltip();
   });
 
+  // ---- Rail drawer slide animation (shared by log/cart/notes drawers) ----
+  // CSS drives the motion (transform transition + .open class). slideOpen unhides
+  // then adds .open on the next frame so the transition runs (slide in); slideClose
+  // removes .open (slide back out = 역재생) and sets hidden once it finishes, so the
+  // panel animates out instead of snapping away via display:none.
+  function slideOpen(el) {
+    if (!el) return;
+    el.hidden = false;
+    void el.offsetWidth;          // force reflow so adding .open transitions
+    el.classList.add("open");
+  }
+  function slideClose(el) {
+    if (!el || !el.classList.contains("open")) return;  // already closed/closing
+    el.classList.remove("open");                        // → slide out (reverse)
+    let done = false;
+    const finish = () => {
+      if (done) return; done = true;
+      el.removeEventListener("transitionend", onEnd);
+      if (!el.classList.contains("open")) el.hidden = true;  // still closed → hide
+    };
+    const onEnd = (e) => { if (e.target === el && e.propertyName === "transform") finish(); };
+    el.addEventListener("transitionend", onEnd);
+    setTimeout(finish, 600);      // fallback if transitionend never fires
+  }
+  const drawerOpen = (el) => !!(el && el.classList.contains("open"));
+
   // ---- Activity log drawer + toast (UI only; work without the bridge) ----
 
   const drawer = $("log-drawer");
@@ -130,25 +156,25 @@ window.BC = window.BC || {};
     if (!drawer) return;
     if (typeof closeCart === "function") closeCart();  // 상호배타: 장바구니 드로어 닫기
     if (typeof closeNotes === "function") closeNotes();  // 상호배타: 노트 레일 닫기
-    drawer.hidden = false;
+    slideOpen(drawer);
     $("log-toggle").classList.add("on");
     const dot = $("log-dot");
     if (dot) dot.hidden = true;
   }
   function closeDrawer() {
     if (!drawer) return;
-    drawer.hidden = true;
+    slideClose(drawer);
     $("log-toggle").classList.remove("on");
   }
   if ($("log-toggle")) {
     $("log-toggle").addEventListener("click", () =>
-      drawer.hidden ? openDrawer() : closeDrawer()
+      drawerOpen(drawer) ? closeDrawer() : openDrawer()
     );
   }
   if ($("log-close")) $("log-close").addEventListener("click", closeDrawer);
 
   function flagUnread() {
-    if (drawer && drawer.hidden) {
+    if (drawer && !drawerOpen(drawer)) {
       const dot = $("log-dot");
       if (dot) dot.hidden = false;
     }
