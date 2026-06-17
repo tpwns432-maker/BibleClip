@@ -874,19 +874,35 @@
       const el = sectionEl(card.id);
       if (!el || !el.requestFullscreen) return;
       fsCardId = card.id;
+      // 전체화면 진입 시 글자가 커지며 본문이 reflow → px 기준 스크롤이 다른(앞쪽) 절에
+      // 떨어진다(예: 26절 보다가 3절로 튐). 진입 전 읽던 절 앵커를 캡처해 전환(reflow)
+      // 후 같은 절로 복원(폰트/역본 변경과 동일 BUG-01 패턴).
+      const anchors = snapshotAnchors();
       el.requestFullscreen().then(() => {
         const hint = document.createElement("div");
         hint.className = "present-hint";
         hint.textContent = window.I18N ? I18N.t("present.hint") : "F2 검색 · ESC 나가기";
         el.appendChild(hint);
         updatePresentBanner(card);   // 틀고정 위치 헤더
+        // 전체화면 reflow가 끝난 뒤(realignAnchors 내부 rAF + 한 프레임 더 대기) 복원.
+        requestAnimationFrame(() => realignAnchors(anchors));
       }).catch(() => { fsCardId = null; });
     }
-    // Exiting fullscreen (ESC / F11): drop the hint + banner + tracking.
+    // Exiting fullscreen (ESC / F11): drop the hint + banner + tracking, then
+    // restore the windowed card to the verse last read in fullscreen — the exit
+    // reflow (back to the small font) would otherwise jump the position again.
     document.addEventListener("fullscreenchange", () => {
       if (!document.fullscreenElement) {
         document.querySelectorAll(".present-hint, .present-banner").forEach((h) => h.remove());
+        const exitedId = fsCardId;
         fsCardId = null;
+        const card = exitedId && cardById(exitedId);
+        if (card && card.type === "bible" && card.verse) {
+          requestAnimationFrame(() => requestAnimationFrame(() => {
+            scriptureScrollers(card).forEach((el) => scrollElToVerse(el, card.verse, true, 0));
+            alignInterlin(card, card.verse, 0);
+          }));
+        }
       }
     });
 
@@ -1468,8 +1484,10 @@
     function primaryVersion() {
       return state.viewer[0] || state.primary;
     }
+    // Returns a promise that resolves once every bible card has re-rendered, so
+    // callers can snapshot→reload→realign the reading position (BUG-01 패턴).
     function reloadAllBible() {
-      bibleCards().forEach((card) => loadBibleCard(card));
+      return Promise.all(bibleCards().map((card) => loadBibleCard(card)));
     }
     // Add a non-bible card with a specific link (used by showStrong to create a
     // lexicon card pre-linked to the source bible).

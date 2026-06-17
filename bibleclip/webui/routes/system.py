@@ -15,7 +15,7 @@ import webbrowser
 
 from bibleclip import i18n
 from bibleclip.config import (
-    __version__, RELEASES_PAGE_URL, IS_WINDOWS, get_base_dir,
+    __version__, RELEASES_PAGE_URL, IS_WINDOWS, get_base_dir, get_resource_dir,
     GITHUB_OWNER, GITHUB_REPO,
 )
 from bibleclip.update import fetch_latest_release, parse_version
@@ -124,27 +124,47 @@ class SystemRoutes:
             return {}
         return i18n._table(lang)
 
-    # ---- Custom reading fonts (the 'fonts' folder next to bible_versions) ----
+    # ---- Reading fonts: bundled built-ins + user 'fonts' folder ----
+
+    _FONT_EXTS = ('.ttf', '.otf', '.woff2', '.woff')
+
+    def _builtin_fonts_dir(self):
+        """Bundled reading fonts shipped inside web/ (rides along the --add-data
+        'web' bundle on every platform). 나눔고딕/나눔명조 (OFL, copyright-free)."""
+        return os.path.join(get_resource_dir(), 'web', 'fonts', 'reading')
+
+    def _user_fonts_dir(self):
+        """User-dropped reading fonts (the same folder 'Open data folder' reveals,
+        alongside bible_versions/)."""
+        return os.path.join(get_base_dir(), 'fonts')
 
     def list_fonts(self):
-        """User reading fonts in the 'fonts' folder next to the data dir (the same
-        folder 'Open data folder' reveals, alongside bible_versions/). Names only —
-        bytes are fetched on demand via get_font. .ttf/.otf/.woff2/.woff."""
-        d = os.path.join(get_base_dir(), 'fonts')
-        out = []
-        try:
-            for f in sorted(os.listdir(d)):
-                if os.path.splitext(f)[1].lower() in ('.ttf', '.otf', '.woff2', '.woff'):
-                    out.append({'family': os.path.splitext(f)[0], 'file': f})
-        except Exception:
-            pass
+        """Selectable reading fonts: bundled built-ins (나눔고딕/나눔명조) first, then
+        the user's own .ttf/.otf/.woff2/.woff in the data 'fonts' folder. The
+        family name is the filename stem (so a Korean filename → a Korean menu
+        label). Names only — bytes are fetched on demand via get_font."""
+        out, seen = [], set()
+        for d, builtin in ((self._builtin_fonts_dir(), True),
+                           (self._user_fonts_dir(), False)):
+            try:
+                names = sorted(os.listdir(d))
+            except Exception:
+                continue
+            for f in names:
+                if os.path.splitext(f)[1].lower() not in self._FONT_EXTS:
+                    continue
+                fam = os.path.splitext(f)[0]
+                if fam in seen:
+                    continue
+                seen.add(fam)
+                out.append({'family': fam, 'file': f, 'builtin': builtin})
         return out
 
     def get_font(self, file):
         """Base64 bytes for one font file so JS can inject a dynamic @font-face
         (a file:// page can't reliably @font-face an arbitrary local path). The
-        name is validated to a bare filename in the fonts folder. Returns
-        {'b64','mime'} or None."""
+        name is validated to a bare filename; searched in the bundled built-in
+        folder first, then the user fonts folder. Returns {'b64','mime'} or None."""
         import base64
         if not isinstance(file, str) or '/' in file or '\\' in file or '..' in file:
             return None
@@ -153,12 +173,14 @@ class SystemRoutes:
                 '.woff2': 'font/woff2', '.woff': 'font/woff'}.get(ext)
         if not mime:
             return None
-        try:
-            with open(os.path.join(get_base_dir(), 'fonts', file), 'rb') as fh:
-                data = fh.read()
-            return {'b64': base64.b64encode(data).decode('ascii'), 'mime': mime}
-        except Exception:
-            return None
+        for d in (self._builtin_fonts_dir(), self._user_fonts_dir()):
+            try:
+                with open(os.path.join(d, file), 'rb') as fh:
+                    data = fh.read()
+                return {'b64': base64.b64encode(data).decode('ascii'), 'mime': mime}
+            except Exception:
+                continue
+        return None
 
     # ---- UI preferences (persisted; shared with the desktop app) ----
 

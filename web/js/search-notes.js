@@ -328,12 +328,15 @@
       (a, b) => parseFloat(a) === parseFloat(b));
 
     // v1.1.6 본문 보기 모드 — 절별 대조 / 병렬 독서(좌우 컬럼). 즉시 재렌더(재시작 불필요).
-    setSeg($("opt-view-mode"), state.viewMode, (val) => {
+    // 모드 전환(레이아웃 변경) 시에도 읽던 절을 유지한다(snapshot→reload→realign).
+    setSeg($("opt-view-mode"), state.viewMode, async (val) => {
       const next = val === "split" ? "split" : "interleave";
       if (next === state.viewMode) return;
+      const anchors = CardManager.snapshotAnchors();
       state.viewMode = next;
       api().set_app_setting("view_mode", next);
-      CardManager.reloadAllBible();
+      await CardManager.reloadAllBible();
+      CardManager.realignAnchors(anchors);
     });
 
     // v1.1.5: 사전 '기본 언어' 설정 제거 — 사전 언어는 프로그램 언어 추종 + 사전 카드
@@ -443,10 +446,15 @@
 
   async function updateViewerVersions(newViewer) {
     const prev = chipRects();
+    // 역본 추가/제거로 카드를 다시 그려도 읽던 절을 유지(장 맨 위로 튐 방지). 폰트
+    // 변경과 동일한 절 앵커 스냅샷/복원 인프라(BUG-01) 재사용 — 재렌더가 끝난 뒤
+    // 복원해야 새 DOM에서 절을 찾으므로 reloadAllBible 을 await 한다.
+    const anchors = CardManager.snapshotAnchors();
     state.viewer = newViewer;
     renderVerChips();
     flipChips(prev);
-    CardManager.reloadAllBible();
+    await CardManager.reloadAllBible();
+    CardManager.realignAnchors(anchors);
     state.searchVersion = CardManager.primaryVersion();
     updateSearchVerLabel();
     if (hasBridge()) api().set_viewer_versions(newViewer);
@@ -537,7 +545,9 @@
     flipChips(prev);
     if (changed) {
       if (hasBridge()) api().set_viewer_order(order);
-      CardManager.reloadAllBible();
+      // 역본 순서 변경으로 카드를 다시 그려도 읽던 절 유지(추가/제거와 동일 패턴).
+      const anchors = CardManager.snapshotAnchors();
+      CardManager.reloadAllBible().then(() => CardManager.realignAnchors(anchors));
       state.searchVersion = CardManager.primaryVersion();
       updateSearchVerLabel();
     }
