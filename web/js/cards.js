@@ -646,11 +646,38 @@
 
     // ---- chapter stepping ----
 
+    // Book-boundary rollover: the neighbouring book in canonical order, entered
+    // from the side we arrive at — 이전 책이면 마지막 장, 다음 책이면 첫 장.
+    // Skips books the version has no chapters for; null at 성경 전체의 양 끝.
+    async function neighborBookChapter(version, book, delta) {
+      const bs = await booksFor(version);
+      let i = bs.findIndex((b) => b.num === book);
+      if (i < 0) return null;
+      for (i += delta; i >= 0 && i < bs.length; i += delta) {
+        const chs = await chaptersFor(version, bs[i].num);
+        if (chs.length) {
+          return { book: bs[i].num, chapter: delta < 0 ? chs[chs.length - 1] : chs[0] };
+        }
+      }
+      return null;
+    }
+
     async function cardChapStep(card, delta) {
-      const chs = await chaptersFor(state.viewer[0] || state.primary, card.book);
-      const j = chs.indexOf(card.chapter) + delta;
-      if (j < 0 || j >= chs.length) return;
-      card.chapter = chs[j];
+      const navVer = state.viewer[0] || state.primary;
+      const chs = await chaptersFor(navVer, card.book);
+      const cur = chs.indexOf(card.chapter);
+      const j = cur + delta;
+      if (cur < 0) {
+        card.chapter = chs[0] || card.chapter;               // 역본에 없는 장 → 첫 장으로 클램프
+      } else if (j >= 0 && j < chs.length) {
+        card.chapter = chs[j];
+      } else {
+        // 책의 첫/마지막 장을 넘어서면 앞/뒤 책으로 이어서 넘어간다.
+        const step = await neighborBookChapter(navVer, card.book, delta);
+        if (!step) return;                                   // 창세기 1장 ‹ / 요한계시록 끝 ›
+        card.book = step.book;
+        card.chapter = step.chapter;
+      }
       await loadBibleCard(card);
       reloadDependents(card);
       recordHistory(card);
