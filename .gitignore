@@ -62,3 +62,6 @@ AutoBible-mac-source.zip
 
 # 작업용 참고 영상(슬라이드 애니메이션 등) — 용량 커서 추적 안 함
 sample video/
+
+# 홍보용 카드뉴스 작업물 — 앱 배포물이 아니라 추적 안 함
+cardnews/
