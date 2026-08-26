@@ -346,6 +346,10 @@
       state.searchClickNav = on;
       api().set_app_setting("search_click_navigates", on);
     });
+    setSwitch($("opt-search-syn"), s.search_synonyms !== false, (on) => {
+      state.searchSyn = on;
+      api().set_app_setting("search_synonyms", on);
+    });
     setSwitch($("opt-auto-copy"), s.auto_copy_top_result, (on) => {
       state.autoCopyTop = on;
       api().set_app_setting("auto_copy_top_result", on);
@@ -1657,10 +1661,21 @@
     // 띄어쓰기 다중 키워드일 때만 AND/OR 모드 표기(단일어는 모드 무관 폴백).
     const multi = res.keyword.trim().includes(" ");
     const modeTag = multi && res.mode ? ` · ${res.mode.toUpperCase()}` : "";
+    // v1.1.11 유의어 확장이 실제로 일어났으면 메타 줄에 이유를 밝힌다 — '이집트'로
+    // 검색해 '애굽' 절이 나오는 것은 알려주지 않으면 오작동처럼 보인다.
+    const exp = res.expanded || {};
+    const expKeys = Object.keys(exp);
+    const expTag = expKeys.length
+      ? " · " + I18N.t("search.synExpanded", {
+          pairs: expKeys.map((k) => `${k}→${exp[k].join("/")}`).join(", "),
+        })
+      : "";
     $("search-meta").textContent =
       I18N.t("search.resultMeta", { keyword: res.keyword, count: searchHits.length, display: res.display, mode: modeTag }) +
-      (state.searchClickNav ? I18N.t("search.actionCopyNav") : I18N.t("search.actionCopy"));
-    const toks = res.matched_tokens || [];
+      (state.searchClickNav ? I18N.t("search.actionCopyNav") : I18N.t("search.actionCopy")) + expTag;
+    // 강조 토큰 = 질의어 + 유의어 확장어(highlight_tokens). 구버전 응답 호환으로
+    // matched_tokens 로 폴백한다.
+    const toks = res.highlight_tokens || res.matched_tokens || [];
     host.innerHTML = (res.hits || [])
       .map(
         (h, i) =>

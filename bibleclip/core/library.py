@@ -62,6 +62,10 @@ class Library:
         'ui_lang': 'ko',                  # UI display language (ko/en) — persisted
         'reading_font': '',               # custom reading font family ('' = default)
         'auto_copy_top_result': False,    # 검색 최고 점수 결과 자동 클립보드 복사
+        # v1.1.11 검색어 유의어 확장(고어↔현대어). 켜면 '이집트'로 검색해도 개역한글의
+        # '애굽'이 걸린다(끄면 0건). 사전은 web/data/bible_synonyms.json — 앱이 가진
+        # 한국어 역본들의 절 단위 병렬 대응에서 추출. 검색 전용(표시/복사와 무관).
+        'search_synonyms': True,
         'poll_interval': 0.5,             # clipboard polling interval (seconds)
         'search_click_navigates': False,  # search hit click also jumps the viewer
         'dark_mode': False,

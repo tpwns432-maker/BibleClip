@@ -8,6 +8,7 @@ Mixed into webui.api.Api. Uses ``self.lib`` and ``self._popup_factory``.
 import re
 
 from bibleclip import i18n, korean
+from bibleclip.data import synonyms
 from bibleclip.webui.dicthtml import _TAGS_RE, _dict_page_html, parse_entry
 
 
@@ -111,18 +112,36 @@ class BibleRoutes:
         matched_tokens = korean.tokenize(keyword) or ([keyword] if keyword else [])
         if not keyword:
             return {'keyword': '', 'version': None, 'display': '', 'mode': mode,
-                    'matched_tokens': [], 'hits': []}
+                    'matched_tokens': [], 'highlight_tokens': [],
+                    'expanded': {}, 'hits': []}
         ver = version if (version and version in self.lib.dbs) else self._search_version()
         db = self.lib.dbs.get(ver)
         if not db:
             return {'keyword': keyword, 'version': None, 'display': '', 'mode': mode,
-                    'matched_tokens': matched_tokens, 'hits': []}
-        rows = db.search(keyword, limit=limit, mode=mode)
+                    'matched_tokens': matched_tokens,
+                    'highlight_tokens': list(matched_tokens),
+                    'expanded': {}, 'hits': []}
+        # v1.1.11 유의어 확장(고어↔현대어)은 설정 토글로 켜고 끈다. 확장이 실제로 일어난
+        # 토큰은 프론트에 함께 돌려준다 — 하이라이트에 넣어야 '이집트'로 검색해 나온 절에서
+        # 본문의 '애굽'이 강조되고(왜 이 절인지 보임), 메타 줄에 이유도 밝힐 수 있다.
+        expand = bool(self.lib.settings.get('search_synonyms', True))
+        rows = db.search(keyword, limit=limit, mode=mode, expand_synonyms=expand)
+        expanded = synonyms.shared().expand_all(matched_tokens) if expand else {}
+        # `matched_tokens` 는 기존 계약을 그대로 지킨다(조사 제거된 어근 = 질의어 자체).
+        # 확장어는 별개 필드로 나눈다: `highlight_tokens` = 질의어 + 확장어(프론트 강조용),
+        # `expanded` = {질의어: [확장어...]}(메타 줄에 '왜 이 절인지' 표기용).
+        hl = list(matched_tokens)
+        for alts in expanded.values():
+            for w in alts:
+                if w not in hl:
+                    hl.append(w)
         hits = [{'book': b, 'chapter': c, 'verse': v,
                  'short': db.books[b][0] if b in db.books else '?', 'text': t}
                 for (b, c, v, t) in rows]
         return {'keyword': keyword, 'version': ver, 'display': db.display_name,
-                'mode': mode, 'matched_tokens': matched_tokens, 'hits': hits}
+                'mode': mode, 'matched_tokens': matched_tokens,
+                'highlight_tokens': hl,
+                'expanded': {k: list(v) for k, v in expanded.items()}, 'hits': hits}
 
     # ---- Lexicon ----
 
