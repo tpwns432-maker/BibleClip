@@ -430,7 +430,12 @@
           // Part3-2: 절 맨 앞이 아니라 본문 문장이 끝나는 최종 지점 뒤에 배치
           // (예: "~천지를 창조하시니라. 📄"). .v 끝에 붙이면 단일 역본은 텍스트
           // 바로 뒤(인라인), 다역본(.vline)은 마지막 줄 뒤에 온다.
-          el.appendChild(b);
+          // v1.1.10 split(병렬 독서): .v는 flex 행(.srow)이라 행에 직접 붙이면 배지가
+          // '역본 하나 더'인 셈으로 컬럼 폭을 먹는다 → 첫(내용 있는) 셀 안에 넣는다.
+          const host = el.classList.contains("srow")
+            ? (el.querySelector(".scell:not(.empty)") || el.querySelector(".scell") || el)
+            : el;
+          host.appendChild(b);
         }
       });
     }
@@ -1213,14 +1218,16 @@
     // 아니라 요소 단위 — split 컬럼이 한 카드 id를 공유하므로 컬럼별로 가드해야 한다.
     const progScroll = new Set();
 
-    // 한 성경 카드의 스크립처 스크롤 컨테이너들: split이면 컬럼(.scol) N개, 아니면 본문 1개.
+    // 한 성경 카드의 스크립처 스크롤 컨테이너 — v1.1.10부터 보기 모드와 무관하게 항상
+    // 카드 본문 하나다. (v1.1.6~1.1.9의 split은 역본별 독립 스크롤 컬럼 `.scol` N개였다.
+    // 절 단위 행 정렬로 바뀌며 컬럼↔컬럼 스크롤 싱크가 구조적으로 불필요해졌다.)
+    // 리스트를 유지하는 이유: 아래 syncFrom/realignAnchors 가 "카드의 모든 스크롤러"를
+    // 순회하는 형태라 다시 다중 스크롤러가 생겨도 무해하다.
     function scriptureScrollers(card) {
       const body = bodyEl(card.id);
-      if (!body) return [];
-      const cols = body.querySelectorAll(".scol");
-      return cols.length ? [...cols] : [body];
+      return body ? [body] : [];
     }
-    // 정규 앵커(히스토리/점프 기준) = 첫 컬럼(= 주 역본). split이 아니면 본문 자체.
+    // 정규 앵커(히스토리/점프 기준) = 카드 본문.
     function primaryScroller(card) { return scriptureScrollers(card)[0] || null; }
     // 이 성경 카드에 연동된 원어 카드의 스크롤 바디들(원어는 단일 본문).
     function linkedInterlinScrollers(card) {
@@ -1302,7 +1309,7 @@
       if (n == null) return;
       const frac = verseTopFraction(scrollEl, n);
       scriptureScrollers(card).forEach((el) => {
-        if (el !== scrollEl) scrollElToVerse(el, n, true, frac);  // 형제 컬럼 추종
+        if (el !== scrollEl) scrollElToVerse(el, n, true, frac);  // 형제 스크롤러(현재 없음)
       });
       alignInterlin(card, n, frac);                                // 연동 원어 추종
     }
@@ -1436,16 +1443,14 @@
       });
 
       // Scroll inside a scripture scroller → hide tooltips + sync(형제 컬럼 + 연동
-      // 원어). 스크롤 요소는 split 컬럼(.scol) 또는 단일 본문(.scripture). 히스토리 절은
-      // 500ms 정착 후에만 잠근다(7차-2): rAF는 실시간 정렬, 타이머는 히스토리 쓰기 보류.
+      // 원어). 스크롤 요소 = 카드 본문(.scripture) — v1.1.10부터 split(병렬 독서)도
+      // 본문 하나만 스크롤한다. 히스토리 절은 500ms 정착 후에만 잠근다(7차-2):
+      // rAF는 실시간 정렬, 타이머는 히스토리 쓰기 보류.
       c.addEventListener("scroll", (e) => {
         hideTip();
         const el = e.target;
         if (!el.classList) return;
-        // split 컬럼이거나 단일 본문(.scripture)인 경우만. split 본문(.split-cols)은
-        // overflow:hidden이라 스크롤 이벤트를 내지 않으므로 컬럼만 잡힌다.
-        const isCol = el.classList.contains("scol");
-        if (!isCol && !el.classList.contains("scripture")) return;
+        if (!el.classList.contains("scripture")) return;
         const sec = el.closest(".mcard");
         if (!sec || sec.dataset.type !== "bible") return;
         const card = cardById(sec.dataset.id);
@@ -1629,23 +1634,43 @@
     if (hl.size) centerHighlightVerse(body);
   }
 
-  // v1.1.6 병렬 독서(split) 렌더링: 역본별 좌우 컬럼(.scol)으로 분할한다. 각 컬럼은
-  // 독립 스크롤 컨테이너(.scol)이고 상단에 역본명 sticky 헤더(.scol-head)를 단다.
-  // 컬럼 간 + 연동 원어 카드 추종은 절 앵커 기반 스크롤 싱크가 담당(syncFrom).
+  // v1.1.10 병렬 독서(split) 렌더링 — 절 단위 '행(row)' 정렬.
+  // v1.1.6~1.1.9는 역본별 독립 스크롤 컬럼(.scol) N개였고 절 앵커 스크롤 싱크로 서로를
+  // 추종했다. 역본마다 줄 수가 달라 같은 절의 '시작점'이 어긋나는 한계가 있었으므로
+  // 구조를 뒤집는다: 본문 = 단일 스크롤 컨테이너, 절 하나 = 한 행(.srow, 겸 .v),
+  // 행 안에 역본별 셀(.scell)이 flex로 나란히. 행 높이는 가장 긴 셀에 맞춰지므로 모든
+  // 역본의 절 시작점이 '구조적으로' 일치한다 — 스크롤 싱크가 아예 불필요(스크롤러 1개).
+  // 역본 간 절 분할이 달라 없는 절은 빈 셀(.empty)로 남긴다(임의 병합하지 않음).
+  // 상단 역본명은 sticky 헤더 행(.shead).
   function renderSplitVersesInto(body, versions, chapDataArr, highlight) {
     const hl = new Set(highlight || []);
-    body.innerHTML = versions.map((ver, vi) => {
-      const verses = (chapDataArr[vi] && chapDataArr[vi].verses) || [];
-      const inner = verses.length
-        ? verses.map((v) =>
-            `<div class="v${hl.has(v.n) ? " hl" : ""}" data-v="${v.n}">` +
-            `<span class="vnum">${v.n}</span>${esc(v.text)}</div>`).join("")
-        : `<div class="panel-loading">${I18N.t("card.noText")}</div>`;
-      return `<div class="scol" data-ver="${esc(ver)}">` +
-             `<div class="scol-head">${esc(displayName(ver))}</div>${inner}</div>`;
-    }).join("");
-    // 하이라이트가 있으면 각 컬럼이 자기 하이라이트 절을 중앙 정렬(같은 절이므로 정렬됨).
-    if (hl.size) body.querySelectorAll(".scol").forEach(centerHighlightVerse);
+    const nums = new Set();
+    const maps = versions.map((_, vi) => {
+      const m = new Map();
+      ((chapDataArr[vi] && chapDataArr[vi].verses) || []).forEach((v) => {
+        m.set(v.n, v.text);
+        nums.add(v.n);
+      });
+      return m;
+    });
+    if (!nums.size) {
+      body.innerHTML = `<div class="panel-loading">${I18N.t("card.noText")}</div>`;
+      return;
+    }
+    const head = `<div class="srow shead">` +
+      versions.map((ver) => `<div class="scell">${esc(displayName(ver))}</div>`).join("") +
+      `</div>`;
+    const rows = [...nums].sort((a, b) => a - b).map((n) =>
+      `<div class="v srow${hl.has(n) ? " hl" : ""}" data-v="${n}">` +
+      maps.map((m) => {
+        const t = m.get(n);
+        return t == null
+          ? `<div class="scell empty"></div>`
+          : `<div class="scell"><span class="vnum">${n}</span>${esc(t)}</div>`;
+      }).join("") +
+      `</div>`).join("");
+    body.innerHTML = head + rows;
+    if (hl.size) centerHighlightVerse(body);
   }
 
   function renderInterlinearInto(body, data) {

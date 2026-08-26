@@ -532,32 +532,34 @@ body {
   vertical-align: middle; letter-spacing: .02em; font-family: var(--font-ui);
 }
 
-/* ---- v1.1.6 병렬 독서(split) 컬럼 레이아웃 ----
-   split 모드에서 .card-body.scripture 는 스크롤하지 않는 가로 flex 컨테이너가 되고,
-   그 안의 역본별 .scol 컬럼이 각자 독립 스크롤한다(절 앵커 기반 양방향 싱크). */
-.card-body.scripture.split-cols {
-  display: flex; gap: 0; padding: 0; overflow: hidden;
+/* ---- v1.1.10 병렬 독서(split) 절 행(row) 정렬 레이아웃 ----
+   본문(.card-body.scripture.split-cols)이 단일 세로 스크롤러이고, 절 하나가 한 행
+   (.srow, 겸 .v)이다. 행 안에서 역본별 셀(.scell)이 flex:1 1 0 으로 균등 분할되므로
+   행 높이 = 가장 긴 셀의 높이 → 역본마다 줄 수가 달라도 모든 역본의 절이 정확히 같은
+   y에서 시작한다. (v1.1.6~1.1.9는 역본별 독립 스크롤 컬럼 `.scol` + 절 앵커 싱크였고
+   줄 수 차이만큼 절 시작점이 어긋났다.) */
+.card-body.scripture.split-cols { padding: 0; }
+/* 격자선은 그리지 않는다(요청) — 정렬만 격자, 시각적으로는 선 없는 여백 분리. */
+.split-cols .srow { display: flex; align-items: stretch; }
+.split-cols .scell {
+  flex: 1 1 0; min-width: 0;              /* 균등 분할 = 역본 폭이 항상 같음 */
+  padding: 5px 15px 12px; word-break: break-word;
 }
-.scol {
-  flex: 1 1 0; min-width: 200px;        /* 좁아지면(3+ 역본) 가로 스크롤 허용 */
-  overflow-y: auto; overflow-x: hidden;
-  padding: 2px 14px 16px;
-}
-.scol + .scol { border-left: 1px solid var(--card-border); }
-.scol-head {
-  position: sticky; top: 0; z-index: 1;
-  background: var(--card-bg);
+.split-cols .scell.empty { min-height: 0; }   /* 역본에 없는 절(절 분할 차이) = 빈 칸 */
+/* 역본명 sticky 헤더 행 */
+.split-cols .shead { position: sticky; top: 0; z-index: 2; background: var(--card-bg); }
+.split-cols .shead .scell {
   font-family: var(--font-ui); font-size: 10.5px; font-weight: 800;
-  color: var(--accent); letter-spacing: .02em;
-  padding: 6px 0 5px; margin-bottom: 4px;
-  border-bottom: 1px solid var(--card-border);
+  color: var(--accent); letter-spacing: .02em; padding: 7px 14px 6px;
 }
-.scol::-webkit-scrollbar { width: 10px; }
-.scol::-webkit-scrollbar-thumb {
-  background: var(--card-border); border-radius: 999px;
-  border: 3px solid var(--card-bg);
+/* `.v` 기본 스타일(절 간 여백·라운드·후광 그림자·hl 음수 마진)은 격자를 어긋나게
+   만들므로 split에서는 무효화한다. 배경/강조 색만 남긴다. */
+.split-cols .v { margin-bottom: 0; border-radius: 0; }
+.split-cols .v:hover, .split-cols .v.copied { box-shadow: none; }
+.split-cols .v.hl {
+  margin: 0; padding: 0; border-radius: 0;
+  box-shadow: inset 3px 0 0 var(--accent);
 }
-.scol::-webkit-scrollbar-thumb:hover { background: var(--text-dim); }
 
 /* Strong's number chip (inline, in scripture + interlinear) */
 .strong {
@@ -917,10 +919,13 @@ html[data-theme="dark"] .note-modal-back { background: rgba(0,0,0,.55); }
   font-size: calc(clamp(26px, 3.4vw, 60px) * var(--reading-scale)); line-height: 1.7;
 }
 .mcard:fullscreen .card-body .v { margin-bottom: .5em; }
-/* 전체화면 병렬 독서(split): 컬럼 레이아웃 유지 + 컬럼별 여백/스크롤 */
-.mcard:fullscreen .card-body.split-cols { display: flex; overflow: hidden; padding: 0; }
-.mcard:fullscreen .scol { padding: 5vh 4vw; }
-.mcard:fullscreen .scol-head { font-size: calc(14px * var(--reading-scale)); margin-bottom: 2vh; }
+/* 전체화면 병렬 독서(split): 행 정렬 유지 + 발표용 여백 확대(스크롤러는 본문 하나) */
+.mcard:fullscreen .card-body.split-cols { display: block; overflow-y: auto; padding: 0; }
+.mcard:fullscreen .split-cols .v { margin-bottom: 0; }
+.mcard:fullscreen .split-cols .scell { padding: .7em 2.6vw; }
+.mcard:fullscreen .split-cols .shead .scell {
+  font-size: calc(14px * var(--reading-scale)); padding: .5em 2.6vw;
+}
 .present-hint {
   position: absolute; bottom: 16px; left: 50%; transform: translateX(-50%);
   font-size: 13px; color: var(--text-dim);
