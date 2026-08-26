@@ -76,6 +76,9 @@ class SystemRoutes:
             'is_premium': bool(getattr(self.lib, 'is_premium', True)),
             'search_click_navigates': bool(s.get('search_click_navigates', False)),
             'auto_copy_top_result': bool(s.get('auto_copy_top_result', False)),
+            # v1.1.11 검색어 유의어 확장 (고어↔현대어). 프론트는 확장 발생 시 검색
+            # 결과 메타 줄에 '유의어 확장: 이집트→애굽'을 덧붙여 이유를 밝힌다.
+            'search_synonyms': bool(s.get('search_synonyms', True)),
             # v1.1.6 본문 보기 모드 (절별 대조 'interleave' / 병렬 독서 'split').
             'view_mode': 'split' if s.get('view_mode') == 'split' else 'interleave',
             # Persisted modular-card layout (None until the web UI saves one; the
@@ -213,6 +216,7 @@ class SystemRoutes:
         'auto_update_check': None,
         'search_click_navigates': None,
         'auto_copy_top_result': None,   # 검색 시 최고 점수 결과를 클립보드에 자동 복사
+        'search_synonyms': None,        # v1.1.11 검색어 유의어 확장(고어↔현대어)
         'lex_lang': {'ko', 'en'},
         # UI 표시 언어 (i18n). 프론트가 전환 시 기록 → Python-렌더 표면(킬스위치·사전
         # 팝업·미리보기)이 같은 언어로 출력. 새 언어 추가 시 프론트 SUPPORTED 와 동반 확장.
@@ -238,6 +242,7 @@ class SystemRoutes:
             'reading_font': s.get('reading_font') or '',
             'poll_interval': float(s.get('poll_interval', 0.5) or 0.5),
             'auto_copy_top_result': bool(s.get('auto_copy_top_result', False)),
+            'search_synonyms': bool(s.get('search_synonyms', True)),
             'view_mode': 'split' if s.get('view_mode') == 'split' else 'interleave',
             'web_cards_layout': s.get('web_cards_layout'),
             'version': __version__,
