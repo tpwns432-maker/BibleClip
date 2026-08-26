@@ -4,6 +4,28 @@ BibleClip의 버전별 변경 내용입니다. 최신 버전이 위에 옵니다
 
 ---
 
+## v1.1.10 — 병렬 독서 절 단위 행 정렬
+- **병렬 독서(`view_mode='split'`)의 절 시작점 정렬** — 역본마다 줄 수가 달라 같은 절의 시작 위치가
+  어긋나던 문제. v1.1.6~1.1.9는 역본별 **독립 스크롤 컬럼 `.scol`** N개를 절 앵커 스크롤 싱크로
+  서로 추종시키는 구조였고, 추종은 되지만 줄 수 차이만큼 절이 밀렸다. 구조를 뒤집어 해결:
+  **본문 단일 스크롤러 + 절 1개 = 한 행**.
+- `renderSplitVersesInto` 재작성 — 전 역본 절 번호의 **합집합**을 행으로 잡고(오름차순), 행 =
+  `<div class="v srow" data-v=n>` + 역본별 셀 `<div class="scell">`. 한쪽 역본에 없는 절은
+  `.scell.empty` 빈 칸으로 남긴다(임의 병합하지 않음). 상단 역본명은 sticky 헤더 행 `.srow.shead`.
+- CSS `.split-cols .srow{display:flex}` + `.scell{flex:1 1 0;min-width:0}` → **행 높이 = 최장 셀**
+  이므로 절 시작점이 구조적으로 일치. **격자선(테두리)은 그리지 않는다** — 정렬만 격자, 시각적으로는
+  셀 padding 으로만 분리. `.v` 기본 여백/라운드/후광 그림자와 `.v.hl` 음수 마진은 격자를 어긋내므로
+  split 에서 무효화(배경·강조색만 유지).
+- **부수 정리** — 스크롤러가 1개가 되어 컬럼↔컬럼 싱크가 불필요해졌다. `scriptureScrollers(card)`는
+  `[body]` 하나만 반환하고, scroll 핸들러의 `.scol` 캐치를 제거(`.scripture` 만). `progScroll`/
+  `syncFrom`/`snapshotAnchors`/`realignAnchors`는 형태 유지 — 카드 → 연동 원어(interlinear) 싱크는
+  그대로 필요하다.
+- `decorateNotes`: split 행에 노트 배지를 직접 붙이면 flex 칸이 하나 더 생겨 컬럼 폭을 먹으므로,
+  **첫 내용 셀**(`.scell:not(.empty)`) 안에 삽입한다.
+- 전체화면(F11) 오버라이드도 flex 컬럼 → block 스크롤 + 셀 여백으로 교체.
+
+---
+
 ## v1.1.9 — 장 넘기기 화살표의 책 경계 이월
 - **책 경계 이월(`neighborBookChapter`)** — 책의 첫/마지막 장에서 장 넘기기 화살표가 무반응이던 문제
   (`cardChapStep`이 현재 책의 장 목록 범위를 벗어나면 그냥 `return`). 이제 **첫 장에서 `←` → 앞 책의
