@@ -100,6 +100,11 @@ class Library:
         from bibleclip.notes import Notes
         self.notes = Notes()
 
+        # 절 내부 단어 하이라이트 store (userdata/user_highlights.json, v1.1.12).
+        # 노트와 같은 절 앵커 사용자 콘텐츠지만 역본별로 갈린다. Fail-soft.
+        from bibleclip.highlights import Highlights
+        self.highlights = Highlights()
+
         # 설교 장바구니 store (userdata/sermon_cart.json) — survives restart
         # (FEAT-08). localStorage was unreliable (random loopback port → origin
         # changes each launch), so persistence is backend-side. Fail-soft.

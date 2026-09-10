@@ -24,7 +24,10 @@
       `<div class="ctx-item" data-a="note">${has ? I18N.t("ctx.noteEdit") : I18N.t("ctx.noteNew")}</div>` +
       `<div class="ctx-item" data-a="cart">${I18N.t("cart.add")}</div>` +
       `<div class="ctx-item" data-a="orig">${I18N.t("ctx.lookupOriginal")}</div>`;
-    document.body.appendChild(m);
+    // F11: 전체화면 요소 밖의 DOM 은 아예 렌더되지 않으므로 body 에 붙이면 발표 중
+    // 우클릭 메뉴가 보이지 않는다(openQuickSearch 와 같은 처리). `.ctx-menu` 는
+    // position:fixed 라 어느 쪽에 붙어도 좌표계는 뷰포트 기준으로 같다.
+    (document.fullscreenElement || document.body).appendChild(m);
     const r = m.getBoundingClientRect();
     m.style.left = Math.min(x, window.innerWidth - r.width - 8) + "px";
     m.style.top = Math.min(y, window.innerHeight - r.height - 8) + "px";
@@ -77,7 +80,9 @@
           `<button class="btn primary note-save">${I18N.t("common.save")}</button>` +
         `</div>` +
       `</div>`;
-    document.body.appendChild(back);
+    // 절 우클릭 메뉴에서 열리므로 F11 에서도 도달 가능 → 메뉴와 같은 곳에 붙인다.
+    // (`.note-modal-back` 은 position:fixed; inset:0 이라 부모가 바뀌어도 동일하게 덮는다.)
+    (document.fullscreenElement || document.body).appendChild(back);
     const ta = back.querySelector(".note-ta");
     ta.value = (existing && existing.text) || "";
     setTimeout(() => ta.focus(), 0);

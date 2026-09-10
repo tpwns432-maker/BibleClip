@@ -16,7 +16,9 @@ monkeypatch on *this* module, so they must reference it here.
 import json
 import threading
 
-from bibleclip.webui.routes import BibleRoutes, NoteRoutes, SystemRoutes
+from bibleclip.webui.routes import (
+    BibleRoutes, HighlightRoutes, NoteRoutes, SystemRoutes,
+)
 # Lexicon-markup helpers live in their own module to avoid a circular import
 # (the route mixins need them too). Re-exported here for backwards compatibility
 # — `from bibleclip.webui.api import markup_to_html` still works.
@@ -31,10 +33,10 @@ except Exception:  # pragma: no cover - clipboard backend optional at import
     pyperclip = None
 
 
-class Api(SystemRoutes, BibleRoutes, NoteRoutes):
+class Api(SystemRoutes, BibleRoutes, NoteRoutes, HighlightRoutes):
     """Thin, JSON-friendly facade over Library for the web front-end.
 
-    Composed from the route mixins (system/bible/notes); the methods below are
+    Composed from the route mixins (system/bible/notes/highlights); the methods below are
     the shared core every mixin relies on."""
 
     def __init__(self, library):

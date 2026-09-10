@@ -404,6 +404,7 @@
       }
       updateBibleHeader(card);
       updateNavButtons(card);
+      decorateHighlights(card);  // 형광펜 (v1.1.12, async) — 배지보다 먼저 칠한다
       decorateNotes(card);   // 묵상 노트 배지 (Phase 3, async)
       updatePresentBanner(card);  // F11 틀고정 헤더 — 장 이동 시 위치 동기화
     }
@@ -439,6 +440,251 @@
         }
       });
     }
+
+
+    // ================= v1.1.12 절 내부 단어 하이라이트 (형광펜) =================
+    // 저장 단위 = (책, 장, 절, 역본) → 정렬된 비겹침 구간 목록 [{s,e,t,c}].
+    // s/e 는 그 역본 원문의 문자 오프셋, t 는 검증용 원문 조각, c 는 색(y/g/b/p).
+    // 역본별로 독립인 이유는 highlights.py 주석 참고(번역어가 달라 오프셋 공유 불가).
+
+    const HL_COLORS = ["y", "g", "b", "p"];
+    const hlCache = {};          // cardId → {version: {"<verse>": [ranges]}}
+    let hlPop = null;            // 열려 있는 색상 팔레트 요소
+
+    // 이 카드의 장 하이라이트를 받아 캐시하고 칠한다(decorateNotes 와 같은 형태).
+    async function decorateHighlights(card) {
+      if (!card || card.type !== "bible") return;
+      let data = {};
+      try {
+        data = (await api().get_chapter_highlights(
+          card.book, card.chapter, cardVersions(card))) || {};
+      } catch (e) { data = {}; }
+      hlCache[card.id] = data;
+      paintHighlights(card);
+    }
+
+    // 캐시 → DOM. 통신 없이 동작하므로 로컬 편집 직후 즉시 다시 칠할 수 있다.
+    function paintHighlights(card) {
+      const body = bodyEl(card.id);
+      if (!body) return;
+      const data = hlCache[card.id] || {};
+      body.querySelectorAll(".vtx[data-ver]").forEach((tx) => {
+        const vEl = tx.closest(".v[data-v]");
+        if (!vEl) return;
+        const ranges = ((data[tx.dataset.ver] || {})[vEl.dataset.v]) || [];
+        // 칠할 것도 없고 칠해진 것도 없으면 건드리지 않는다(대부분의 절).
+        if (!ranges.length && !tx.querySelector(".hl-mark")) return;
+        // textContent 는 항상 원문 그대로 → 이걸 원문 소스로 쓴다(vtxHTML 주석 참고).
+        tx.innerHTML = hlTextHTML(tx.textContent, ranges);
+      });
+    }
+
+    function hlColor(c) { return HL_COLORS.includes(c) ? c : HL_COLORS[0]; }
+
+    function hlMark(c, text, s, e) {
+      return '<span class="hl-mark" data-c="' + hlColor(c) + '" data-s="' + s +
+        '" data-e="' + e + '">' + esc(text) + '</span>';
+    }
+
+    // 원문 + 구간목록 → 하이라이트 span 이 박힌 HTML.
+    // 오프셋 검증: 저장된 조각(t)과 실제 텍스트가 다르면(성경 DB 갱신·역본 재동봉으로
+    // 본문이 밀린 경우) 그 자리를 칠하는 대신 같은 조각을 뒤에서 다시 찾는다. 그래도
+    // 없으면 조용히 버린다 — 발표 화면에 엉뚱한 곳이 칠해지는 게 더 나쁘다.
+    function hlTextHTML(raw, ranges) {
+      if (!ranges || !ranges.length) return esc(raw);
+      let out = "", pos = 0;
+      for (const r of ranges) {
+        const s = Math.max(pos, r.s | 0), e = Math.min(raw.length, r.e | 0);
+        if (r.t && raw.slice(s, e) !== r.t) {
+          const at = raw.indexOf(r.t, pos);
+          if (at < 0) continue;                       // 사라진 하이라이트 → 폐기
+          out += esc(raw.slice(pos, at)) + hlMark(r.c, r.t, at, at + r.t.length);
+          pos = at + r.t.length;
+          continue;
+        }
+        if (e <= s) continue;
+        out += esc(raw.slice(pos, s)) + hlMark(r.c, raw.slice(s, e), s, e);
+        pos = e;
+      }
+      return out + esc(raw.slice(pos));
+    }
+
+    // ---- 선택 영역 → 오프셋 구간 ----
+
+    // (node, offset) 경계가 `tx` 안에서 몇 번째 문자인지. Range 로 재어서 구하므로
+    // 이미 하이라이트 span 들로 쪼개진 상태에서도 정확하다.
+    function vtxOffset(tx, node, off) {
+      const r = document.createRange();
+      try { r.selectNodeContents(tx); r.setEnd(node, off); }
+      catch (e) { return null; }
+      return r.toString().length;
+    }
+
+    // 드래그 선택을 (역본, 절)별 구간으로 쪼갠다. 여러 절이나 여러 컬럼에 걸친 선택은
+    // 걸친 `.vtx` 마다 자기 몫으로 잘려 각각 독립 하이라이트가 된다.
+    function selectionRanges(sec, range) {
+      const out = [];
+      sec.querySelectorAll(".vtx[data-ver]").forEach((tx) => {
+        if (!range.intersectsNode(tx)) return;
+        const vEl = tx.closest(".v[data-v]");
+        if (!vEl) return;
+        const raw = tx.textContent;
+        // 선택의 시작/끝이 이 .vtx 안에 있으면 그 지점, 아니면 이 절은 통째로 걸린 것.
+        const s = tx.contains(range.startContainer)
+          ? vtxOffset(tx, range.startContainer, range.startOffset) : 0;
+        const e = tx.contains(range.endContainer)
+          ? vtxOffset(tx, range.endContainer, range.endOffset) : raw.length;
+        if (s == null || e == null || e <= s) return;
+        // 앞뒤 공백까지 칠하면 형광펜이 지저분해 보인다 → 텍스트 경계로 좁힌다.
+        let a = s, b = e;
+        while (a < b && /\s/.test(raw[a])) a++;
+        while (b > a && /\s/.test(raw[b - 1])) b--;
+        if (b <= a) return;
+        out.push({ ver: tx.dataset.ver, n: vEl.dataset.v, s: a, e: b });
+      });
+      return out;
+    }
+
+    // ---- 구간 목록 대수 (병합 / 차감) ----
+
+    // 정렬 + 같은 색 인접·겹침 병합 + 비겹침 보장, 그리고 t(검증 조각) 재계산.
+    // 경계가 바뀐 구간의 t 를 다시 뜨지 않으면 다음 렌더에서 검증에 걸려 사라진다.
+    function normRanges(list, raw) {
+      const sorted = list.filter((r) => r.e > r.s).sort((a, b) => a.s - b.s || a.e - b.e);
+      const merged = [];
+      for (const r0 of sorted) {
+        const r = { s: r0.s, e: r0.e, c: hlColor(r0.c) };
+        const last = merged[merged.length - 1];
+        if (last && last.c === r.c && r.s <= last.e) {   // 같은 색 → 하나로
+          last.e = Math.max(last.e, r.e);
+          continue;
+        }
+        if (last && r.s < last.e) {                       // 다른 색 겹침 → 뒤를 잘라냄
+          r.s = last.e;
+          if (r.e <= r.s) continue;
+        }
+        merged.push(r);
+      }
+      return merged.map((r) => ({ s: r.s, e: r.e, c: r.c, t: raw.slice(r.s, r.e) }));
+    }
+
+    // 새 구간을 덮어쓴다. 다른 색과 겹치면 새 색이 이기고(형광펜을 겹쳐 칠하는 감각),
+    // 기존 구간의 남는 쪽은 보존한다 — 가운데를 덮으면 좌우 둘로 쪼개진다.
+    function mergeRange(list, add, raw) {
+      const out = [];
+      for (const r of list) {
+        if (r.e <= add.s || r.s >= add.e) { out.push(r); continue; }
+        // 같은 색끼리는 자르지 않고 그대로 넘겨 normRanges 가 하나로 잇게 한다.
+        // (여기서 버리면 병합할 대상이 사라져 겹쳐 칠한 앞부분이 날아간다.)
+        if (hlColor(r.c) === hlColor(add.c)) { out.push(r); continue; }
+        if (r.s < add.s) out.push({ s: r.s, e: add.s, c: r.c });
+        if (r.e > add.e) out.push({ s: add.e, e: r.e, c: r.c });
+      }
+      out.push({ s: add.s, e: add.e, c: hlColor(add.c) });
+      return normRanges(out, raw);
+    }
+
+    // 선택 구간을 기존 하이라이트에서 뺀다(✕ 지우기). 가운데만 지우면 둘로 쪼갠다.
+    function subtractRange(list, del, raw) {
+      const out = [];
+      for (const r of list) {
+        if (r.e <= del.s || r.s >= del.e) { out.push(r); continue; }
+        if (r.s < del.s) out.push({ s: r.s, e: del.s, c: r.c });
+        if (r.e > del.e) out.push({ s: del.e, e: r.e, c: r.c });
+      }
+      return normRanges(out, raw);
+    }
+
+    // ---- 색상 팔레트 팝업 ----
+
+    function closeHlPalette() {
+      if (hlPop) { hlPop.remove(); hlPop = null; }
+    }
+
+    // targets: selectionRanges() 결과 (또는 기존 하이라이트 하나).
+    function openHlPalette(card, targets, rect) {
+      closeHlPalette();
+      const p = document.createElement("div");
+      p.className = "hl-pal";
+      p.innerHTML =
+        HL_COLORS.map((c) =>
+          '<button class="hl-sw" data-c="' + c + '" title="' +
+          esc(I18N.t("hl." + c)) + '"></button>').join("") +
+        '<span class="hl-sep"></span>' +
+        '<button class="hl-sw hl-del" title="' + esc(I18N.t("hl.clear")) + '">✕</button>';
+      // F11: 전체화면 요소 밖의 DOM 은 아예 렌더되지 않는다. 팝업을 body 에 붙이면
+      // 발표 중에는 보이지 않으므로 전체화면 요소 안에 붙인다(position:fixed 라
+      // 좌표계는 어느 쪽이든 뷰포트 기준으로 같다).
+      (document.fullscreenElement || document.body).appendChild(p);
+      const r = p.getBoundingClientRect();
+      p.style.left = Math.max(6, Math.min(rect.left + rect.width / 2 - r.width / 2,
+        window.innerWidth - r.width - 6)) + "px";
+      const above = rect.top - r.height - 8;           // 선택 위가 기본, 좁으면 아래
+      p.style.top = (above > 6 ? above : rect.bottom + 8) + "px";
+      p.addEventListener("mousedown", (e) => {
+        const b = e.target.closest(".hl-sw");
+        if (!b) return;
+        e.preventDefault();
+        e.stopPropagation();                            // 바깥클릭 닫힘 핸들러 차단
+        applyHl(card, targets, b.classList.contains("hl-del") ? null : b.dataset.c);
+        closeHlPalette();
+      });
+      hlPop = p;
+    }
+
+    // color=null 이면 지우기. 화면을 먼저 갱신하고 저장은 뒤따른다(저장 실패해도
+    // 화면은 이미 맞고, 다음 로드에서 원상복귀 — notes 와 같은 fail-soft).
+    async function applyHl(card, targets, color) {
+      const body = bodyEl(card.id);
+      if (!body) return;
+      const cache = hlCache[card.id] || (hlCache[card.id] = {});
+      const writes = [];
+      for (const t of targets) {
+        const tx = vtxFor(body, t.n, t.ver);
+        if (!tx) continue;
+        const raw = tx.textContent;
+        const per = cache[t.ver] || (cache[t.ver] = {});
+        const cur = (per[t.n] || []).map((r) => ({ s: r.s | 0, e: r.e | 0, c: r.c }));
+        const next = color
+          ? mergeRange(cur, { s: t.s, e: t.e, c: color }, raw)
+          : subtractRange(cur, { s: t.s, e: t.e }, raw);
+        per[t.n] = next;
+        writes.push([t, next]);
+      }
+      paintHighlights(card);
+      window.getSelection().removeAllRanges();   // 선택 잔상 제거(형광색이 가려진다)
+      for (const [t, next] of writes) {
+        try {
+          await api().set_verse_highlights(card.book, card.chapter, +t.n, t.ver, next);
+        } catch (e) { /* 저장 실패는 조용히 넘긴다 */ }
+      }
+      // 같은 장을 띄운 다른 성경 카드도 따라 갱신(하이라이트는 카드가 아니라
+      // 본문에 붙는 것이므로 두 카드가 같은 장을 보면 같이 보여야 한다).
+      for (const c of cards) {
+        if (c.type === "bible" && c.id !== card.id &&
+            c.book === card.book && c.chapter === card.chapter) decorateHighlights(c);
+      }
+    }
+
+    // 한 절 안에서 특정 역본의 텍스트 래퍼. 역본명에 CSS 셀렉터 특수문자가 있어도
+    // 안전하도록 속성 셀렉터 대신 순회로 찾는다.
+    function vtxFor(body, n, ver) {
+      const vEl = body.querySelector('.v[data-v="' + n + '"]');
+      if (!vEl) return null;
+      for (const tx of vEl.querySelectorAll(".vtx[data-ver]")) {
+        if (tx.dataset.ver === ver) return tx;
+      }
+      return null;
+    }
+
+    // 팔레트는 바깥 클릭 / ESC / 스크롤에 닫힌다(절 컨텍스트 메뉴와 같은 규칙).
+    document.addEventListener("mousedown", (e) => {
+      if (hlPop && !e.target.closest(".hl-pal")) closeHlPalette();
+    }, true);
+    document.addEventListener("keydown", (e) => {
+      if (e.key === "Escape") closeHlPalette();
+    });
+    document.addEventListener("scroll", closeHlPalette, true);
 
     // Ensure an interlinear (원어) card linked to a bible card, then surface it.
     function ensureInterlinearFor(bibleId) {
@@ -1385,8 +1631,27 @@
         // Verse click → copy (only when there's no active text selection).
         const sel = window.getSelection();
         if (sel && !sel.isCollapsed) return;
+        // 이미 칠해진 형광펜을 클릭 → 절 복사 대신 팔레트(색 변경 / 지우기).
+        // 칠하지 않은 부분을 누르면 여전히 절 복사이므로 기존 동작은 살아 있다.
+        const hm = e.target.closest(".hl-mark");
+        if (hm) {
+          const tx = hm.closest(".vtx[data-ver]");
+          const vv = hm.closest(".v[data-v]");
+          const card = cardById(hm.closest(".mcard").dataset.id);
+          if (tx && vv && card) {
+            openHlPalette(card, [{ ver: tx.dataset.ver, n: vv.dataset.v,
+              s: +hm.dataset.s, e: +hm.dataset.e }], hm.getBoundingClientRect());
+            return;
+          }
+        }
         const v = e.target.closest('.mcard[data-type="bible"] .v[data-v]');
         if (v) {
+          // F11 발표 중에는 절 클릭 복사를 막는다. 전체화면에서는 복사 피드백이 둘 다
+          // 보이지 않기 때문이다 — 토스트(.toast-wrap)는 fullscreen 요소 밖이라 렌더가
+          // 안 되고, 초록 플래시(.copied)는 발표 화면 소음이라 껐다. 그 상태로 두면
+          // 화면을 무심코 한 번 누르는 것만으로 준비해 둔 클립보드가 아무 표시 없이
+          // 덮인다. 의도적 제스처인 드래그 복사와 우클릭 메뉴 복사는 그대로 남는다.
+          if (document.fullscreenElement) return;
           const card = cardById(v.closest(".mcard").dataset.id);
           if (card) copyVersesFromCard(card, [+v.dataset.v]);
         }
@@ -1401,10 +1666,16 @@
         const card = cardById(sec.dataset.id);
         if (!card) return;
         const range = sel.getRangeAt(0);
+        // v1.1.12 형광펜: 기존 '드래그 → 걸친 절 복사'는 그대로 두고(회귀 없음)
+        // 색상 팔레트를 함께 띄운다. 색을 고르면 하이라이트, 딴 데를 누르면 복사만
+        // 된 셈이 된다. 좌표는 복사(async)가 선택을 건드리기 전에 미리 잡아둔다.
+        const rect = range.getBoundingClientRect();
+        const targets = selectionRanges(sec, range);
         const verses = [...sec.querySelectorAll(".v[data-v]")]
           .filter((el) => range.intersectsNode(el))
           .map((el) => +el.dataset.v);
         if (verses.length) copyVersesFromCard(card, verses);
+        if (targets.length) openHlPalette(card, targets, rect);
       });
 
       // Right-click an original-language word / cross-ref → independent window.
@@ -1590,6 +1861,21 @@
     body.scrollTop += (fr.top - br.top) - (br.height - fr.height) / 2;
   }
 
+  // v1.1.12 형광펜 — 절 텍스트를 `.vtx[data-ver]` 한 겹으로 감싼다.
+  //
+  // 이 래퍼가 기능의 토대다. 하이라이트 오프셋은 '그 역본 원문의 문자 인덱스'인데,
+  // 절 요소에는 절번호(.vnum)·역본명(.vver)·노트 배지(📄)가 함께 섞여 있어 절 요소
+  // 기준으로 오프셋을 세면 그 장식들 길이만큼 어긋난다. 텍스트만 별도 래퍼에 담으면
+  //   ① 오프셋 = `.vtx` 안의 순수 텍스트 위치 (장식 보정 불필요)
+  //   ② 다시 칠할 때 `.vtx.innerHTML`만 교체 (절번호·배지 건드리지 않음)
+  //   ③ `esc()`는 & < > 만 바꾸므로 `vtx.textContent === 원문` 이 항상 성립
+  //      → 원문을 따로 캐시할 필요가 없다(DOM이 곧 진실).
+  // data-ver 가 붙는 이유: 대조/병렬 모드에서 한 절에 역본별 텍스트가 여러 개 있고,
+  // 하이라이트는 역본별로 독립이라 어느 역본의 텍스트인지 표시해야 한다.
+  function vtxHTML(version, text) {
+    return `<span class="vtx" data-ver="${esc(version)}">${esc(text)}</span>`;
+  }
+
   function renderVersesInto(body, verses, highlight) {
     if (!verses || !verses.length) {
       body.innerHTML = `<div class="panel-loading">${I18N.t("card.noText")}</div>`;
@@ -1623,10 +1909,11 @@
           content = versions.map((ver) => {
             const text = v.texts[ver];
             if (!text) return "";
-            return `<div class="vline"><span class="vver">${esc(ver)}</span>${esc(text)}</div>`;
+            return `<div class="vline"><span class="vver">${esc(ver)}</span>` +
+              vtxHTML(ver, text) + `</div>`;
           }).filter(Boolean).join("");
         } else {
-          content = esc(v.texts[versions[0]] || "");
+          content = vtxHTML(versions[0], v.texts[versions[0]] || "");
         }
         return `<div class="v${hl.has(v.n) ? " hl" : ""}${multi ? " multi" : ""}" data-v="${v.n}">` +
           `<span class="vnum">${v.n}</span>${content}</div>`;
@@ -1662,11 +1949,12 @@
       `</div>`;
     const rows = [...nums].sort((a, b) => a - b).map((n) =>
       `<div class="v srow${hl.has(n) ? " hl" : ""}" data-v="${n}">` +
-      maps.map((m) => {
+      maps.map((m, vi) => {
         const t = m.get(n);
         return t == null
           ? `<div class="scell empty"></div>`
-          : `<div class="scell"><span class="vnum">${n}</span>${esc(t)}</div>`;
+          : `<div class="scell"><span class="vnum">${n}</span>` +
+            vtxHTML(versions[vi], t) + `</div>`;
       }).join("") +
       `</div>`).join("");
     body.innerHTML = head + rows;
