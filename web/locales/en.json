@@ -245,6 +245,12 @@
   "ctx.noteNew": "Write note",
   "ctx.lookupOriginal": "Open interlinear breakdown",
 
+  "hl.y": "Yellow highlight",
+  "hl.g": "Green highlight",
+  "hl.b": "Blue highlight",
+  "hl.p": "Pink highlight",
+  "hl.clear": "Remove highlight",
+
   "note.title": "Note",
   "note.placeholder": "Write your reflection on this verse…",
   "note.saved": "Note saved",

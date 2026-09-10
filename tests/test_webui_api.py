@@ -414,6 +414,31 @@ def main():
     assert api.get_note(10, 1, 1) is None
     print("notes CRUD (set/get/chapter/delete) OK")
 
+    # 형광펜 하이라이트 (v1.1.12) — 절 내부 단어 구간. 노트와 같은 방식으로 디스크
+    # 쓰기를 막고 빈 상태에서 시작한다.
+    api.lib.highlights._save = lambda: True
+    api.lib.highlights.data = {}
+    assert api.get_verse_highlights(10, 1, 1, '개역개정') == []
+    r = api.set_verse_highlights(10, 1, 1, '개역개정', [
+        {'s': 9, 'e': 12, 't': '천지를', 'c': 'y'},
+        {'s': 0, 'e': 3, 't': '태초에', 'c': 'g'},     # 순서 무관 → 정렬되어 저장
+        {'s': 4, 'e': 2, 'c': 'y'},                     # 역전 구간 → 폐기
+    ])
+    assert r['ok'] and [(x['s'], x['e']) for x in r['ranges']] == [(0, 3), (9, 12)], r
+    # 한 번의 왕복으로 표시 중인 역본 전체를 받는다(대조/병렬 모드).
+    ch = api.get_chapter_highlights(10, 1, ['개역개정', 'KJV'])
+    assert set(ch) == {'개역개정', 'KJV'}, ch
+    assert list(ch['개역개정']) == [1] and ch['KJV'] == {}, ch
+    # 역본 격리: KJV 에 칠해도 개역개정 것은 그대로.
+    api.set_verse_highlights(10, 1, 1, 'KJV', [{'s': 0, 'e': 3, 't': 'In ', 'c': 'b'}])
+    ch = api.get_chapter_highlights(10, 1, ['개역개정', 'KJV'])
+    assert len(ch['개역개정'][1]) == 2 and len(ch['KJV'][1]) == 1, ch
+    assert len(api.get_all_highlights()) == 3
+    api.clear_verse_highlights(10, 1, 1, '개역개정')
+    assert api.get_verse_highlights(10, 1, 1, '개역개정') == []
+    assert api.get_verse_highlights(10, 1, 1, 'KJV')      # KJV 는 남아 있어야 한다
+    print("highlights CRUD (set/get/chapter/clear + per-version isolation) OK")
+
     # 설교 장바구니 영속성 (FEAT-08, v1.1.4) — stub the disk write and start empty
     # so the test never touches userdata/sermon_cart.json. set_cart replaces the
     # whole list (sanitizing junk); get_cart + get_initial.cart reflect it.

@@ -4,8 +4,9 @@
 >
 > **유지보수 규칙 (STRICT)**: `api.py`/`routes/*`에 API 추가, `app.js`(프론트)에 이벤트 디스패처/컴포넌트 추가, 파일 구조·경로 변경 시 **반드시 이 파일을 동시에 갱신**한다. 커밋·작업완료 보고 전 "지명도 파일 업데이트 완료 여부"를 체크포인트로 확인한다.
 
-- **현재 버전**: v1.1.11 (`bibleclip/_version.py` = `__version__`, ASCII-only single source of truth)
-- **killswitch**: `recommend_version` = 1.1.10 (직전 버전 규칙)
+- **현재 버전**: v1.1.12 (`bibleclip/_version.py` = `__version__`, ASCII-only single source of truth)
+- **killswitch**: `recommend_version` = 1.1.11 (직전 버전 규칙)
+- **★ v1.1.12 내용(형광펜 = 절 내부 단어 하이라이트)**: 구절 안의 단어 구간에 색을 칠하고 영속 저장. 저장 단위 = **(책, 장, 절, 역본)** → 정렬된 비겹침 구간 `[{s,e,t,c}]`. `bibleclip/highlights.py`(`Highlights`, `userdata/user_highlights.json`, notes.py 미러·fail-soft) + `webui/routes/highlights.py`(`HighlightRoutes`) + `library.highlights`. 🔑 **① `.vtx` 텍스트 래퍼가 이 기능의 토대다** — 절 요소에는 절번호(`.vnum`)·역본명(`.vver`)·노트 배지(📄)가 섞여 있어 절 기준으로 문자 오프셋을 세면 장식 길이만큼 어긋난다. 렌더 3함수(`renderMultiVersesInto`/`renderSplitVersesInto`, 단일·다역본·split 전부)가 본문을 `<span class="vtx" data-ver="역본">`으로 감싸면 (a) 오프셋 = `.vtx` 안 순수 텍스트 위치, (b) 다시 칠할 때 `.vtx.innerHTML`만 교체하므로 절번호·배지 무손상, (c) `esc()`는 `& < >`만 바꾸므로 **`vtx.textContent === 원문`이 항상 성립** → 원문 캐시가 아예 불필요(DOM이 곧 진실). 🔑 **② 오프셋은 반드시 `esc()` 이전 원문 기준** — `&`가 `&amp;`로 5자가 되므로 이스케이프된 문자열에 오프셋을 적용하면 하이라이트가 밀린다. 원문을 구간 분할 → 조각별 esc → span 조립 순서. 🔑 **③ 역본별 독립 저장**(키에 version 포함) — 번역어가 달라 역본 간 오프셋 공유가 불가능. 개역개정에 칠한 게 KJV 셀의 엉뚱한 위치에 찍히는 것을 원천 차단. 🔑 **④ 오프셋 단독은 취약** — 성경 DB 갱신/역본 재동봉으로 본문이 밀리면 전 구간이 오작동. `t`(원문 조각)를 함께 저장해 그리기 전 검증, 불일치 시 `indexOf`로 재탐색, 그래도 없으면 **조용히 폐기**(발표 화면에 엉뚱한 곳이 칠해지는 것보다 사라지는 게 낫다). 🔑 **⑤ 기존 '드래그 → 걸친 절 복사'와 공존** — 그 제스처를 빼앗지 않는다. 복사+토스트는 그대로 두고 색상 팔레트를 **함께** 띄운다(색 고르면 하이라이트, 딴 데 클릭하면 복사만 된 셈). 회귀 0. 🔑 **⑥ F11 팝업은 fullscreen 요소 안에 append** — 전체화면 요소 밖의 DOM은 아예 렌더되지 않으므로 `document.body`에 붙이면 발표 중 안 보인다(`document.fullscreenElement || document.body`). 같은 함정에 빠져 있던 **절 우클릭 메뉴(`.ctx-menu`)와 묵상 노트 편집 모달(`.note-modal-back`)도 함께 고쳤다** — 둘 다 `document.body.appendChild` → `(document.fullscreenElement || document.body)`. 노트 모달은 우클릭 메뉴에서만 열리므로 메뉴만 고치면 막다른 길이 되어 반드시 같이 가야 한다. 이 패턴의 선례는 `openQuickSearch`(F2, search-notes.js). **의도적으로 남긴 것**: 토스트(`.toast-wrap`, index.html 정적)는 F11에서 계속 안 보인다 — 발표 화면에 뜨면 그게 곧 청중에게 보이는 소음이므로 안 보이는 게 맞다(사용자 확인). 부팅 시에만 뜨는 모달(`showForcedUpdate`/`maybePatchModal`)과 크롬 앵커 팝업(`openMenu`/`showTooltip`, 앵커가 F11에서 `display:none`)·`.lex-tip`(`.scripture`에서 스트롱코드 숨김)은 F11 도달 불가라 미변경. 프론트 `cards.js`: `decorateHighlights`(장 단위 fetch, `loadBibleCard`에서 `decorateNotes` 앞)/`paintHighlights`(캐시→DOM, 통신 없음·멱등)/`hlTextHTML`(오프셋→HTML+검증·재탐색)/`hlMark`/`vtxOffset`(Range로 실측)/`selectionRanges`(드래그를 (역본,절)별로 쪼갬 — 여러 절·여러 컬럼 걸침 지원, 앞뒤 공백 트림)/`normRanges`(정렬·같은색 병합·비겹침·**t 재계산**)/`mergeRange`(덧칠: 새 색 우선, 남는 쪽 보존, 가운데 덮으면 좌우 분리)/`subtractRange`(✕ 지우기, 가운데 지우면 분리)/`openHlPalette`/`applyHl`/`vtxFor`. 상태 `HL_COLORS=[y,g,b,p]`/`hlCache`/`hlPop`. CSS `.hl-mark[data-c]`(4색, `box-decoration-break:clone`으로 줄바꿈 조각마다 라운딩, `position:relative`로 절 호버 배경 위에 올림)·`.hl-pal`/`.hl-sw`(z-index 1300), 토큰 `--hl-{y,g,b,p}`(+다크 재정의)·`--hl-*-dot`(팔레트 스와치용 불투명). i18n `hl.{y,g,b,p,clear}`. **부수 수정**: F11에서 절 배경 강조 제거 — `.mcard:fullscreen .scripture .v:hover, .mcard:fullscreen .scripture .v.copied {background:none;box-shadow:none}`. 발표 화면에 조작 흔적이 뜨는 건 소음(노트 배지를 숨기는 것과 같은 이유). `.copied`(절 클릭 복사 시 초록 플래시)는 처음에 '의도한 동작의 피드백'이라 남겼다가 **실제 발표 화면에서 튀어 함께 껐다** — `copyVersesFromCard`가 async(백엔드 왕복 후 클래스 부착)라 클릭 순간이 아니라 **다음 입력 이벤트에 뒤늦게** 그려져 더 눈에 걸린다(호버를 끄기 전엔 호버 배경이 매 순간 깔려 초록이 묻혀 있었을 뿐). 그리고 F11에선 토스트(`.toast-wrap`)도 fullscreen 요소 밖이라 렌더되지 않아 **복사 피드백이 둘 다 사라지므로**, click 핸들러에 `if (document.fullscreenElement) return;` 가드를 넣어 **발표 중 절 클릭 복사를 차단**했다 (무심코 한 번 누르면 준비해 둔 클립보드가 무표시로 덮이던 문제). 의도적 제스처인 **드래그 복사와 우클릭 메뉴 복사는 유지**. ⚠️ **칠해진 부분 클릭은 절 복사가 아니라 팔레트**(색 변경/지우기)로 바뀐다 — 안 칠한 부분 클릭은 여전히 절 복사. ⚠️ `renderVersesInto`는 **호출처가 없는 사문(dead code)**이라 `.vtx`를 적용하지 않았다 — 되살려 쓸 경우 하이라이트가 동작하지 않는다.
 - **★ v1.1.11 내용(BM25 랭킹 + 유의어 확장 검색)**: ① **BM25 랭킹** — `bible_db.py` `bm25_search(keyword, mode, limit, expand)` 신설. 기존 `_score`(매칭수×10+밀집도+짧은절)에 **IDF가 없어** '하나님'(수천 절)과 '연단'(수십 절)을 동가로 취급하던 것을 표준 BM25로 교체(k1=1.5, b=0.75, idf=ln(1+(N-df+.5)/(df+.5))). `search()`의 **1차 경로**(공백 유무·한/영 무관), 결과 0건이나 예외 시 기존 계단(smart_search→exact→형태소→trigram)으로 **100% 폴백**. 🔑 **FTS5를 쓰지 않았다** — df/tf/절 길이/N이 이미 메모리 역색인(`_inverted_index`+`_verse_tokens`, 부팅 시 백그라운드 워밍)에 다 있고, FTS5는 캐시 DB+최신성 관리+한국어 토크나이저 우회가 딸려오는데 31,103절에선 얻는 게 속도뿐이다. 목표는 수단(FTS5)이 아니라 IDF 랭킹이었다. 보조: `_ensure_bm25_stats()`(N/avgdl 1회), `_term_addrs(term)`(부분일치 조회 — smart_search와 동일 규칙), 밀집도 보너스(`PROX_WEIGHT`, BM25는 위치를 안 보므로 tiebreaker). ② **유의어 확장(고어↔현대어)** — 다역본 앱 고유 실패 모드 제거: 새번역으로 읽다 '이집트'를 기억하고 개역한글에서 검색하면 **0건**(새번역 690건). 사전 **`web/data/bible_synonyms.json`**(7,630 표제어, 317KB, `map[단어]=[[대체어,신뢰도],…]` 양방향 대칭) + 로더 **`bibleclip/data/synonyms.py`**(`SynonymDict`/`shared()`/`expand`/`words`/`expand_all`, **fail-soft** — 파일 없으면 확장 0개로 기존 동작 유지). ⚠️ **web/ 아래에 두는 이유**: 빌드 3곳(BibleClipWeb.spec·build_web.ps1·build.yml)이 모두 `--add-data web`이라 **빌드 스크립트 수정 없이** 자동 동봉(v1.1.7 읽기 글꼴과 같은 요령). 🔑 **가중치는 고정값이 아니라 신뢰도(Dice) 비례**여야 한다 — 전부 0.55로 두자 '이집트' 검색에서 오탐 '인도하여'(0.22)가 정답 '애굽'(0.91)보다 **위로 올라왔다**(오탐이 더 희귀해 IDF가 높음). `w = SYN_W_MIN(0.15) + (SYN_W_MAX(0.75)-SYN_W_MIN)·conf`. 질의 토큰마다 유의어를 '대체 후보 그룹'으로 묶어 AND는 그룹 단위 만족, 점수는 그룹 내 최고점만(중복 가산 방지). ③ **설정 토글 `search_synonyms`(기본 True)** — `DEFAULT_SETTINGS`+`_APP_KEYS`(None=boolean)+`get_initial`+`get_app_settings`, 프론트 `state.searchSyn`(core.js)·`#opt-search-syn`(index.html 검색 그룹)·i18n `modal.searchSyn`/`search.synExpanded`. ④ **API 계약** — `search()`가 `matched_tokens`(질의어 어근, **기존 계약 유지**)와 **`highlight_tokens`**(질의어+확장어, 프론트 강조용)·**`expanded`**({질의어:[확장어]}, 메타 줄 표기용)를 분리 반환. 확장어를 matched_tokens에 섞으면 test_webui_api가 깨지고 의미도 흐려진다. 프론트는 `res.highlight_tokens || res.matched_tokens` 폴백. **사전 생성은 비배포** `_local/synonym_experiment/`(`build_v5.py` 추출·`export_for_app.py` 앱 포맷 변환·`impact_v5.py` 효과 측정).
 - **★ v1.1.10 내용(병렬 독서 = 절 단위 행 정렬)**: 병렬 독서(`view_mode='split'`)에서 역본마다 줄 수가 달라 같은 절의 **시작점이 어긋나던** 문제. 구조를 뒤집어 해결 — 기존 **역본별 독립 스크롤 컬럼 `.scol` N개 + 절 앵커 스크롤 싱크** → **본문 단일 스크롤러 + 절 1개 = 한 행**. `renderSplitVersesInto(body, versions, chapDataArr, highlight)` 재작성: 전 역본 절 번호의 **합집합**을 행으로 잡고(`nums` Set, 오름차순), 행 = `<div class="v srow" data-v=n>` + 역본별 셀 `<div class="scell">`(없는 절 = `.scell.empty` 빈 칸, 임의 병합 안 함), 상단 = sticky 헤더 행 `.srow.shead`. CSS `.split-cols .srow{display:flex}` + `.scell{flex:1 1 0;min-width:0}` → **행 높이 = 최장 셀** 이므로 절 시작점이 구조적으로 일치. **격자선(테두리)은 그리지 않는다** — 정렬만 격자, 시각적으로는 선 없이 셀 padding으로만 분리(사용자 요청). `.v` 기본 여백/라운드/후광 그림자/`.hl` 음수 마진은 격자를 어긋내므로 split에서 무효화. **부수 정리**: 스크롤러가 1개가 되어 컬럼↔컬럼 싱크가 불필요 → `scriptureScrollers(card)`=`[body]`, scroll 핸들러의 `.scol` 캐치 제거(`.scripture`만), `progScroll`/`syncFrom`/`snapshotAnchors`/`realignAnchors`는 형태 유지(카드→연동 원어 싱크는 그대로 필요). `decorateNotes`는 split 행에 배지를 붙이면 flex 칸이 하나 늘어나므로 **첫 내용 셀 안**(`.scell:not(.empty)`)에 삽입. 전체화면(F11) 오버라이드도 flex 컬럼 → block 스크롤 + 셀 여백으로 교체.
 - **★ v1.1.9 내용(장 넘기기 화살표의 책 경계 이월)**: 책의 첫/마지막 장에서 장 넘기기 화살표가 무반응이던 문제(`cardChapStep`이 현재 책의 장 목록 범위를 벗어나면 그냥 `return`). **`neighborBookChapter(version, book, delta)`** 신설 → 첫 장 `←`=앞 책의 **마지막** 장(출 1장→창 50장), 마지막 장 `→`=다음 책의 **첫** 장(창 50장→출 1장). 창세기 1장 `←`/요한계시록 마지막 장 `→`는 성경 양 끝이라 no-op 유지. ⚠️ 책 이동은 `booksFor(navVer)`의 정경 순서(`db.book_list`) **배열 인덱스** 기준 — 책 `num`이 10,20,… 비연속이라 `num` 산술 불가. 장이 없는 책은 스킵(신약만 있는 역본 방어), 역본에 없는 장을 들고 있던 카드는 첫 장으로 클램프. 책 변경 시 `card.book`도 갱신되어 기존 경로(`loadBibleCard`→헤더 책 pill, `reloadDependents`, `recordHistory`, `note_position`, `saveLayout`)가 그대로 따라옴 → ◀▶ 히스토리·읽던 위치 보존 정상. 키보드 ←/→(search-notes.js)와 헤더 `‹ ›`가 같은 함수를 타므로 cards.js 한 곳 수정으로 양쪽 적용.
@@ -18,7 +19,7 @@
 - **★ v1.1.2 내용(일부 PC "런타임 에러" 진범 해결)**: 다운로드 zip의 **MOTW(Zone.Identifier=3)** 가 번들 `Python.Runtime.dll`에 묻어 .NET이 "인터넷 어셈블리" 로드를 거부(`Failed to resolve Python.Runtime.Loader.Initialize`)하던 문제. **로컬 복사본은 표식 없어 정상, 다운로드본만 실패** → startup_error.log로 확진(ZoneId=3 + ReferrerUrl=zip). 수정: `app.py _strip_motw`(clr import 전 번들 .dll/.pyd/.exe의 Zone.Identifier ADS 1회 제거, `.motw_cleared` 마커) + `BibleClipWeb.exe.config`의 `loadFromRemoteSources`(읽기전용 위치 백스톱, build_web.ps1 동봉). .NET·WebView2·Python 버전·보안SW 전부 무죄였음.
 - **v1.1.1 내용**: 실행 실패 의심으로 CI Windows 빌드 Python 3.12→3.13 + `requirements.txt` 정확 버전 핀(재현성). 시작 실패 안내·로깅: 실제 .NET/WebView2/보안SW 탐지 후 원인별 분기(_diagnostics) + `userdata/startup_error.log` 기록 + 안내 페이지. (실제 진범은 v1.1.2의 MOTW였음 — 이 로깅 덕에 잡음.)
 - **v1.1.0 내용**: FEAT-01 장바구니 DnD+FLIP / FEAT-02 매직 포맷터 매크로+태그칩 / FEAT-03 묵상 노트 **슬라이딩 레일 패널**(독립 카드에서 전환) / FEAT-04 카드별 대조 토글(역본 쌍 고정) / FEAT-05 병렬 복사 부스터 / BUG-01·BUG-i18n·FIX-01 핫픽스 / KJV+ 동봉 + 원전 분해 소스 선택
-- **마지막 맵 동기화**: 2026-08-11 (v1.1.9 장 넘기기 책 경계 이월 반영)
+- **마지막 맵 동기화**: 2026-09-10 (v1.1.12 형광펜 = 절 내부 단어 하이라이트 반영)
 
 ---
 
@@ -37,6 +38,7 @@ BibleClip Project/
 │  ├─ morph.py                     # Kiwi 형태소 토큰화(frozen 빌드 비활성)
 │  ├─ i18n.py                      # 백엔드측 i18n (web/locales/*.json 공유)
 │  ├─ notes.py                     # 묵상 노트(절-단위 저장, user_notes.json)
+│  ├─ highlights.py                # 형광펜(절 내부 문자구간·역본별, user_highlights.json)
 │  ├─ text_utils.py                # 한글조합/clean_text/despace/trigrams
 │  ├─ theme.py                     # LIGHT/DARK/CTK 색상 팔레트
 │  ├─ update.py                    # GitHub Releases 업뎃 체크/에셋 선택/SSL
@@ -65,12 +67,13 @@ BibleClip Project/
 │  │  └─ widgets.py                #   ScrollDropdown(스크롤 가능 드롭다운)
 │  └─ webui/                       # ★ pywebview 데스크톱(웹 프론트 + JS브리지)
 │     ├─ app.py                    #   pywebview 창 부트스트랩/생명주기/.NET 에러
-│     ├─ api.py                    #   Api 브리지 파사드(3개 라우트 믹스인 조합)
+│     ├─ api.py                    #   Api 브리지 파사드(4개 라우트 믹스인 조합)
 │     ├─ dicthtml.py               #   렉시콘 마크업 → HTML 헬퍼
 │     ├─ __main__.py               #   python -m bibleclip.webui
 │     └─ routes/                   #   JS-호출 가능 브리지 메서드(HTTP 아님)
 │        ├─ bible.py               #     성경 탐색/검색/렉시콘 (BibleRoutes)
 │        ├─ notes.py               #     묵상 노트 CRUD (NoteRoutes)
+│        ├─ highlights.py          #     형광펜 CRUD (HighlightRoutes)
 │        └─ system.py              #     부트/설정/업뎃/폰트/출력포맷 (SystemRoutes)
 ├─ web/                            # ★ 프론트엔드 SPA (vanilla JS, 프레임워크 없음)
 │  ├─ index.html                   #   DOM 셸(.rail/.main/뷰/드로어/모달)
@@ -190,6 +193,7 @@ BibleClip Project/
 | `korean.py` | 순수파이썬 한국어 정규화 | `_PARTICLES`/`_STOPWORDS`; `strip_particle(token)`/`tokenize(text)` |
 | `i18n.py` | 백엔드 i18n(웹로케일 공유) | `DEFAULT_LANG='ko'`; `_table(lang)`/`t(key, lang, **fmt)`/`resolve_ui_lang(settings=None)` |
 | `notes.py` | 묵상 노트(절-단위) | `NOTES_FILE="user_notes.json"`; **class `Notes`**: `get/set/delete(book,chapter,verse)`, `all()`, `for_chapter(book,chapter)` |
+| `highlights.py` | 형광펜(절 내부 문자구간, v1.1.12) | `HIGHLIGHTS_FILE="user_highlights.json"`, `COLORS=('y','g','b','p')`, `MAX_RANGES=64`, `_norm(ranges)`(정렬·비겹침·색검증·캡); **class `Highlights`**: `get/set_verse/clear_verse(book,chapter,verse,version)`, `for_chapter(book,chapter,version)`, `all()`. 키=`book:chapter:verse:version`(version에 `:` 있어도 `split(':',3)`로 안전). 값=`[{s,e,t,c,ts}]` — s/e=**그 역본 원문**의 문자 오프셋, t=검증용 조각 |
 | `cart.py` | 설교 장바구니 영속성(FEAT-08, v1.1.4) | `CART_FILE="sermon_cart.json"`; `_sanitize(items)`; **class `Cart`**: `all()`, `replace(items)`(write-through). localStorage가 랜덤 포트로 휘발하던 문제를 백엔드 파일로 대체 |
 | `text_utils.py` | 한글조합/정제/검색 | `convert_qwerty_to_hangul(text)`/`assemble_hangul(jamo)`/`clean_text(text)`/`despace(s)`/`trigrams(s)` |
 | `constants.py` | 정적 데이터 | `QWERTY_TO_HANGUL`, `CHOSEONG`/`JUNGSEONG`/`JONGSEONG`, `KOREAN_BOOK_MAP`{name→(id,abbr,full)}, `ENGLISH_BOOK_MAP`, `ENGLISH_VERSIONS`(set) |
@@ -234,7 +238,7 @@ BibleClip Project/
 - locale: `dotnet.errTitle/errBody`, `webview2.errTitle/errBody`, `secblock.errTitle/errBody`
 
 ### webui/api.py — Api 브리지 파사드
-- **class `Api(SystemRoutes, BibleRoutes, NoteRoutes)`** — `__init__(library)`; `set_window(window)`/`set_popup_factory(factory)`/`_push(fn, *args)`
+- **class `Api(SystemRoutes, BibleRoutes, NoteRoutes, HighlightRoutes)`** — `__init__(library)`; `set_window(window)`/`set_popup_factory(factory)`/`_push(fn, *args)`
   - 모니터링: `start_monitoring()`/`stop_monitoring()`/`_clip_read()`/`_clip_write(text)`/`_on_reference(result)`/`_on_keyword(keyword)`
   - 복사/내보내기: `copy_reference(book, chapter, verses, versions=None)`/`copy_references(items, versions=None)`/`copy_text(text)`/`export_text_file(text, suggested_name)`
   - `pyperclip` 클립보드 백엔드(옵셔널); dicthtml 심볼 재익스포트
@@ -277,6 +281,15 @@ BibleClip Project/
 | `set_cart` | `(items)` | 전체 교체+저장(write-through) + `_broadcast_cart`로 모든 창 동기화 {ok, items} (FEAT-08/07) |
 | `open_cart_window` | `()` | 설교 장바구니 팝아웃 창 열기/포커스 {ok} (FEAT-07, v1.1.5) |
 | `cart_goto` | `(book, chapter, verses)` | 팝아웃→메인 뷰어 점프(`_push('cartGoto')`) {ok} (FEAT-07, v1.1.5) |
+
+**HighlightRoutes (`routes/highlights.py`) — 형광펜 CRUD (v1.1.12):**
+| 메서드 | 인자 | 역할 |
+|---|---|---|
+| `get_chapter_highlights` | `(book, chapter, versions)` | {version→{verse→[ranges]}} — **표시 중 역본 전체를 1왕복**(대조/병렬 모드) |
+| `get_verse_highlights` | `(book, chapter, verse, version)` | 한 절+역본의 구간 목록 (없으면 `[]`) |
+| `set_verse_highlights` | `(book, chapter, verse, version, ranges)` | 전체 교체+저장(빈 목록=삭제). 병합/지우기 의미는 프론트 소유(장바구니와 동일 방식) {ok, ranges} |
+| `clear_verse_highlights` | `(book, chapter, verse, version)` | {ok} |
+| `get_all_highlights` | `()` | 전체 [{book,chapter,verse,version,s,e,t,c,ts}] (향후 모아보기 훅) |
 
 **SystemRoutes (`routes/system.py`) — 부트/설정/업뎃/폰트/출력포맷:**
 | 메서드 | 인자 | 역할 |
@@ -339,7 +352,8 @@ BibleClip Project/
 - 잠금(N-1 규칙): `toggleLock(card)`/`normalizeLocks()`/`refreshLockStates()`
 - 싱크(BUG-01 픽스 + v1.1.6 컬럼 일반화): `anchorVerseOf(el)`/`verseTopFraction(el, n)`/`findVerseEl(el, n)`(결손 절 fallback)/`scrollElToVerse(el, n, guard, align)`(요소 단위·boolean guard)/`syncFrom(card, scrollEl)`(스크롤된 컬럼 드라이버→형제 컬럼+연동 원어 양방향 추종)/`scriptureScrollers(card)`/`primaryScroller(card)`/`linkedInterlinScrollers(card)`/`alignInterlin(card,n,frac)`/`snapshotAnchors()`/`realignAnchors(anchors)`/`lockHistoryVerse(card, el)`(500ms 디바운스). `progScroll`=스크롤 **요소** 단위 가드. 본문 점프 시 원어 카드 타깃 절 추종(1절 고정 버그 해소)
 - 렌더: `headerHTML(card)`/`skeleton(card)`/`updateBibleHeader`/`handleAction(card, act, actEl)`/`renderVersesInto(...)`/`renderMultiVersesInto(...)`(절별 대조 세로 교차)/**`renderSplitVersesInto(body, versions, chapDataArr, highlight)`**(v1.1.10 병렬 독서 = 절 단위 행 정렬 `.srow`/`.scell`/sticky `.shead`; v1.1.6~1.1.9의 독립 스크롤 컬럼 `.scol` 대체)/`cardVersions(card)`(=`state.viewer`, 렌더·복사 공유)/`renderInterlinearInto`/`renderLexEntryInto`/`renderMorph` (※ FEAT-04 대조 pill·`"parallel"` 케이스 v1.1.6 제거, `renderNotesInto`/`wireNotes` 폐기)
-- 이벤트 위임: `wireContainer()` (클릭/스크롤/드래그/contextmenu/hover 단일 핸들러)
+- **형광펜(v1.1.12)**: `decorateHighlights(card)`(장 단위 fetch→캐시→칠하기, `loadBibleCard`에서 `decorateNotes` **앞**에 호출)/`paintHighlights(card)`(캐시→DOM, 통신 없음·멱등)/`vtxHTML(version, text)`(**`.vtx[data-ver]` 텍스트 래퍼** — 오프셋 기준점)/`hlTextHTML(raw, ranges)`(오프셋→HTML, `t` 검증·재탐색·폐기)/`hlMark`/`hlColor`/`vtxOffset(tx, node, off)`(Range 실측)/`selectionRanges(sec, range)`(드래그→(역본,절)별 구간, 다중 절·다중 컬럼·공백 트림)/`normRanges(list, raw)`/`mergeRange(list, add, raw)`/`subtractRange(list, del, raw)`/`openHlPalette`/`closeHlPalette`/`applyHl(card, targets, color)`/`vtxFor(body, n, ver)`. 상태 `HL_COLORS`/`hlCache`(cardId→{version:{verse:[ranges]}})/`hlPop`. 팔레트는 `document.fullscreenElement || document.body`에 append(F11 필수)
+- 이벤트 위임: `wireContainer()` (클릭/스크롤/드래그/contextmenu/hover 단일 핸들러). **드래그 mouseup = 걸친 절 복사(기존) + 형광펜 팔레트(v1.1.12) 동시**, **`.hl-mark` 클릭 = 절 복사 대신 팔레트**(색 변경/지우기)
 - public: `{init, addCard, addCardWithLink, goToRef, primaryVersion, primaryBible, bibleCards, lexiconCards, bodyEl, linkedBibleFor, chapStepPrimary, chapStepActive, reloadAllBible, relabel, presentToggle, ensureInterlinearFor, decorateNotesFor:decorateNotes, snapshotAnchors, realignAnchors}`
 
 ### search-notes.js (~1682줄) — ★ 검색/노트/설정/카트/업뎃/폰트/약칭/라이브i18n
@@ -378,3 +392,5 @@ BibleClip Project/
 - `test_webui_api.py` — Api 브리지 메서드(헤드리스, webview 미임포트 설계 덕분)
 - `test_installer.py` — installer 다운/스테이징/스크립트
 - `test_killswitch.py` — 킬스위치 fail-open/min_version 로직
+- `test_highlights.py` — 형광펜 store(`_norm` 정렬·비겹침·캡, CRUD, **역본 격리**, 장/책 경계, `:` 포함 역본명, 손상 파일·쓰기불가 fail-soft)
+- `test_highlight_ranges.js` — 형광펜 구간 대수(**node**, `node tests/test_highlight_ranges.js`). cards.js 소스에서 `hlColor`/`hlMark`/`hlTextHTML`/`normRanges`/`mergeRange`/`subtractRange` 정의를 **이름으로 잘라 eval** — 로직 복사본을 만들지 않아 갈라지지 않는다. 함수명을 바꾸면 이 테스트가 먼저 실패한다

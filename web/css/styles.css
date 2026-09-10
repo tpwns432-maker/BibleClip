@@ -619,6 +619,58 @@ body {
 .menu::-webkit-scrollbar { width: 9px; }
 .menu::-webkit-scrollbar-thumb { background: var(--card-border); border-radius: 999px; border: 2px solid var(--card-bg); }
 
+
+/* ---- 형광펜 하이라이트 (v1.1.12) ---- */
+/* .vtx = 절 텍스트 래퍼. 순수 인라인이어야 한다(글 흐름을 바꾸면 안 됨). */
+.vtx { display: inline; }
+.hl-mark {
+  background: var(--hl-y);
+  border-radius: 3px;
+  padding: .04em .08em;
+  margin: 0 -.02em;              /* 패딩만큼 글자 간격이 벌어지는 것을 되돌림 */
+  cursor: pointer;
+  /* 줄바꿈으로 조각나도 각 조각이 제 배경·라운딩을 갖게 한다(기본값은 첫 조각만). */
+  -webkit-box-decoration-break: clone;
+  box-decoration-break: clone;
+  /* 절 호버 배경(.v:hover)이 형광색 위에 겹쳐 색을 탁하게 만들지 않도록 위로 올린다. */
+  position: relative;
+}
+.hl-mark[data-c="g"] { background: var(--hl-g); }
+.hl-mark[data-c="b"] { background: var(--hl-b); }
+.hl-mark[data-c="p"] { background: var(--hl-p); }
+.hl-mark:hover { filter: brightness(.93) saturate(1.15); }
+
+/* 색상 팔레트 — 드래그 선택 직후, 또는 기존 하이라이트 클릭 시.
+   .ctx-menu(1200) 보다 위. F11 에서는 전체화면 카드 안에 append 된다. */
+.hl-pal {
+  position: fixed; z-index: 1300;
+  display: flex; align-items: center; gap: 7px;
+  padding: 7px 9px;
+  background: var(--card-bg);
+  border: 1px solid var(--card-border);
+  border-radius: var(--r-pill);
+  box-shadow: 0 14px 38px -14px rgba(60, 40, 100, .5);
+  -webkit-user-select: none; user-select: none;
+}
+.hl-sw {
+  width: 22px; height: 22px; padding: 0;
+  border: 1px solid rgba(0, 0, 0, .16);
+  border-radius: 50%;
+  cursor: pointer;
+  transition: transform .12s;
+}
+.hl-sw:hover { transform: scale(1.18); }
+.hl-sw[data-c="y"] { background: var(--hl-y-dot); }
+.hl-sw[data-c="g"] { background: var(--hl-g-dot); }
+.hl-sw[data-c="b"] { background: var(--hl-b-dot); }
+.hl-sw[data-c="p"] { background: var(--hl-p-dot); }
+.hl-sep { width: 1px; height: 18px; background: var(--hairline); }
+.hl-del {
+  background: transparent; border-color: transparent;
+  color: var(--text-muted); font-size: 13px; line-height: 1;
+}
+.hl-del:hover { color: var(--text); background: var(--seg-bg); }
+
 /* ---- Lexicon: <num> cross-reference (from markup converter) ---- */
 .lex-body .lex-num { color: var(--accent-text); text-decoration: underline; cursor: pointer; font-weight: 600; }
 .lex-body b { font-weight: 700; }
@@ -919,6 +971,17 @@ html[data-theme="dark"] .note-modal-back { background: rgba(0,0,0,.55); }
   font-size: calc(clamp(26px, 3.4vw, 60px) * var(--reading-scale)); line-height: 1.7;
 }
 .mcard:fullscreen .card-body .v { margin-bottom: .5em; }
+/* 발표 화면에서는 절 배경이 물들지 않게 한다 — 청중에게 보이는 화면에 조작 흔적이
+   뜨는 건 소음이다(노트 배지를 숨기는 것과 같은 이유).
+   :hover = 마우스가 스칠 때, .copied = 절 클릭으로 복사됐을 때의 초록 플래시.
+   .copied 는 처음에 '의도한 복사의 피드백'이라 남겼는데, 실제 발표 화면에서 튀었다.
+   copyVersesFromCard 가 async(백엔드 왕복 후 클래스 부착)여서 클릭 순간이 아니라
+   그 다음 입력 이벤트에 뒤늦게 그려지는 탓에 더 눈에 걸린다. 전체화면 진입 전까지는
+   호버 배경이 매 순간 깔려 초록이 그 소음에 섞여 보이지 않았을 뿐이다.
+   ⚠️ 복사 자체는 그대로 일어난다(F11 에서는 토스트도 fullscreen 요소 밖이라 안 보이므로
+   발표 중 절 클릭은 아무 표시 없이 클립보드를 덮는다). */
+.mcard:fullscreen .scripture .v:hover,
+.mcard:fullscreen .scripture .v.copied { background: none; box-shadow: none; }
 /* 전체화면 병렬 독서(split): 행 정렬 유지 + 발표용 여백 확대(스크롤러는 본문 하나) */
 .mcard:fullscreen .card-body.split-cols { display: block; overflow-y: auto; padding: 0; }
 .mcard:fullscreen .split-cols .v { margin-bottom: 0; }

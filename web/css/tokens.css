@@ -54,6 +54,19 @@
   --rom:           var(--accent-text);
   --link:          var(--accent-text);
 
+  /* ---- 형광펜 하이라이트 (v1.1.12) ----
+     본문 위에 얹히는 반투명 형광색. 채도는 높게, 알파는 낮게 — 큰 폰트로 띄우는
+     F11 발표 화면에서도 글자 가독성이 죽지 않아야 한다. --hl-*-dot 은 팔레트
+     스와치용 불투명 색(반투명이면 버튼이 흐려 보인다). */
+  --hl-y:      rgba(255, 214,  10, .45);
+  --hl-g:      rgba(  0, 208, 130, .34);
+  --hl-b:      rgba( 70, 162, 255, .32);
+  --hl-p:      rgba(255, 110, 178, .32);
+  --hl-y-dot:  #FFD60A;
+  --hl-g-dot:  #00C87E;
+  --hl-b-dot:  #46A2FF;
+  --hl-p-dot:  #FF6EB2;
+
   /* ---- Status badge (LIGHT) ---- */
   --badge-ok-bg:   #EEF7EE;
   --badge-ok-fg:   #5B8F5B;
@@ -132,4 +145,10 @@
 
   --toast-bg:      #FFFFFF;   /* dark theme → light toast */
   --toast-fg:      #241D33;
+
+  /* 형광펜: 어두운 본문 위에서는 알파를 낮추고(글자가 묻힘) 색을 살짝 밝힌다. */
+  --hl-y:      rgba(255, 214,  10, .30);
+  --hl-g:      rgba( 60, 224, 158, .26);
+  --hl-b:      rgba(110, 180, 255, .26);
+  --hl-p:      rgba(255, 138, 194, .26);
 }
