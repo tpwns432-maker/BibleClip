@@ -958,7 +958,15 @@ html[data-theme="dark"] .note-modal-back { background: rgba(0,0,0,.55); }
 .mcard:fullscreen {
   width: 100% !important; height: 100% !important;
   left: 0 !important; top: 0 !important;
-  border-radius: 0; border: none; background: var(--bg);
+  /* ⚠️ v1.1.13 이전에는 `var(--bg)` 였는데 그런 토큰은 정의된 적이 없다. 미정의
+     변수는 파스 오류가 아니라 '계산 시점 무효'라서 background 숏핸드 전체가 unset
+     (=transparent)이 되고, 특이도가 더 낮은 `.card { background: var(--card-bg) }`
+     까지 덮어버려 전체화면 본문이 테마를 전혀 따르지 못했다.
+     `--app-bg`(워크스페이스 색)를 쓴다. 본문은 '면', 상단 틀고정 헤더
+     (.present-banner)는 그 위에 얹힌 '크롬'이므로 서로 다른 층이어야 한다.
+     헤더가 --card-bg 라 한 단 밝게 떠 보이고 본문과 경계가 생긴다(--card-bg 로
+     맞췄을 때 "헤더와 본문이 너무 비슷하다"는 피드백을 받아 바꿨다). */
+  border-radius: 0; border: none; background: var(--app-bg);
   display: flex; flex-direction: column;
 }
 .mcard:fullscreen .card-hd,
@@ -986,6 +994,16 @@ html[data-theme="dark"] .note-modal-back { background: rgba(0,0,0,.55); }
 .mcard:fullscreen .card-body.split-cols { display: block; overflow-y: auto; padding: 0; }
 .mcard:fullscreen .split-cols .v { margin-bottom: 0; }
 .mcard:fullscreen .split-cols .scell { padding: .7em 2.6vw; }
+/* F11 역본명 띠 — 발표 화면의 세 구역(틀고정 헤더 / 역본명 / 본문)이 각각 다른
+   면으로 읽혀야 한다. 색 층은 --seg-bg(헤더) → --card-bg(역본명) → --app-bg(본문)
+   순으로 내려가고, 여기에 헤더와 같은 굵은 그림자 + 경계선을 더한다. 이 띠는 sticky
+   라 본문이 그 아래로 밀려 들어가므로 그림자가 특히 잘 먹는다.
+   windowed(작은 카드) 모드는 이 굵기가 과하므로 건드리지 않는다 — F11 한정. */
+.mcard:fullscreen .split-cols .shead {
+  background: var(--card-bg);
+  border-bottom: 1px solid var(--present-bar-line);
+  box-shadow: var(--present-bar-shadow);
+}
 .mcard:fullscreen .split-cols .shead .scell {
   font-size: calc(14px * var(--reading-scale)); padding: .5em 2.6vw;
 }
@@ -1005,8 +1023,15 @@ html[data-theme="dark"] .note-modal-back { background: rgba(0,0,0,.55); }
   /* 본문 성구와 동일한 읽기 글꼴로 통일(.scripture 와 같은 var) */
   font-family: var(--reading-font, var(--font-ui));
   font-size: clamp(17px, 2.3vw, 40px); font-weight: 800;
-  color: var(--text); background: var(--card-bg);
-  border-bottom: 1.5px solid var(--card-border);
+  color: var(--text);
+  /* 본문(.mcard:fullscreen = --app-bg) 과 층을 갈라 보이게 한다. --card-bg 로 두면
+     라이트 #FFFFFF vs #FAF9FC, 다크 #171127 vs #0F0B1A 라 차이가 너무 미세했다.
+     --seg-bg 는 팔레트의 '눌린 크롬 면'(라이트 #F0ECF8 보라 틴트 / 다크 #1D1633)이고
+     이미 `.mcard.locked .card-hd` 에서 카드 헤더 배경으로 쓰이는 선례가 있다.
+     + 아래로 떨어지는 --card-shadow 로 얹힌 바처럼 보이게 해 경계를 확실히 한다. */
+  background: var(--present-bar-bg);
+  border-bottom: 1px solid var(--present-bar-line);
+  box-shadow: var(--present-bar-shadow);
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
   letter-spacing: .01em; z-index: 9;
 }
