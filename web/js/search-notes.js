@@ -344,6 +344,13 @@
       CardManager.realignAnchors(anchors);
     });
 
+    // v1.2.0 자막 배색 — 바꾸면 백엔드가 자막 창에 즉시 밀어준다(창이 열려 있을 때).
+    // 이 창에서는 미리보기가 없으므로 여기선 저장만 한다.
+    setSeg($("opt-subtitle-preset"), state.subtitlePreset || "green", (val) => {
+      state.subtitlePreset = val;
+      api().set_app_setting("subtitle_preset", val);
+    });
+
     // v1.1.5: 사전 '기본 언어' 설정 제거 — 사전 언어는 프로그램 언어 추종 + 사전 카드
     // pill / 사전 창 드롭다운에서 표면별 전환(opt-lex-lang UI 삭제됨).
 
@@ -686,6 +693,10 @@
         showView("viewer");
         CardManager.goToRef(book, chapter, verses);
       },
+      // 자막 슬라이드가 바뀌면 백엔드가 양 창에 민다(v1.2.0). 조작 화면은 지금
+      // 무엇이 송출 중인지만 알면 되므로 최신 payload 만 들고 있는다 — ◀ ▶ 제어
+      // UI 가 붙는 다음 단계에서 이 값을 그린다.
+      onSlideChanged(payload) { slideState = payload || null; },
       onUpdateProgress,
       onUpdateReady,
       onUpdateError,
@@ -1092,12 +1103,16 @@
   function closeQuickSearch() {
     document.querySelectorAll(".qs-overlay").forEach((o) => o.remove());
   }
-  function openQuickSearch() {
+  // F2(본문 점프)와 F9(자막 송출)가 같은 입력창을 쓴다 — 사용자가 익힌 조작이 하나면
+  // 되고, 상대 참조("22")도 한 곳에서만 풀린다. 무엇을 할지는 onSubmit 이 정한다.
+  function openQuickSearch(opts) {
     closeQuickSearch();
+    const o = opts || {};
+    const onSubmit = o.onSubmit || quickJump;
     const host = document.fullscreenElement || document.body;
     const box = document.createElement("div");
-    box.className = "qs-overlay";
-    box.innerHTML = `<input type="text" class="qs-input" autocomplete="off" placeholder="${esc(I18N.t("present.qsPlaceholder"))}">`;
+    box.className = "qs-overlay" + (o.cls ? " " + o.cls : "");
+    box.innerHTML = `<input type="text" class="qs-input" autocomplete="off" placeholder="${esc(I18N.t(o.placeholder || "present.qsPlaceholder"))}">`;
     host.appendChild(box);
     const input = box.querySelector(".qs-input");
     setTimeout(() => input.focus(), 0);
@@ -1108,7 +1123,7 @@
       else if (e.key === "Enter") {
         const q = input.value.trim();
         closeQuickSearch();
-        if (q) await quickJump(q);
+        if (q) await onSubmit(q);
       }
     });
   }
@@ -1152,20 +1167,27 @@
     return !!(body && body.querySelector('.v[data-v="' + n + '"]'));
   }
 
-  async function quickJump(q) {
-    // 0) 책 이름 없는 숫자 입력 → 보고 있는 카드 기준으로 해석(키워드 검색으로 안 넘김).
+  // 입력 한 줄 → {book, chapter, verses} 또는 null. F2·F9 공통 해석기.
+  // 상대 참조("22", "44:22")를 먼저 보고, 아니면 백엔드 참조 파서("사 44:22")로 간다.
+  async function resolveRefInput(q) {
     const rel = relativeRef(q, CardManager.jumpContext());
     if (rel) {
-      if (rel.sameChapter && !rel.verses.some(verseOnScreen)) return;  // 없는 절 = 무반응
-      CardManager.goToRef(rel.book, rel.chapter, rel.verses);
-      return;
+      // 같은 장 안의 절 지정인데 그 절이 없으면 아무것도 하지 않는다(엉뚱한 데로 튀지 않게).
+      if (rel.sameChapter && !rel.verses.some(verseOnScreen)) return null;
+      return { book: rel.book, chapter: rel.chapter, verses: rel.verses || [] };
     }
-    // Reference first; fall back to a keyword search and jump to the top hit.
     let ref = null;
     try { ref = await api().resolve_reference(q); } catch (_) {}
     if (ref) {
-      const vs = ref.verses && ref.verses.length ? ref.verses : null;
-      CardManager.goToRef(ref.book_num, ref.chapter, vs);
+      return { book: ref.book_num, chapter: ref.chapter, verses: ref.verses || [] };
+    }
+    return null;
+  }
+
+  async function quickJump(q) {
+    const r = await resolveRefInput(q);
+    if (r) {
+      CardManager.goToRef(r.book, r.chapter, r.verses.length ? r.verses : null);
       return;
     }
     try {
@@ -1179,7 +1201,41 @@
   document.addEventListener("keydown", (e) => {
     if (e.key === "F11") { e.preventDefault(); CardManager.presentToggle(); }
     else if (e.key === "F2") { e.preventDefault(); openQuickSearch(); }
+    else if (e.key === "F9") { e.preventDefault(); openSlideInput(); }
   });
+
+  // 현재 송출 중인 슬라이드(백엔드가 밀어준 것). 제어 UI 가 붙기 전까지는 보관만.
+  let slideState = null;
+
+  // 레일의 자막 창 아이콘 — 창을 열기만 한다(띄울 구절은 F9 나 장바구니가 정한다).
+  // F9 만으로도 창이 열리지만, 단축키를 모르면 기능의 존재 자체를 알 수 없어서 둔다.
+  function wireSubtitleToggle() {
+    const b = $("subtitle-toggle");
+    if (!b) return;
+    b.addEventListener("click", async () => {
+      try {
+        const r = await api().open_subtitle_window();
+        if (!r || !r.ok) toast(I18N.t("subtitle.openFail"));
+      } catch (e) { toast(I18N.t("subtitle.openFail")); }
+    });
+  }
+
+  // F9 — 입력한 구절을 자막(PPT) 창에 바로 띄운다. 장바구니에 담아둔 순서를 벗어나
+  // 즉석으로 한 구절을 보여줘야 하는 일이 실제 예배에서 잦다.
+  // 창이 아직 없으면 함께 열어준다(따로 여는 절차를 기억할 필요가 없게).
+  function openSlideInput() {
+    openQuickSearch({
+      placeholder: "subtitle.qsPlaceholder",
+      onSubmit: async (q) => {
+        const r = await resolveRefInput(q);
+        if (!r) return;                       // 못 알아들은 입력 = 무반응(F2 와 같은 규칙)
+        try {
+          await api().open_subtitle_window();
+          await api().show_slide_ref(r.book, r.chapter, r.verses);
+        } catch (e) {}
+      },
+    });
+  }
 
   // ---- Custom reading fonts (fonts/ 폴더 → 동적 @font-face, 4순위) ----
   // The backend lists/serves user .ttf/.otf placed in the data 'fonts' folder;

@@ -46,6 +46,10 @@
       <!-- list -->
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M8 6h12M8 12h12M8 18h12"/><circle cx="4" cy="6" r="1"/><circle cx="4" cy="12" r="1"/><circle cx="4" cy="18" r="1"/></svg>
     </div>
+    <div class="nav-icon" id="subtitle-toggle" title="자막 창 열기" aria-label="자막 창 열기" data-i18n-title="subtitle.open" data-i18n-aria="subtitle.open">
+      <!-- projector / screen -->
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="4" width="20" height="13" rx="2"/><path d="M8 21h8M12 17v4"/><path d="M7 9h10"/><path d="M7 12.5h6"/></svg>
+    </div>
     <div class="spacer"></div>
     <div class="nav-icon" id="theme-toggle" title="테마 전환" aria-label="테마 전환" data-i18n-title="nav.theme" data-i18n-aria="nav.theme">
       <!-- moon -->
@@ -261,6 +265,17 @@
           </div>
         </div>
         <p class="set-note" data-i18n="modal.viewModeNote">여러 역본을 선택했을 때 한 카드에 절마다 겹쳐 볼지(절별 대조), 역본별 좌우 컬럼으로 나눠 볼지(병렬 독서) 정합니다.</p>
+        <div class="set-row">
+          <span class="set-label" data-i18n="modal.subtitlePreset">자막 배색</span>
+          <div class="seg" id="opt-subtitle-preset">
+            <div class="opt" data-val="green" data-i18n="modal.presetGreen">연둣빛</div>
+            <div class="opt" data-val="navy" data-i18n="modal.presetNavy">남색</div>
+            <div class="opt" data-val="black" data-i18n="modal.presetBlack">검정</div>
+            <div class="opt" data-val="white" data-i18n="modal.presetWhite">흰색</div>
+            <div class="opt" data-val="theme" data-i18n="modal.presetTheme">앱 테마</div>
+          </div>
+        </div>
+        <p class="set-note" data-i18n="modal.subtitlePresetNote">자막 창(F9)의 배경·글자색입니다. 투사 환경에서는 대비가 큰 쪽이 잘 보입니다. 글꼴은 위의 읽기 글꼴을 따릅니다.</p>
       </div>
 
       <div class="set-group">

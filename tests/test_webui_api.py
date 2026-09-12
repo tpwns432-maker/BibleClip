@@ -457,6 +457,69 @@ def main():
     assert api.get_initial()['cart'] == r['items']     # boot payload restores it
     print("cart persistence (set/get/get_initial round-trip) OK")
 
+    # 자막(PPT) 슬라이드 (v1.2.0) — 장바구니를 슬라이드로 풀고 ◀ ▶ 로 훑는다.
+    api.lib.cart._save = lambda: True
+    api.lib.settings['viewer_versions'] = ['KRV'] if 'KRV' in api.lib.dbs else         [api.lib.primary_version()]
+    api.lib.cart.replace([
+        {'book_num': 470, 'chapter': 18, 'verses': [19, 20]},
+        {'book_num': 230, 'chapter': 119, 'verses': []},      # 절 미지정 = 장 전체
+        {'book_num': 230, 'chapter': 23, 'verses': []},
+    ])
+    assert len(api.get_slides()) == 3
+    s0 = api.get_slide(0)
+    assert s0['ok'] and len(s0['verses']) == 2 and s0['index'] == 0, s0
+    assert '19' in s0['ref'] and '20' in s0['ref'], s0['ref']
+    # 절을 지정하지 않으면 장 전체가 온다.
+    assert len(api.get_slide(2)['verses']) >= 6, api.get_slide(2)
+
+    # ◀ ▶ — 장이 1장뿐이면 바로 다음 구절로.
+    api.set_slide(0)
+    assert api.slide_step(1)['index'] == 1
+    # 자막 창이 "이건 8장짜리"라고 보고하면 그 다음부터는 장 안에서 움직인다.
+    api.report_slide_pages(8)
+    assert api.get_slide()['pages'] == 8
+    assert api.slide_step(1)['page'] == 1 and api.get_slide()['index'] == 1
+    for _ in range(7):
+        api.slide_step(1)
+    assert api.get_slide()['index'] == 2, '장 끝에서 다음 구절로 넘어가야 한다'
+    # ◀ 로 돌아오면 앞 구절의 '마지막 장'에서 이어진다(-1 = 마지막이라는 약속).
+    api.report_slide_pages(1)
+    api.slide_step(-1)
+    assert api.get_slide()['page'] == -1, api.get_slide()['page']
+    assert api.report_slide_pages(8)['page'] == 7, '마지막 장으로 클램프'
+    # 경계: 맨 앞에서 더 뒤로 가도 벗어나지 않는다.
+    api.set_slide(0)
+    api.slide_step(-1)
+    assert api.get_slide()['index'] == 0
+
+    # F9 즉석 슬라이드는 준비된 순서보다 우선하고, 한 걸음이면 원래 자리로 복귀한다.
+    api.set_slide(1)
+    assert api.show_slide_ref(290, 44, [22])['ok']
+    adhoc = api.get_slide()
+    assert adhoc['index'] == -1 and '44' in adhoc['ref'], adhoc
+    # ★ 즉석 슬라이드도 여러 장이면 장 안에서 먼저 움직여야 한다. 예전에는 첫
+    #   걸음에 무조건 장바구니로 빠져나가 F9 로 띄운 긴 본문의 2장 이후를 볼 수 없었다.
+    api.report_slide_pages(3)
+    api.slide_step(1)
+    assert api.get_slide()['index'] == -1 and api.get_slide()['page'] == 1,         '즉석 슬라이드 안에서 장이 넘어가야 한다'
+    api.slide_step(1)
+    assert api.get_slide()['page'] == 2
+    api.slide_step(1)     # 장의 끝을 넘으면 그때 복귀
+    assert api.get_slide()['index'] == 1, '즉석에서 나오면 건너뛰지 않고 제자리로'
+    # 장바구니가 비어 있어도 즉석 슬라이드의 장 이동은 되어야 한다.
+    saved = api.get_slides()
+    api.lib.cart.replace([])
+    api.show_slide_ref(230, 119, [])
+    api.report_slide_pages(4)
+    assert api.slide_step(1)['ok'] and api.get_slide()['page'] == 1,         '빈 장바구니에서도 F9 본문의 장은 넘어가야 한다'
+    api.clear_slide_adhoc()
+    api.lib.cart.replace(saved)
+    # 창 팩토리가 없으면(헤드리스) 창 열기는 조용히 실패한다.
+    assert api.open_subtitle_window()['ok'] is False
+    api.lib.cart.replace([])
+    assert api.get_slide()['ok'] is False, '장바구니가 비면 띄울 것이 없다'
+    print("slides: 장바구니→슬라이드 / 장(page) 탐색 / F9 즉석 / 경계 OK")
+
     # 설교 장바구니 팝아웃 창 + 양방향 동기화 (FEAT-07, v1.1.5). Fake windows record
     # evaluate_js so we can assert the broadcast/jump without a real webview.
     class _FakeWin:

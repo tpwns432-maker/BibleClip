@@ -17,7 +17,7 @@ import json
 import threading
 
 from bibleclip.webui.routes import (
-    BibleRoutes, HighlightRoutes, NoteRoutes, SystemRoutes,
+    BibleRoutes, HighlightRoutes, NoteRoutes, SlideRoutes, SystemRoutes,
 )
 # Lexicon-markup helpers live in their own module to avoid a circular import
 # (the route mixins need them too). Re-exported here for backwards compatibility
@@ -33,10 +33,10 @@ except Exception:  # pragma: no cover - clipboard backend optional at import
     pyperclip = None
 
 
-class Api(SystemRoutes, BibleRoutes, NoteRoutes, HighlightRoutes):
+class Api(SystemRoutes, BibleRoutes, NoteRoutes, HighlightRoutes, SlideRoutes):
     """Thin, JSON-friendly facade over Library for the web front-end.
 
-    Composed from the route mixins (system/bible/notes/highlights); the methods below are
+    Composed from the route mixins (system/bible/notes/highlights/slides); the methods below are
     the shared core every mixin relies on."""
 
     def __init__(self, library):
@@ -47,6 +47,18 @@ class Api(SystemRoutes, BibleRoutes, NoteRoutes, HighlightRoutes):
         # 창에서 성구 클릭 시 메인 뷰어 점프(cart_goto). 팩토리는 webui.app 가 주입한다.
         self._cart_window = None        # the pop-out cart window (for pushes), or None
         self._cart_window_factory = None  # callable() -> opens/returns the cart window
+        # 자막(PPT) 창 — 장바구니 팝아웃과 같은 배관(v1.2.0).
+        self._subtitle_window = None          # 자막 창(푸시 대상), 없으면 None
+        self._subtitle_window_factory = None  # callable() -> 창을 열고 반환
+        self._slide_index = 0                 # 준비된 순서(=장바구니) 안의 현재 번호
+        # F9 즉석 슬라이드. 준비한 순서를 벗어나 한 구절을 바로 띄우는 경우가 실제로
+        # 잦아서, 장바구니와 별개의 '임시 한 장'을 둔다(걸려 있으면 이쪽이 우선).
+        self._slide_adhoc = None
+        # 긴 본문은 한 슬라이드가 여러 '장'이 된다(시편 119편 = 8장). 몇 장인지는
+        # 실제로 그려 보는 자막 창만 알 수 있어(글꼴·창 크기에 달림) 창이 보고한다.
+        # ◀ ▶ 는 장 안에서 먼저 움직이고, 끝에 닿으면 다음 구절로 넘어간다.
+        self._slide_page = 0
+        self._slide_pages = 1
         # F11 발표용 네이티브 전체화면 상태(v1.2.0). pywebview 의 toggle_fullscreen 은
         # '토글'이라 지금 상태를 우리가 들고 있지 않으면 프론트와 어긋난다.
         self._fullscreen = False
@@ -97,6 +109,64 @@ class Api(SystemRoutes, BibleRoutes, NoteRoutes, HighlightRoutes):
         sermon-cart window (FEAT-07). Supplied by webui.app; None in headless
         tests, so open_cart_window degrades to a no-op there."""
         self._cart_window_factory = factory
+
+    def set_subtitle_window_factory(self, factory):
+        """webui.app 이 자막 창 생성자를 주입한다(장바구니 창과 같은 방식).
+        헤드리스 테스트에는 주입되지 않으므로 open_subtitle_window 가 no-op 이 된다."""
+        self._subtitle_window_factory = factory
+
+    def _subtitle_version(self):
+        """자막에 쓸 역본 — 화면 첫 번째 역본. 자막은 한 역본만 띄우는 것이 맞다
+        (투사 화면에 두 역본을 겹치면 글자가 작아져 뒤에서 안 보인다)."""
+        viewer = [v for v in (self.lib.settings.get('viewer_versions') or [])
+                  if v in self.lib.dbs]
+        return viewer[0] if viewer else self.lib.primary_version()
+
+    def _resolve_slide(self, item):
+        """장바구니 항목 하나 → 띄울 글자. {ref, verses:[{n,text}], version} 또는 None.
+
+        줄바꿈은 하지 않는다 — 어디서 줄을 나눌지는 그리는 쪽이 제 글꼴로 폭을 재서
+        정한다(web/js/versebreak.js). 여기서는 '무슨 글자'까지만 정한다."""
+        try:
+            book = int(item.get('book_num'))
+            chapter = int(item.get('chapter'))
+        except (TypeError, ValueError, AttributeError):
+            return None
+        version = self._subtitle_version()
+        rows = dict(self.lib.get_chapter(version, book, chapter))
+        if not rows:
+            return None
+        wanted = [int(v) for v in (item.get('verses') or [])]
+        if not wanted:
+            wanted = sorted(rows)                      # 절 지정이 없으면 장 전체
+        verses = [{'n': n, 'text': rows[n]} for n in wanted if n in rows]
+        if not verses:
+            return None
+        name = self.lib._display_book_name(book, [version]) or ''
+        ns = [v['n'] for v in verses]
+        span = f"{ns[0]}-{ns[-1]}" if ns[0] != ns[-1] else f"{ns[0]}"
+        ref = f"[{name} {chapter}장 {span}절]" if name else f"[{chapter}:{span}]"
+        return {'ref': ref, 'verses': verses, 'version': version}
+
+    def _broadcast_slide(self):
+        """현재 슬라이드를 자막 창과 조작 화면 양쪽에 민다.
+
+        상태를 백엔드 한 곳에만 두고 밀어주는 이유는 장바구니(_broadcast_cart)와
+        같다 — 창마다 제 상태를 가지면 반드시 어긋난다. 받는 쪽은 **다시 그리기만**
+        하고 되쓰지 않으므로 메아리가 없다."""
+        try:
+            payload = self.get_slide()
+        except Exception:
+            payload = {'ok': False}
+        self._push('onSlideChanged', payload)
+        win = self._subtitle_window
+        if win is not None:
+            try:
+                blob = json.dumps(payload, ensure_ascii=False)
+                win.evaluate_js(f"window.renderSlide && window.renderSlide({blob})")
+            except Exception:
+                # 창이 닫혔다 — 낡은 핸들을 버린다(장바구니 창과 동일 처리).
+                self._subtitle_window = None
 
     def _broadcast_cart(self, items):
         """Push the current cart to EVERY window that shows it — the main window's

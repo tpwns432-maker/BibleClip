@@ -24,6 +24,12 @@ def _cart_index_path():
     return os.path.join(get_resource_dir(), 'web', 'cart.html')
 
 
+def _subtitle_index_path():
+    """자막(PPT) 창의 페이지 — index.html 옆 자체완결 페이지, 같은 web/ 복사본에
+    묶여 배포된다(빌드 스크립트 수정 불필요)."""
+    return os.path.join(get_resource_dir(), 'web', 'subtitle.html')
+
+
 def _onscreen(x, y):
     """True if a saved window position looks on-screen — used to reject the
     -32000,-32000 that Windows reports for a MINIMIZED window (saving/restoring
@@ -497,6 +503,33 @@ def _main():
         return win
 
     api.set_cart_window_factory(_open_cart_window)
+
+    def _open_subtitle_window():
+        # v1.2.0 자막(PPT) 창. 장바구니 창과 같은 구조 — js_api 를 붙여 백엔드가
+        # renderSlide 를 밀어넣을 수 있게 하고, _child_windows 로 추적해 메인이
+        # 닫힐 때 함께 정리한다(BUG-SYS 좀비 방지).
+        if api._subtitle_window is not None:
+            return api._subtitle_window
+        lang = i18n.resolve_ui_lang(library.settings)
+        win = webview.create_window(
+            i18n.t('subtitle.windowTitle', lang),
+            url=_subtitle_index_path(), js_api=api,
+            width=960, height=540, min_size=(480, 270),
+        )
+        api._subtitle_window = win
+        _child_windows.append(win)
+
+        def _forget_subtitle(*_):
+            api._subtitle_window = None
+            if win in _child_windows:
+                _child_windows.remove(win)
+        try:
+            win.events.closed += _forget_subtitle
+        except Exception:
+            pass
+        return win
+
+    api.set_subtitle_window_factory(_open_subtitle_window)
 
     # Startup connection watchdog (Fix-C): if the front-end never reaches the
     # bridge (get_initial) within the timeout, the local HTTP page failed to load

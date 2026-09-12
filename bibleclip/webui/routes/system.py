@@ -61,6 +61,7 @@ class SystemRoutes:
             'lex_lang': 'en' if s.get('lex_lang') == 'en' else 'ko',
             'ui_lang': s.get('ui_lang') or 'ko',  # i18n: front-end syncs on boot
             'reading_font': s.get('reading_font') or '',
+            'subtitle_preset': s.get('subtitle_preset') or 'green',
             # Which original-language dictionaries are installed (user-supplied
             # modules in original_lang/). When both are false the UI guides the
             # user to add a module instead of showing an empty lexicon panel.
@@ -224,6 +225,9 @@ class SystemRoutes:
         # v1.1.6 본문 보기 모드 (view-only): 절별 대조 / 병렬 독서 좌우 컬럼.
         'view_mode': {'interleave', 'split'},
         'reading_font': 'any',   # 읽기 글꼴 family 이름('' = 기본 Pretendard)
+        # v1.2.0 자막 창 배색. 값이 바뀌면 자막 창에도 즉시 밀어야 하므로
+        # set_app_setting 이 _broadcast_subtitle_style 을 부른다.
+        'subtitle_preset': {'green', 'navy', 'black', 'white', 'theme'},
         'poll_interval': 'float',
         # The web card layout is an opaque, front-end-owned blob (a list of card
         # descriptors). 'any' = store whatever JSON-serializable value JS sends,
@@ -240,6 +244,7 @@ class SystemRoutes:
             'lex_lang': 'en' if s.get('lex_lang') == 'en' else 'ko',
             'ui_lang': s.get('ui_lang') or 'ko',
             'reading_font': s.get('reading_font') or '',
+            'subtitle_preset': s.get('subtitle_preset') or 'green',
             'poll_interval': float(s.get('poll_interval', 0.5) or 0.5),
             'auto_copy_top_result': bool(s.get('auto_copy_top_result', False)),
             'search_synonyms': bool(s.get('search_synonyms', True)),
@@ -276,6 +281,10 @@ class SystemRoutes:
         self.lib.save_settings()
         if key == 'poll_interval':
             self.lib.set_poll_interval(value)
+        # 자막 창의 겉모습에 영향을 주는 설정이면 그 창에도 즉시 밀어준다.
+        # (자막 창은 자체완결이라 설정 변경을 스스로 알 수 없다.)
+        if key in ('subtitle_preset', 'reading_font'):
+            self._broadcast_subtitle_style()
         return {'ok': True, 'value': value}
 
     def reset_settings(self):
