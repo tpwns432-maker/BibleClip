@@ -61,6 +61,9 @@ class Library:
         # 재시작마다 기본값으로 되돌아가던 버그). reading_font='' = 기본 Pretendard.
         'ui_lang': 'ko',                  # UI display language (ko/en) — persisted
         'reading_font': '',               # custom reading font family ('' = default)
+        # v1.2.0 자막(PPT) 창 배색 프리셋. ⚠️ 앱이 저장하는 키는 반드시 여기 있어야
+        # load_settings 가 받아들인다(v1.1.4 에서 설정이 재시작마다 초기화되던 원인).
+        'subtitle_preset': 'green',       # green|navy|black|white|theme
         'auto_copy_top_result': False,    # 검색 최고 점수 결과 자동 클립보드 복사
         # v1.1.11 검색어 유의어 확장(고어↔현대어). 켜면 '이집트'로 검색해도 개역한글의
         # '애굽'이 걸린다(끄면 0건). 사전은 web/data/bible_synonyms.json — 앱이 가진

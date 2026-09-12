@@ -8,6 +8,8 @@ established by ``Api.__init__`` — none define their own ``__init__``.
 from bibleclip.webui.routes.bible import BibleRoutes
 from bibleclip.webui.routes.highlights import HighlightRoutes
 from bibleclip.webui.routes.notes import NoteRoutes
+from bibleclip.webui.routes.slides import SlideRoutes
 from bibleclip.webui.routes.system import SystemRoutes
 
-__all__ = ['BibleRoutes', 'HighlightRoutes', 'NoteRoutes', 'SystemRoutes']
+__all__ = ['BibleRoutes', 'HighlightRoutes', 'NoteRoutes', 'SlideRoutes',
+           'SystemRoutes']

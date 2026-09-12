@@ -215,6 +215,7 @@ window.BC = window.BC || {};
     autoCopyTop: false,     // 검색 시 최고 점수 결과를 클립보드에 자동 복사
     searchSyn: true,        // v1.1.11 검색어 유의어 확장(고어↔현대어)
     viewMode: "interleave", // v1.1.6 본문 보기 모드: 'interleave'(절별 대조) | 'split'(병렬 독서)
+    subtitlePreset: "green", // v1.2.0 자막 창 배색: green|navy|black|white|theme
     booksCache: {},         // version -> [{num,short,long}]
     chapCache: {},          // "version:book" -> [chapters]
     primaryBooks: [],       // primary version's book list (for search autocomplete)
@@ -289,6 +290,7 @@ window.BC = window.BC || {};
     state.autoCopyTop = !!init.auto_copy_top_result;
     state.searchSyn = init.search_synonyms !== false;   // 기본 켜짐
     state.viewMode = init.view_mode === "split" ? "split" : "interleave";
+    state.subtitlePreset = init.subtitle_preset || "green";
     const verLabel = $("app-ver");
     if (verLabel && init.version) verLabel.textContent = "v" + init.version;
 
@@ -313,6 +315,7 @@ window.BC = window.BC || {};
     wireUpdate();
     wireAppSettings();
     wireReadingFontMenu();
+    wireSubtitleToggle();
     wireAliasManager();
     if (init.auto_update_check) checkUpdate(true); // silent startup check
     maybePatchModal(); // first-run-after-update patch notes (Phase 4)

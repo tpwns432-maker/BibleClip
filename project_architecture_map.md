@@ -4,8 +4,9 @@
 >
 > **유지보수 규칙 (STRICT)**: `api.py`/`routes/*`에 API 추가, `app.js`(프론트)에 이벤트 디스패처/컴포넌트 추가, 파일 구조·경로 변경 시 **반드시 이 파일을 동시에 갱신**한다. 커밋·작업완료 보고 전 "지명도 파일 업데이트 완료 여부"를 체크포인트로 확인한다.
 
-- **현재 버전**: v1.1.15 (`bibleclip/_version.py` = `__version__`, ASCII-only single source of truth)
-- **killswitch**: `recommend_version` = 1.1.14 (직전 버전 규칙)
+- **현재 버전**: v1.2.0 (`bibleclip/_version.py` = `__version__`, ASCII-only single source of truth)
+- **killswitch**: `recommend_version` = 1.1.15 (직전 버전 규칙)
+- **★ v1.2.0 내용(자막/PPT 화면 — 성경 구절을 문맥에 맞게 자동 줄바꿈해 투사)**: 예배 영상 송출 구조를 그대로 옮긴다 — 노트북=조작, 빔프로젝터=자막. 장바구니 팝아웃(FEAT-07)과 **같은 배관**(자체완결 HTML + `js_api` + `_child_windows` 추적 + `evaluate_js` 푸시). 신규 `web/subtitle.html`·**`web/js/versebreak.js`**·`webui/routes/slides.py`, 진입 = **F9**(즉석 구절 입력) / 레일 아이콘 `#subtitle-toggle`(창 열기) / 장바구니 순서. 🔑 **① 줄바꿈은 '그리는 쪽'이 푼다** — 어디서 줄을 나눌지는 실제 렌더 폭에 달렸고 그건 자기 글꼴·창 크기를 아는 자막 창만 잴 수 있다(Canvas `measureText`). 미리 구워두면 역본·글꼴·창 크기가 바뀔 때마다 어긋난다. 백엔드는 **'무슨 글자를 띄울지'까지만**(역본 텍스트 + 참조 문자열). 🔑 **② 한국어 성경은 절 경계 어미가 정형화돼 있어 규칙이 통한다**(4역본 319절 실측: 절당 내부 후보 평균 2.7개, 후보 있는 절 92~93%). 후보에 **등급**을 매기고(1 종결/절경계 → 2 연결 → 3 나열·쉼표 → 4 어절경계) **Knuth–Plass 식 DP**로 `Σ(줄 여백²) + Σ(등급 벌점)` 최소화. 나열문(계 21:8, 89자 한 덩어리)은 3등급 `…와/과`가 구제. 🔑 **③ 문장 경계는 '선호'가 아니라 '강제'** — 등급만으로는 폭이 아까울 때 DP 가 서로 다른 두 문장을 한 줄에 묶는다(창 1:10 이 대표 사례). `sentenceEnd()` 가 참이면 그 뒤는 반드시 줄이 끝난다. ⚠️ **강제라서 오탐이 그대로 보인다** — 실측으로 걸러냈다: 단독 `다`(부사 '모두', 최다 오탐 22회)·`아니라`(연결)·`것이요`/`아니요`(나열)·`바다`/`따라`/`것보다`(명사·조사·비교). `아니라`는 빼되 `아니니라`는 살려야 해서 **접미사가 아니라 정확히 일치할 때만** 제외. 정리 후 60개 어절 전부가 실제 문장 끝이었다. 문장부호로 끝나면 어미와 무관하게 문장 끝(현대어 역본용). 🔑 **④ 외부 데이터는 답이 아니었다(조사 완료, 되풀이 금지)** — (a) 동봉 16역본 중 **14개에 문장부호가 있지만** 문장 경계가 **역본마다 다르다**(개역한글 창1:12 = 1문장 ↔ 새번역 = 2문장). 다른 역본을 정답지로 쓰면 없는 경계를 집어넣어 **개악**된다. (b) **Kiwi**(requirements 에 있음)는 현대 한국어 학습이라 고어체에서 우리 규칙보다 못하다(내부 경계 탐지 **71곳 vs 25곳**, `칭하시니라`의 `니라`를 연결어미 EC 로 오판). (c) 원어 데이터에 히브리어 캔틸레이션 악센트 없음. (d) **개역한글은 2012년 저작권 만료(퍼블릭 도메인), 개역개정은 저작권 유효**. 남은 가능성은 USFM `\q`(시가서 행 구분)뿐. 🔑 **⑤ 긴 본문 자동 분할** — `paginate()`. 투사 기준 '읽을 수 있는 바닥'(28px) 밑으로 내려갈 상황이면 우겨넣지 않고 장을 넘긴다. **절 경계에서만** 나눈다. 장수는 자막 창만 알 수 있어(`report_slide_pages`) 백엔드가 받아 `◀▶`가 **장 안에서 먼저** 움직이고 끝에서 다음 구절로 간다. 뒤로 갈 땐 **`page = -1` = 마지막 장** 약속(큰 수 sentinel 은 payload 에 `1000001/1` 로 새어 나감). 🔑 **⑥ 성능 — 병목은 측정이 아니라 DP 였다** — 시편 119편 최초 **3255ms** → 어절 폭 누적합 770ms → 측정 캐시 835ms(**효과 없음 = 측정이 병목이 아니라는 신호**) → **`memo.clear()` 제거 157ms**. 줄 수 `k` 를 1부터 늘리며 매 회 memo 를 비워 DP 를 통째로 21번 다시 돌고 있었다(키가 `(i,k)` 라 지울 이유가 없다). 일반 슬라이드 **0.2ms**. 🔑 **⑦ 겉모습** — `subtitle_preset`(green/navy/black/white/theme) ⚠️ **`DEFAULT_SETTINGS`+`_APP_KEYS` 동반 등록 필수**(v1.1.4 교훈). 자막 창은 자체완결이라 메인이 주입한 커스텀 글꼴을 물려받지 못해 **같은 브리지(`get_font`)로 base64 를 받아 제 문서에 `@font-face` 를 따로 심는다**; 글꼴이 바뀌면 글자 폭이 달라지므로 **줄바꿈을 다시 계산**. 설정 변경 시 `set_app_setting` 이 `_broadcast_subtitle_style()` 로 창에 푸시. ⚠️ **미구현**: 장바구니 `◀▶` 제어 UI(사용자 판단으로 보류 — 자막 창에 포커스를 두면 `←/→` 로 장바구니 순서 탐색은 됨).
 - **★ v1.1.15 내용(F11 진짜 전체화면 + 최대화 크기 저장 차단)**: ① **F11 이 창 안에서만 전체화면이던 문제** — HTML `requestFullscreen()` 은 **웹뷰 뷰포트 안에서만** 전체화면이라 제목표시줄·작업표시줄이 그대로 남았다. 브라우저는 브라우저가 제 창을 OS 전체화면으로 바꿔주지만 **임베드된 WebView2 에는 그 주인이 없다**. → 브리지 **`Api.set_native_fullscreen(on)`**(pywebview `window.toggle_fullscreen()`) 신설. ⚠️ pywebview 의 것은 **세터가 아니라 토글**이라 현재 상태를 `Api._fullscreen` 에 들고 있다가 같은 상태 요청은 무시한다(중복 호출로 어긋남 방지). `presentToggle()` 진입 시 **창을 먼저** 전체화면으로(뷰포트가 화면 전체가 되어야 그 위에서 카드가 채워진다 — 작은 창에서도 최대화 없이 바로 전체화면이 되는 이유), 실패 시 되돌림. 해제는 **`fullscreenchange` 한 곳에서만**(ESC·F11 어느 경로로 나가도 어긋나지 않음). ② **최대화 크기가 저장되던 문제** — 최대화한 채 종료하면 다음 실행이 '최대화 크기의 일반 창'으로 열려 복원이 안 됐다. **`_looks_maximized(w, h)`**(app.py): pywebview 가 창 상태를 이식성 있게 주지 않으므로 **크기로 판정**(모든 `webview.screens` 와 비교, 여유 96px). 걸리면 기하 저장을 통째로 건너뛰어 **직전 정상 크기를 보존**. 🔑 **`webview` 는 함수 안에서 지연 임포트해야 한다** — `app.py` 는 모듈 최상단에 `import webview` 가 **없다**. `_strip_motw()` 가 `import webview`→clr 보다 먼저 돌아야 v1.1.2 의 MOTW 수정(다운로드본 실행 실패)이 유지되기 때문. 최상단으로 올리면 **테스트는 통과하면서 배포본만 실행 불가**가 된다(작업 중 실제로 밟을 뻔했음).
 - **★ v1.1.14 내용(F2 상대 참조 단축 입력 + F11 점프 강조 제거)**: ① **F2 단축 입력** — 책 이름을 생략하면 **'점프를 받을 카드'의 위치 기준**으로 해석. `22`·`22절`=현재 장의 절, `22-24`(`~`/전각 `－～`)=절 범위, `44:22`(전각 `：`)=현재 **책**의 장:절, `44장`=현재 책의 장. `relativeRef(q, ctx)`+`vRange`(search-notes.js)가 `resolve_reference` **앞단**에서 가로챈다. 🔑 **문맥은 반드시 goToRef 가 고를 카드와 같아야 한다** — 그래서 `goToRef` 의 대상 선정(우선순위 fs카드→일치 잠금카드→첫 비잠금)을 **`jumpTarget(book, chapter)`** 로 분리하고 **`CardManager.jumpContext()`**(={book,chapter})로 공개. 다른 카드를 기준으로 삼으면 엉뚱한 장의 22절로 간다. 🔑 **범위 밖은 무반응**(사용자 선택) — 키워드 검색으로 흘려보내면 `50`이 민수기 7:50 같은 곳으로 튄다. 같은 장 안의 절은 **DOM(`.v[data-v]`)으로 즉시 검증**해 브리지 왕복이 없다(`verseOnScreen`). 책 이름이 붙은 입력(`사 44:22`)·키워드는 파서가 `null` 을 돌려 기존 경로 그대로. 발견 가능성 위해 `present.qsPlaceholder` 에 힌트 추가(ko/en). ② **F11 점프 강조 제거** — `.mcard:fullscreen .scripture .v.hl` 에서 배경·좌측 액센트 바·`hl-flash` 애니메이션 + **`.scripture .v.hl` 의 음수 마진(-8px)/패딩까지 리셋**(발표 화면은 좌우 9vw 라 그 절만 튀어나오면 눈에 띔). ⚠️ **`.v.hl` 클래스 자체는 절대 지우면 안 된다** — 색칠 표식이자 `centerHighlightVerse()` 가 스크롤 목표 절을 찾는 **앵커**라서, 클래스를 빼면 점프해도 그 절로 이동하지 않는다. **보이는 것만** 죽인다. 테스트 `tests/test_quickjump_parse.js`(33건, node — 파서 정의를 소스에서 이름으로 잘라 eval).
 - **★ v1.1.13 내용(F11 테마 적용 + 발표 화면 구역 구분)**: 🔑 **① 진범은 정의된 적 없는 토큰 `--bg`** — `.mcard:fullscreen { background: var(--bg) }`. 미정의 커스텀 속성은 **파스 오류가 아니라 '계산 시점 무효(invalid at computed-value time)'** 라서 `background` **숏핸드 전체가 `unset`(=transparent)** 이 되고, 그 결과 특이도가 더 낮은 `.card { background: var(--card-bg) }` 까지 덮어버려 **전체화면 본문만 테마를 전혀 따르지 못했다**. 라이트에서는 결과가 흰색으로 보여 **우연히 맞아 보인 탓에** 오래 묻혀 있었다. → `var(--app-bg)`. CSS 전체 커스텀 속성 감사 결과 미정의+폴백없음은 이것뿐(`--card-2`/`--danger`/`--mono`/`--reading-font`는 폴백 있어 정상). 🔑 **② 헤더 배경을 전용 토큰으로 분리** — `.present-banner` 가 `--seg-bg` 를 참조하고 있었으나 그건 **세그먼트 컨트롤·메뉴 호버 등 10곳이 공유**하는 토큰이라, 발표 화면 색을 조정하면 무관한 UI가 같이 바뀌는 구조였다. → **`--present-bar-bg`** 신설. 🔑 **③ 구역 3층화** — 발표 화면은 `틀고정 헤더 / 역본명 띠(.shead, split 모드의 sticky 행) / 본문` 세 구역인데 모두 같은 면이라 뭉쳐 보였다. 색 층을 `--present-bar-bg`(헤더) → `--card-bg`(역본명) → `--app-bg`(본문) 으로 내리고, 헤더와 역본명 띠에 **1px 선 + 얕은 그림자**를 준다. 신규 토큰 **`--present-bar-bg`/`--present-bar-line`/`--present-bar-shadow`**(라이트 `#F6F3FC`/`#E6E1F2`/`0 1px 2px .06`, 다크 `#1D1633`/`#322A49`/`0 1px 2px .35`). ⚠️ **다크에서 선은 면보다 밝아야 보인다**(면 `#1D1633`/`#171127`/`#0F0B1A` → 선 `#322A49`). 🔑 **④ 디자인 언어는 양 테마 공통** — 시행착오를 남긴다: 처음엔 `--card-shadow`(확산 `-14px` 라 거의 안 보임) → 큰 드롭섀도(`0 10~12px 24~28px -6px`)로 키웠더니 **라이트에서 즉시 촌스러워졌고**(흰 면 + 큰 그림자), '라이트는 선 / 다크는 그림자'로 방식을 갈랐더니 **두 테마가 서로 다른 디자인**이 되어 더 어색했다. 최종 = **양 테마 모두 선 주력 + 그림자는 이음새 제거용**. 선 두께도 **1px 이 정답**(1.5px=비정수 배율에서 반 픽셀 뭉개짐, 2px=발표 화면에서 굵음 — 둘 다 시도 후 되돌림). ⚠️ 이 구역 구분은 **F11 한정**(`.mcard:fullscreen .split-cols .shead`) — 작은 카드의 windowed 모드엔 과하다. 역본명 띠는 **병렬 독서(split)에만 존재**(절별 대조는 역본명이 줄 앞 인라인 `.vver`).
@@ -22,7 +23,7 @@
 - **★ v1.1.2 내용(일부 PC "런타임 에러" 진범 해결)**: 다운로드 zip의 **MOTW(Zone.Identifier=3)** 가 번들 `Python.Runtime.dll`에 묻어 .NET이 "인터넷 어셈블리" 로드를 거부(`Failed to resolve Python.Runtime.Loader.Initialize`)하던 문제. **로컬 복사본은 표식 없어 정상, 다운로드본만 실패** → startup_error.log로 확진(ZoneId=3 + ReferrerUrl=zip). 수정: `app.py _strip_motw`(clr import 전 번들 .dll/.pyd/.exe의 Zone.Identifier ADS 1회 제거, `.motw_cleared` 마커) + `BibleClipWeb.exe.config`의 `loadFromRemoteSources`(읽기전용 위치 백스톱, build_web.ps1 동봉). .NET·WebView2·Python 버전·보안SW 전부 무죄였음.
 - **v1.1.1 내용**: 실행 실패 의심으로 CI Windows 빌드 Python 3.12→3.13 + `requirements.txt` 정확 버전 핀(재현성). 시작 실패 안내·로깅: 실제 .NET/WebView2/보안SW 탐지 후 원인별 분기(_diagnostics) + `userdata/startup_error.log` 기록 + 안내 페이지. (실제 진범은 v1.1.2의 MOTW였음 — 이 로깅 덕에 잡음.)
 - **v1.1.0 내용**: FEAT-01 장바구니 DnD+FLIP / FEAT-02 매직 포맷터 매크로+태그칩 / FEAT-03 묵상 노트 **슬라이딩 레일 패널**(독립 카드에서 전환) / FEAT-04 카드별 대조 토글(역본 쌍 고정) / FEAT-05 병렬 복사 부스터 / BUG-01·BUG-i18n·FIX-01 핫픽스 / KJV+ 동봉 + 원전 분해 소스 선택
-- **마지막 맵 동기화**: 2026-09-12 (v1.1.15 F11 진짜 전체화면 + 최대화 저장 차단 반영)
+- **마지막 맵 동기화**: 2026-09-12 (v1.2.0 자막/PPT 화면 + 자동 줄바꿈 엔진 반영)
 
 ---
 
@@ -70,17 +71,19 @@ BibleClip Project/
 │  │  └─ widgets.py                #   ScrollDropdown(스크롤 가능 드롭다운)
 │  └─ webui/                       # ★ pywebview 데스크톱(웹 프론트 + JS브리지)
 │     ├─ app.py                    #   pywebview 창 부트스트랩/생명주기/.NET 에러
-│     ├─ api.py                    #   Api 브리지 파사드(4개 라우트 믹스인 조합)
+│     ├─ api.py                    #   Api 브리지 파사드(5개 라우트 믹스인 조합)
 │     ├─ dicthtml.py               #   렉시콘 마크업 → HTML 헬퍼
 │     ├─ __main__.py               #   python -m bibleclip.webui
 │     └─ routes/                   #   JS-호출 가능 브리지 메서드(HTTP 아님)
 │        ├─ bible.py               #     성경 탐색/검색/렉시콘 (BibleRoutes)
 │        ├─ notes.py               #     묵상 노트 CRUD (NoteRoutes)
 │        ├─ highlights.py          #     형광펜 CRUD (HighlightRoutes)
+│        ├─ slides.py              #     자막(PPT) 슬라이드·장 탐색·겉모습 (SlideRoutes)
 │        └─ system.py              #     부트/설정/업뎃/폰트/출력포맷 (SystemRoutes)
 ├─ web/                            # ★ 프론트엔드 SPA (vanilla JS, 프레임워크 없음)
 │  ├─ index.html                   #   DOM 셸(.rail/.main/뷰/드로어/모달)
 │  ├─ cart.html                    #   FEAT-07 설교 장바구니 팝아웃 창(자체완결, v1.1.5)
+│  ├─ subtitle.html                #   ★ 자막(PPT) 창(자체완결, v1.2.0) — 빔프로젝터용
 │  ├─ js/
 │  │  ├─ i18n.js                   #   i18n 엔진(로케일 로드/라이브 전환/DOM스윕)
 │  │  ├─ core.js                   #   부트/전역상태/API브리지/UI헬퍼 (window.BC)
@@ -241,7 +244,7 @@ BibleClip Project/
 - locale: `dotnet.errTitle/errBody`, `webview2.errTitle/errBody`, `secblock.errTitle/errBody`
 
 ### webui/api.py — Api 브리지 파사드
-- **class `Api(SystemRoutes, BibleRoutes, NoteRoutes, HighlightRoutes)`** — `__init__(library)`; `set_window(window)`/`set_popup_factory(factory)`/`_push(fn, *args)`
+- **class `Api(SystemRoutes, BibleRoutes, NoteRoutes, HighlightRoutes, SlideRoutes)`** — `__init__(library)`; `set_window(window)`/`set_popup_factory(factory)`/`_push(fn, *args)`
   - 모니터링: `start_monitoring()`/`stop_monitoring()`/`_clip_read()`/`_clip_write(text)`/`_on_reference(result)`/`_on_keyword(keyword)`
   - 복사/내보내기: `copy_reference(book, chapter, verses, versions=None)`/`copy_references(items, versions=None)`/`copy_text(text)`/`export_text_file(text, suggested_name)`
   - `pyperclip` 클립보드 백엔드(옵셔널); dicthtml 심볼 재익스포트
@@ -294,6 +297,19 @@ BibleClip Project/
 | `clear_verse_highlights` | `(book, chapter, verse, version)` | {ok} |
 | `get_all_highlights` | `()` | 전체 [{book,chapter,verse,version,s,e,t,c,ts}] (향후 모아보기 훅) |
 
+**SlideRoutes (`routes/slides.py`) — 자막(PPT) 화면 (v1.2.0):**
+| 메서드 | 인자 | 역할 |
+|---|---|---|
+| `open_subtitle_window` / `close_subtitle_window` / `subtitle_window_open` | `()` | 자막 창 열기·닫기·상태 (팩토리 없으면 no-op) |
+| `get_slides` | `()` | 띄울 수 있는 슬라이드 = 장바구니 순서 그대로 |
+| `get_slide` | `(index=None)` | 슬라이드 → 띄울 글자 `{ref, verses:[{n,text}], version, index, total, page, pages}`. 즉석(F9)이 걸려 있으면 우선(`index:-1`) |
+| `set_slide` | `(index)` | 현재 슬라이드 지정(즉석 해제 + 장 초기화) |
+| `slide_step` | `(delta)` | ◀▶ — **장 안에서 먼저**, 끝에서 다음 구절. 뒤로는 `page=-1`(=마지막 장) |
+| `report_slide_pages` | `(pages)` | 자막 창이 '몇 장인지' 보고(글꼴·창 크기에 달려 백엔드가 알 수 없음) → `page` 클램프 |
+| `show_slide_ref` / `clear_slide_adhoc` | `(book, chapter, verses)` / `()` | F9 즉석 슬라이드 설정·해제 |
+| `get_subtitle_style` | `()` | `{preset, font_family, font_file}` — 창이 배색·글꼴을 받아간다 |
+| `_resolve_slide` / `_broadcast_slide` / `_broadcast_subtitle_style` | (내부) | 장바구니 항목→텍스트 / 슬라이드·겉모습 푸시 |
+
 **SystemRoutes (`routes/system.py`) — 부트/설정/업뎃/폰트/출력포맷:**
 | 메서드 | 인자 | 역할 |
 |---|---|---|
@@ -327,7 +343,7 @@ BibleClip Project/
 
 ## 8. 프론트엔드 SPA (`web/` — vanilla JS, 프레임워크 없음)
 
-**스크립트 로드 순서(필수)**: `i18n.js` → `core.js` → `cards.js` → `search-notes.js`(끝에서 boot()). 전역 네임스페이스 `window.BC`, `window.I18N`, `CardManager`. 백→프론트 푸시: `window.bibleclip.{onReference, onKeyword, onUpdateProgress, onUpdateReady, onUpdateError}`.
+**스크립트 로드 순서(필수)**: `i18n.js` → `core.js` → `cards.js` → `search-notes.js`(끝에서 boot()). ※ **`versebreak.js` 는 이 순서에 들어가지 않는다** — 메인 SPA 가 쓰지 않고 자막 창(`subtitle.html`)만 직접 로드한다(자체완결). 전역 네임스페이스 `window.BC`, `window.I18N`, `CardManager`. 백→프론트 푸시: `window.bibleclip.{onReference, onKeyword, onUpdateProgress, onUpdateReady, onUpdateError}`.
 
 **index.html DOM 셸**: `.rail`(좌측 아이콘 네비, `#notes-toggle` 포함) + `.main`(`.topbar`/`.controls`/`.viewer-view>.panels-container`/`.settings-view`/`.search-view`) + 드로어(`#log-drawer`/`#cart-drawer`/**`#notes-drawer`**(FEAT-03 묵상 노트 레일 패널: `#notes-list`+`#notes-foot`)) + 모달(`#settings-modal`/`#alias-modal`) + `.toast-wrap`.
 
@@ -359,6 +375,21 @@ BibleClip Project/
 - 이벤트 위임: `wireContainer()` (클릭/스크롤/드래그/contextmenu/hover 단일 핸들러). **드래그 mouseup = 걸친 절 복사(기존) + 형광펜 팔레트(v1.1.12) 동시**, **`.hl-mark` 클릭 = 절 복사 대신 팔레트**(색 변경/지우기)
 - public: `{init, addCard, addCardWithLink, goToRef, primaryVersion, primaryBible, bibleCards, lexiconCards, bodyEl, linkedBibleFor, chapStepPrimary, chapStepActive, reloadAllBible, relabel, presentToggle, ensureInterlinearFor, decorateNotesFor:decorateNotes, snapshotAnchors, realignAnchors, **jumpContext**}` — `jumpContext()`(v1.1.14)는 `jumpTarget()`(goToRef 의 대상 선정 로직 분리)이 고른 카드의 `{book, chapter}`
 
+### versebreak.js — ★ 성경 구절 자동 줄바꿈 엔진 (v1.2.0, IIFE `window.VerseBreak`)
+자막 창만 로드한다(메인 SPA 무관). **`measure` 를 주입받는 순수 계산 모듈**이라 브라우저 없이 node 로 테스트된다.
+- `tokenize(verses)` → `{words, tiers, hard}` — 어절별 끊기 등급 + **문장 경계(강제)** 표시. 절과 절 사이는 최상급 후보
+- `wordTier(word)` → 1 종결/2 연결/3 나열·쉼표/4 어절경계. `sentenceEnd(word)` → 강제 줄바꿈 여부(보수적 목록 + 정확일치 예외 + 문장부호)
+- `layout(words, tiers, {measure, maxWidth, maxLines, hard})` → DP. **어절 폭 누적합**(`pre[]`)으로 구간 폭 O(1), `hard[j]` 면 그 줄은 거기서 끝
+- `plan(verses, o)` = tokenize+layout / `fit(verses, {measureAt, maxWidth, maxHeight, lineHeight, min, max})` = 들어가는 **가장 큰** 글자 크기 이분 탐색
+- `paginate(verses, {…, minSize})` → `[{lines, size, verses}]` — 읽을 수 있는 바닥 아래로 내려갈 상황이면 **절 경계에서** 장을 나눔. 호출 수명 측정 캐시(⚠️ 원본 `measureAt` 을 먼저 붙잡아야 함 — `o` 재할당 시 자기 자신을 불러 무한 재귀)
+- 상수: `TIER_PENALTY{1:0, 2:60, 3:300, 4:1200}`(⚠️ `||` 폴백 금지 — 최상급이 0 이라 falsy), `RAGGED`(**비율 정규화 필수** — px 로 두면 여백²이 등급 벌점을 압도), `WIDOW_PENALTY`, `SENT_FINAL`/`SENT_EXCEPT`/`SENT_MIN_LEN`
+
+### subtitle.html — 자막(PPT) 창 (v1.2.0, 자체완결)
+- 백엔드 푸시 수신: `window.renderSlide(payload)` / `window.applySubtitleStyle({preset, font_family, font_file})`
+- `draw()`(paginate→현재 장 렌더→`report_slide_pages`)/`measureAt`(Canvas)/`applyFont`(get_font base64 → 제 문서에 `@font-face`)/`cssFontName`(**화이트리스트** — 블랙리스트는 이스케이프 실수로 정규식이 깨진 적 있음)/`redraw`
+- 배색은 `body[data-preset]` CSS 변수. `#page` 는 여러 장일 때만 `2 / 8`. 창 크기 변경 시 줄바꿈 재계산(디바운스 80ms)
+- 창 포커스 시 `←/→`·PageUp/Down → `slide_step`
+
 ### search-notes.js (~1682줄) — ★ 검색/노트/설정/카트/업뎃/폰트/약칭/라이브i18n
 - 노트/절메뉴: `showVerseMenu(card, verse, x, y)`/`openNoteEditor(card, verse)`/`addVerseToCart(card, verse)`/`openOriginalFor(card, verse)`
 - **묵상 노트 레일 패널(FEAT-03, 카드→레일 전환)**: `renderNotes()`(API에서 전체 노트 fetch·렌더)/`openNotes()`/`closeNotes()`(로그·카트와 상호배타)/`wireNotesRail()`(토글·새로고침·복사·내보내기·전체선택 바인딩)/`buildNotesText(list)`/`notesTargets()`(선택분 없으면 전체)/`syncNotesSelAll()`/`noteRowKey(n)`. 상태: `notesData[]`/`notesSel`(Set). DOM: `#notes-drawer`/`#notes-list`/`#notes-foot`/`#notes-toggle`/`#notes-close`/`#notes-reload`/`#notes-selall-cb`/`#notes-copy`/`#notes-export`. API: `get_all_notes()`/`copy_text(text)`/`export_text_file(text, filename)`
@@ -368,7 +399,8 @@ BibleClip Project/
 - 버전칩(FLIP애니): `renderVerChips()`/`flipChips(prev)`/`updateViewerVersions(newViewer)`/`wireChipDrag()`/`layoutChipGap(insertIdx)`/`commitChipDrag()`
 - 모니터링: `setStatus(active)`/`wireMonitor()`/`logReference(entry)`/`renderLog()`/`flagUnread()`
 - **장바구니(FEAT-01 DnD+FLIP, +FEAT-08 영속성 v1.1.4)**: `addToCart(item)`/`removeFromCart(i)`/`clearCart()`/`saveCart()`(**백엔드 `set_cart` write-through + localStorage 캐시**)/`restoreCart(items)`(부팅 시 `get_initial.cart`로 복구, core.js boot에서 호출)/`cartKey(it)`/`renderCart()`/`wireCartDnD(list)`/`flipReorder(list, mutate)`(드래그 중 FLIP 실시간 위치 애니메이션)/`commitCartFromDOM(list)`(DnD 후 DOM 순서→카트 배열 동기화, dragend)/`extractCart(items, allMode)`/`extractAllCart()`/`extractSelectedCart()`/`toggleSelectAll(on)`/`openCart()`/`closeCart()`/`wireCart()`
-- F2 빠른검색: `openQuickSearch()`/`closeQuickSearch()`/`quickJump(q)`/**`relativeRef(q, ctx)`**(v1.1.14 상대 참조 파서 — `resolve_reference` 앞단 가로채기)/`vRange(a,b)`/`verseOnScreen(n)`(DOM 절 존재 확인)
+- **자막(v1.2.0)**: `openSlideInput()`(**F9** — 입력 구절을 자막 창에 즉시 송출, 창이 없으면 함께 열림)/`wireSubtitleToggle()`(레일 `#subtitle-toggle`)/`slideState`(백엔드 `onSlideChanged` 수신). 설정 세그 `#opt-subtitle-preset`
+- F2 빠른검색: `openQuickSearch(opts)`(**v1.2.0 일반화** — `{placeholder, onSubmit}`, F2·F9 가 같은 입력창을 공유)/`closeQuickSearch()`/`quickJump(q)`/**`resolveRefInput(q)`**(F2·F9 공통 참조 해석기)/**`relativeRef(q, ctx)`**(v1.1.14 상대 참조 파서 — `resolve_reference` 앞단 가로채기)/`vRange(a,b)`/`verseOnScreen(n)`(DOM 절 존재 확인)
 - 커스텀 읽기폰트: `loadFontsList()`/`injectFont(family, file)`/`applyReadingFont(family)`/`selectReadingFont(...)`/`bootReadingFont(family)`/`fontStep(size)`/`nextFontSize(size, d)`/`wireReadingFontMenu()`
 - 약칭관리: `setAliasBook(num)`/`renderAliasList()`/`addAlias()`/`openAliasManager()`/`closeAliasManager()`/`wireAliasManager()`
 - 출력설정(+FEAT-02 매크로 템플릿 UI, 태그 버튼화): `renderFormat()`/`renderOrder()`/`commitOrder(next)`/`moveOrder(i, d)`/`removeOrder(i)`/`loadSettings()`/`refreshPreview()`/`insertAtCaret(input, text)`(태그칩 클릭 시 커서 위치에 매크로 삽입). 상수 `FORMAT_MACRO_TAGS`(`{book_full}`…`{content2}`/`{version2}`), UI `.fmt-tagchips`/`.fmt-tagchip`(칩 버튼)
@@ -396,5 +428,6 @@ BibleClip Project/
 - `test_installer.py` — installer 다운/스테이징/스크립트
 - `test_killswitch.py` — 킬스위치 fail-open/min_version 로직
 - `test_highlights.py` — 형광펜 store(`_norm` 정렬·비겹침·캡, CRUD, **역본 격리**, 장/책 경계, `:` 포함 역본명, 손상 파일·쓰기불가 fail-soft)
+- `test_versebreak.js` — 자동 줄바꿈 엔진(**node**, 12개 절: 등급 판정/절 경계/기준 사례(마 18:19-20 = 사람이 만든 슬라이드와 줄 단위 일치)/나열문 구제/**문장 경계 강제 + 오탐 목록**/자동 분할(절 누락·중복 없음, 무한 재귀 방지))
 - `test_quickjump_parse.js` — F2 상대 참조 파서(**node**, 33건: 절/범위/장:절/장, 전각 문자, 역순 입력, **건드리면 안 되는 입력 14종이 `null` 로 빠지는지**)
 - `test_highlight_ranges.js` — 형광펜 구간 대수(**node**, `node tests/test_highlight_ranges.js`). cards.js 소스에서 `hlColor`/`hlMark`/`hlTextHTML`/`normRanges`/`mergeRange`/`subtractRange` 정의를 **이름으로 잘라 eval** — 로직 복사본을 만들지 않아 갈라지지 않는다. 함수명을 바꾸면 이 테스트가 먼저 실패한다
