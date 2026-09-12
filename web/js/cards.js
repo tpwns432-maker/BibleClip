@@ -1173,6 +1173,12 @@
       // 떨어진다(예: 26절 보다가 3절로 튐). 진입 전 읽던 절 앵커를 캡처해 전환(reflow)
       // 후 같은 절로 복원(폰트/역본 변경과 동일 BUG-01 패턴).
       const anchors = snapshotAnchors();
+      // ★ 네이티브 창까지 전체화면으로. HTML 의 requestFullscreen 은 '웹뷰 안에서만'
+      //   전체화면이라 제목표시줄과 작업표시줄이 그대로 남는다 — 브라우저에서는
+      //   브라우저가 제 창을 OS 전체화면으로 바꿔주지만 임베드된 WebView2 에는 그
+      //   주인이 없다. 창을 먼저 키워야 뷰포트가 화면 전체가 되고, 그 위에서 카드가
+      //   requestFullscreen 으로 채워진다(작은 창에서도 바로 전체화면이 되는 이유).
+      try { api().set_native_fullscreen(true); } catch (e) {}
       el.requestFullscreen().then(() => {
         const hint = document.createElement("div");
         hint.className = "present-hint";
@@ -1181,13 +1187,20 @@
         updatePresentBanner(card);   // 틀고정 위치 헤더
         // 전체화면 reflow가 끝난 뒤(realignAnchors 내부 rAF + 한 프레임 더 대기) 복원.
         requestAnimationFrame(() => realignAnchors(anchors));
-      }).catch(() => { fsCardId = null; });
+      }).catch(() => {
+        fsCardId = null;
+        // 카드 전체화면에 실패했으면 창만 전체화면으로 남는 어정쩡한 상태가 되므로 되돌린다.
+        try { api().set_native_fullscreen(false); } catch (e) {}
+      });
     }
     // Exiting fullscreen (ESC / F11): drop the hint + banner + tracking, then
     // restore the windowed card to the verse last read in fullscreen — the exit
     // reflow (back to the small font) would otherwise jump the position again.
     document.addEventListener("fullscreenchange", () => {
       if (!document.fullscreenElement) {
+        // ESC / F11 어느 쪽으로 나가든 네이티브 창도 함께 원래 크기로 되돌린다.
+        // 여기 한 곳에서만 처리하면 나가는 경로가 몇 개든 어긋나지 않는다.
+        try { api().set_native_fullscreen(false); } catch (e) {}
         document.querySelectorAll(".present-hint, .present-banner").forEach((h) => h.remove());
         const exitedId = fsCardId;
         fsCardId = null;
