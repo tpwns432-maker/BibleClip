@@ -79,7 +79,7 @@
   "cart.windowTitle": "장바구니 — BibleClip",
   "cart.unit": "개",
 
-  "present.qsPlaceholder": "구절·키워드 입력 후 Enter (예: 창 1:1)",
+  "present.qsPlaceholder": "구절·키워드 입력 후 Enter (예: 창 1:1 · 22 = 이 장 22절)",
   "present.hint": "F2 검색 · +/− 글자 크기 · ESC 나가기",
 
   "modal.title": "설정",

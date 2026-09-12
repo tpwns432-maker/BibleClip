@@ -1112,7 +1112,54 @@
       }
     });
   }
+  // F2 단축 입력 (v1.1.14) — 책 이름을 생략하고 '지금 보고 있는 곳' 기준으로 적는다.
+  // 발표 중에는 "이사야 44:22" 를 다 치기보다 "22" 한 번이 훨씬 빠르다.
+  //   22      → 현재 장의 22절          22-24 / 22~24 → 현재 장의 22~24절
+  //   22절    → 같음                    44:22 / 44:22-24 → 현재 책의 44장
+  //   44장    → 현재 책의 44장
+  // 책 이름이 붙은 기존 입력("사 44:22", "창 1:1")은 건드리지 않고 백엔드 파서로 간다.
+  const vRange = (a, b) => {
+    const out = [];
+    for (let n = Math.min(a, b); n <= Math.max(a, b); n++) out.push(n);
+    return out;
+  };
+  function relativeRef(q, ctx) {
+    if (!ctx || !ctx.book) return null;
+    const s = String(q).replace(/\s+/g, "");
+    let m;
+    // 44:22 · 44:22-24 — 장을 바꾸므로 현재 '책'만 물려받는다.
+    if ((m = s.match(/^(\d+)[:：](\d+)(?:[-~－～](\d+))?$/))) {
+      return { book: ctx.book, chapter: +m[1],
+               verses: vRange(+m[2], m[3] ? +m[3] : +m[2]) };
+    }
+    // 44장 — 장만 이동(절 지정 없음).
+    if ((m = s.match(/^(\d+)장$/))) {
+      return { book: ctx.book, chapter: +m[1], verses: null };
+    }
+    // 22 · 22-24 · 22절 — 현재 장 안에서의 절.
+    if ((m = s.match(/^(\d+)(?:[-~－～](\d+))?절?$/))) {
+      return { book: ctx.book, chapter: ctx.chapter, sameChapter: true,
+               verses: vRange(+m[1], m[2] ? +m[2] : +m[1]) };
+    }
+    return null;
+  }
+
+  // 지금 화면에 그려져 있는 절인가? 같은 장 안의 절 지정은 DOM 으로 바로 확인할 수
+  // 있어 브리지 왕복이 필요 없다. 없는 절이면 조용히 무시한다(사용자 선택):
+  // 키워드 검색으로 흘려보내면 "50" 이 민수기 7:50 같은 엉뚱한 곳으로 튄다.
+  function verseOnScreen(n) {
+    const body = document.querySelector('.mcard[data-type="bible"] .card-body');
+    return !!(body && body.querySelector('.v[data-v="' + n + '"]'));
+  }
+
   async function quickJump(q) {
+    // 0) 책 이름 없는 숫자 입력 → 보고 있는 카드 기준으로 해석(키워드 검색으로 안 넘김).
+    const rel = relativeRef(q, CardManager.jumpContext());
+    if (rel) {
+      if (rel.sameChapter && !rel.verses.some(verseOnScreen)) return;  // 없는 절 = 무반응
+      CardManager.goToRef(rel.book, rel.chapter, rel.verses);
+      return;
+    }
     // Reference first; fall back to a keyword search and jump to the top hit.
     let ref = null;
     try { ref = await api().resolve_reference(q); } catch (_) {}
