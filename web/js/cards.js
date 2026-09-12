@@ -956,19 +956,36 @@
     //  2. Otherwise the FIRST unlocked card (by index) receives and navigates.
     // Only ONE card reacts per clipboard event.
 
-    async function goToRef(book, chapter, verses) {
+    // 들어온 참조를 어느 카드가 받을지 고른다. goToRef 와 F2 단축 입력이 **같은 기준**을
+    // 써야 한다 — "22" 를 현재 장 기준으로 풀 때의 '현재'는 실제로 점프를 받을 카드의
+    // 위치여야 하며, 다른 카드를 기준으로 삼으면 엉뚱한 장의 22절로 간다.
+    // book/chapter 를 주면 '이미 그 곳을 띄운 잠금 카드' 우선순위까지 반영하고,
+    // 생략하면(= F2 문맥 조회) 그 단계를 건너뛴다.
+    function jumpTarget(book, chapter) {
       const bibles = bibleCards();
       // Priority 0: the fullscreen-presented card (F2 jump during a presentation)
       // — it always navigates in place, even if locked, so the slide follows.
       const fsCard = (fsCardId && document.fullscreenElement)
         ? bibles.find((c) => c.id === fsCardId) : null;
       // Priority 1: locked card that already shows this book+chapter.
-      const matchedLocked = bibles.find(
+      const matchedLocked = (book == null) ? null : bibles.find(
         (c) => c.locked && c.book === book && c.chapter === chapter
       );
       // Priority 2: first unlocked card.
       const firstUnlocked = bibles.find((c) => !c.locked);
-      const target = fsCard || matchedLocked || firstUnlocked;
+      return fsCard || matchedLocked || firstUnlocked || null;
+    }
+
+    // F2 단축 입력이 "지금 보고 있는 곳"을 묻는 창구 → {book, chapter} 또는 null.
+    function jumpContext() {
+      const c = jumpTarget();
+      return c ? { book: c.book, chapter: c.chapter } : null;
+    }
+
+    async function goToRef(book, chapter, verses) {
+      const fsCard = (fsCardId && document.fullscreenElement)
+        ? bibleCards().find((c) => c.id === fsCardId) : null;
+      const target = jumpTarget(book, chapter);
       if (!target) return;
 
       if (target === fsCard || !target.locked) {
@@ -1831,7 +1848,7 @@
              primaryBible, bibleCards, lexiconCards, bodyEl, linkedBibleFor,
              chapStepPrimary, chapStepActive, reloadAllBible, relabel,
              presentToggle, ensureInterlinearFor, decorateNotesFor: decorateNotes,
-             snapshotAnchors, realignAnchors };
+             snapshotAnchors, realignAnchors, jumpContext };
   })();
 
   // ---- Scripture / interlinear / lexicon rendering (into a card body) ----

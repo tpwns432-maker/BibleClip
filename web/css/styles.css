@@ -990,6 +990,16 @@ html[data-theme="dark"] .note-modal-back { background: rgba(0,0,0,.55); }
    발표 중 절 클릭은 아무 표시 없이 클립보드를 덮는다). */
 .mcard:fullscreen .scripture .v:hover,
 .mcard:fullscreen .scripture .v.copied { background: none; box-shadow: none; }
+/* 구절 찾기(F2·클립보드 인식)로 점프한 절의 강조도 발표 화면에서는 끈다.
+   ⚠️ 클래스 자체는 지우면 안 된다 — `.v.hl` 은 색칠 표식이자 centerHighlightVerse()
+   가 '어느 절로 스크롤할지' 찾는 앵커라서, 클래스를 없애면 점프해도 그 절로
+   이동하지 않는다. 그래서 여기서는 **보이는 것만** 죽인다.
+   .scripture .v.hl 이 걸어둔 음수 마진/패딩까지 되돌려야 그 절만 좌우로 튀어나오지
+   않는다(발표 화면은 좌우 여백이 9vw 라 8px 밀림이 눈에 띈다). */
+.mcard:fullscreen .scripture .v.hl {
+  background: none; box-shadow: none; animation: none;
+  margin-left: 0; margin-right: 0; padding: 0; border-radius: 0;
+}
 /* 전체화면 병렬 독서(split): 행 정렬 유지 + 발표용 여백 확대(스크롤러는 본문 하나) */
 .mcard:fullscreen .card-body.split-cols { display: block; overflow-y: auto; padding: 0; }
 .mcard:fullscreen .split-cols .v { margin-bottom: 0; }

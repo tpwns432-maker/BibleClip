@@ -79,7 +79,7 @@
   "cart.windowTitle": "Cart — BibleClip",
   "cart.unit": "",
 
-  "present.qsPlaceholder": "Type a reference or keyword, then Enter (e.g. Jn 1:1)",
+  "present.qsPlaceholder": "Reference or keyword, then Enter (e.g. Jn 1:1 · 22 = v.22 here)",
   "present.hint": "F2 search · +/− font size · ESC to exit",
 
   "modal.title": "Settings",
