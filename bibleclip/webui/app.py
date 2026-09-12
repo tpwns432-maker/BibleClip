@@ -37,6 +37,31 @@ def _onscreen(x, y):
     return -30000 < x < 30000 and -30000 < y < 30000
 
 
+def _looks_maximized(w, h):
+    """True if the window fills (nearly) a whole monitor — i.e. it is maximized
+    or fullscreen rather than a size the user actually chose.
+
+    Saving that size is a trap: 최대화한 채 종료하면 다음 실행이 최대화 크기의
+    '일반 창'으로 열려, 복원 버튼을 눌러도 작아지지 않는다. pywebview 는 창 상태
+    (maximized/normal)를 이식성 있게 알려주지 않으므로 크기로 판정한다.
+
+    모니터마다 해상도가 다를 수 있어 **모든 화면**과 비교한다. 여유(96px)는 제목
+    표시줄·작업표시줄·테두리를 감안한 값 — 사용자가 일부러 화면 꽉 차게 키운 창도
+    함께 걸리지만, 그 경우 이전 크기를 유지하는 편이 덜 나쁘다."""
+    MARGIN = 96
+    try:
+        # ⚠️ webview 는 반드시 지연 임포트 — 모듈 최상단에 올리면 _strip_motw() 보다
+        #    먼저 clr 이 로드되어 v1.1.2 의 MOTW 수정이 깨진다(다운로드본 실행 실패).
+        #    이 함수는 창을 닫을 때만 불리므로 그때는 이미 임포트돼 있다.
+        import webview
+        for sc in webview.screens:
+            if w >= int(sc.width) - MARGIN and h >= int(sc.height) - MARGIN:
+                return True
+    except Exception:
+        pass
+    return False
+
+
 def _blocked_html(message):
     """Full-window notice shown when the remote kill switch blocks this build."""
     safe = _html.escape(message).replace('\n', '<br>')
@@ -403,7 +428,10 @@ def _main():
         # at -32000,-32000) — saving it would reopen the window where it can't be
         # seen next launch. Keep the prior good geometry in that case.
         try:
-            if _onscreen(window.x, window.y):
+            # 최대화/전체화면 상태의 크기는 저장하지 않는다 — 그대로 저장하면 다음
+            # 실행이 '최대화 크기의 일반 창'으로 열려 복원이 안 되는 꼴이 된다.
+            # 이 경우 직전에 저장돼 있던 정상 크기를 그대로 둔다.
+            if _onscreen(window.x, window.y) and                     not _looks_maximized(window.width, window.height):
                 library.settings['web_geometry'] = {
                     'w': window.width, 'h': window.height,
                     'x': window.x, 'y': window.y,

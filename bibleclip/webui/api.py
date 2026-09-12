@@ -47,6 +47,9 @@ class Api(SystemRoutes, BibleRoutes, NoteRoutes, HighlightRoutes):
         # 창에서 성구 클릭 시 메인 뷰어 점프(cart_goto). 팩토리는 webui.app 가 주입한다.
         self._cart_window = None        # the pop-out cart window (for pushes), or None
         self._cart_window_factory = None  # callable() -> opens/returns the cart window
+        # F11 발표용 네이티브 전체화면 상태(v1.2.0). pywebview 의 toggle_fullscreen 은
+        # '토글'이라 지금 상태를 우리가 들고 있지 않으면 프론트와 어긋난다.
+        self._fullscreen = False
         self._update = None        # last fetch_latest_release info (for install)
         self.monitoring = False
         # Set when the front-end first reaches the bridge (get_initial) — proof
@@ -60,6 +63,29 @@ class Api(SystemRoutes, BibleRoutes, NoteRoutes, HighlightRoutes):
         Kept separate from __init__ so headless tests construct an Api with no
         window (pushes become no-ops)."""
         self._window = window
+
+    def set_native_fullscreen(self, on):
+        """창 자체를 전체화면으로 만든다(F11 발표).
+
+        HTML 의 requestFullscreen 은 **웹뷰 안에서만** 전체화면이라 제목표시줄과
+        작업표시줄이 그대로 남는다(브라우저에서는 브라우저가 제 창을 OS 전체화면으로
+        바꿔주지만, 임베드된 WebView2 에는 그 주인이 없다). 그래서 네이티브 창도
+        함께 전체화면으로 만들어야 크롬 F11 과 같은 그림이 된다.
+
+        pywebview 의 toggle_fullscreen() 은 토글이므로 현재 상태를 여기서 들고
+        있다가, 이미 원하는 상태면 아무것도 하지 않는다(중복 호출로 어긋나는 것 방지).
+        창이 없으면(헤드리스 테스트) 조용히 no-op."""
+        on = bool(on)
+        if self._window is None:
+            return {'ok': False, 'error': 'no window'}
+        if on == self._fullscreen:
+            return {'ok': True, 'fullscreen': self._fullscreen}
+        try:
+            self._window.toggle_fullscreen()
+            self._fullscreen = on
+        except Exception as e:
+            return {'ok': False, 'error': str(e)}
+        return {'ok': True, 'fullscreen': self._fullscreen}
 
     def set_popup_factory(self, factory):
         """Receive a callable that opens a new native window from (title, html).
