@@ -1167,17 +1167,22 @@ html[data-theme="dark"] .note-modal-back { background: rgba(0,0,0,.55); }
 /* ---- 첫 실행 안내 투어 (tour.js, v1.2.1) ---- */
 .tour-back { position: fixed; inset: 0; z-index: 2000; background: transparent; }
 .tour-back.dim { background: rgba(20, 12, 40, .55); }
+/* 말풍선이 대상(화면 가득 찬 카드) 위에 겹칠 때 — 본문 글자가 말풍선과 다투지 않게 더 진하게 */
+.tour-back.dim.over { background: rgba(10, 6, 22, .78); }
 .tour-spot {
   position: fixed; z-index: 2001; pointer-events: none;
   border-radius: var(--r-md);
   box-shadow: 0 0 0 3px var(--accent), 0 0 0 9999px rgba(20, 12, 40, .55);
   transition: left .25s, top .25s, width .25s, height .25s;
 }
+/* 말풍선이 대상 위에 겹칠 때: 대상도 .tour-back.dim 으로 어둡게 두고 테두리만 남긴다 */
+.tour-spot.ring { box-shadow: 0 0 0 3px var(--accent); }
 .tour-tip {
   position: fixed; z-index: 2002; width: min(440px, calc(100vw - 24px));
   background: var(--card-bg); color: var(--text);
-  border: 1px solid var(--card-border); border-radius: var(--r-lg);
-  box-shadow: 0 30px 70px -28px rgba(60, 40, 100, .6);
+  /* 강조색 테두리 — 다크 테마에서는 카드와 같은 색이라 테두리 없이는 배경에 묻힌다 */
+  border: 1.5px solid var(--accent); border-radius: var(--r-lg);
+  box-shadow: 0 24px 60px -20px rgba(0, 0, 0, .55);
   padding: 16px 18px 14px; display: flex; flex-direction: column; gap: 8px;
 }
 .tour-count { font-size: 11px; font-weight: 700; color: var(--accent-text); }
