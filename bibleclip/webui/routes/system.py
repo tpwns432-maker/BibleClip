@@ -16,7 +16,7 @@ import webbrowser
 from bibleclip import i18n
 from bibleclip.config import (
     __version__, RELEASES_PAGE_URL, IS_WINDOWS, get_base_dir, get_resource_dir,
-    GITHUB_OWNER, GITHUB_REPO,
+    get_app_dir, GITHUB_OWNER, GITHUB_REPO, BIBLE_DIR,
 )
 from bibleclip.update import fetch_latest_release, parse_version
 from bibleclip.core.installer import (
@@ -85,6 +85,8 @@ class SystemRoutes:
             # Persisted modular-card layout (None until the web UI saves one; the
             # front-end builds a sensible default when this is null).
             'web_cards_layout': s.get('web_cards_layout'),
+            # v1.2.1 첫 실행 안내(tour.js) — False 면 부팅 시 자동 시작.
+            'tour_done': bool(s.get('tour_done')),
             # 설교 장바구니 — restored on boot (FEAT-08). Backend-persisted so it
             # survives the random loopback port that orphaned localStorage.
             'cart': self.lib.cart.all(),
@@ -132,6 +134,11 @@ class SystemRoutes:
 
     _FONT_EXTS = ('.ttf', '.otf', '.woff2', '.woff')
 
+    # Bundled font files are named in ASCII (v1.2.1): a Korean filename inside the
+    # macOS .app broke its signature once Finder copied it (the name is re-encoded
+    # as NFD). The menu label — and the family saved as reading_font — stays Korean.
+    _BUILTIN_FAMILY = {'NanumGothic': '나눔고딕', 'NanumMyeongjo': '나눔명조'}
+
     def _builtin_fonts_dir(self):
         """Bundled reading fonts shipped inside web/ (rides along the --add-data
         'web' bundle on every platform). 나눔고딕/나눔명조 (OFL, copyright-free)."""
@@ -158,6 +165,8 @@ class SystemRoutes:
                 if os.path.splitext(f)[1].lower() not in self._FONT_EXTS:
                     continue
                 fam = os.path.splitext(f)[0]
+                if builtin:
+                    fam = self._BUILTIN_FAMILY.get(fam, fam)
                 if fam in seen:
                     continue
                 seen.add(fam)
@@ -209,6 +218,40 @@ class SystemRoutes:
         added = self.lib.refresh_databases()
         return {'added': added, 'versions': self.lib.versions()}
 
+    _BIBLE_FILE_TYPES = ('Bible (*.SQLite3;*.sqlite3;*.sqlite;*.db;*.zip)', 'All files (*.*)')
+
+    def add_bible_files(self):
+        """[성경 파일 추가…]: pick .SQLite3 files (or zips holding them) in the
+        native Open dialog, copy them into the data folder's bible_versions/ and
+        load them. Returns {ok, added:[{name, display}], errors:[{file, code}],
+        versions} — or {ok:False, error:'cancelled'|...} without a pick."""
+        if self._window is None:
+            return {'ok': False, 'error': 'no window'}
+        try:
+            import webview  # lazy: keep api.py headless-importable
+            picked = self._window.create_file_dialog(
+                webview.OPEN_DIALOG, allow_multiple=True, file_types=self._BIBLE_FILE_TYPES)
+        except Exception as e:
+            return {'ok': False, 'error': str(e)}
+        if isinstance(picked, str):
+            picked = [picked]
+        paths = [p for p in (picked or []) if p]
+        if not paths:
+            return {'ok': False, 'error': 'cancelled'}
+        res = self.lib.import_bible_files(paths)
+        res['versions'] = self.lib.versions()
+        res['ok'] = True
+        return res
+
+    def open_bible_folder(self):
+        """[성경 폴더 열기]: the data folder's bible_versions/, created if missing."""
+        path = os.path.join(get_base_dir(), BIBLE_DIR)
+        try:
+            os.makedirs(path, exist_ok=True)
+        except Exception:
+            return {'ok': False}
+        return self._reveal(path)
+
     # ---- App-wide settings (the gear ⚙ window — distinct from 출력 설정) ----
 
     # Whitelisted app settings. Enums carry allowed values; None = boolean;
@@ -233,6 +276,7 @@ class SystemRoutes:
         # descriptors). 'any' = store whatever JSON-serializable value JS sends,
         # no server-side validation. None clears it back to the default.
         'web_cards_layout': 'any',
+        'tour_done': None,       # v1.2.1 첫 실행 안내를 끝까지 보거나 건너뛰면 True
     }
 
     def get_app_settings(self):
@@ -297,7 +341,9 @@ class SystemRoutes:
     def open_data_folder(self):
         """Open the folder that holds bible_versions/original_lang in the OS file
         manager (so the user can drop in new .db files)."""
-        path = get_base_dir()
+        return self._reveal(get_base_dir())
+
+    def _reveal(self, path):
         try:
             if IS_WINDOWS:
                 os.startfile(path)  # noqa: S606 - user-initiated
@@ -351,18 +397,23 @@ class SystemRoutes:
     # ---- 패치노트 (first-run-after-update modal, Phase 4) ----
 
     def _version_changes(self):
+        # Bundled copy first (v1.2.1~ it ships inside the app, so it always matches
+        # the running version — a macOS user drags only the .app out of the DMG).
+        # A copy next to the program is the fallback for older layouts.
         import json
-        from bibleclip.config import BASE_DIR, get_resource_dir
-        for root in (BASE_DIR, get_resource_dir()):
+        found = {}
+        for root in (get_resource_dir(), get_app_dir()):
             try:
                 with open(os.path.join(root, 'version_changes.json'), 'r',
                           encoding='utf-8') as f:
                     d = json.load(f)
-                if isinstance(d, dict):
-                    return d
             except Exception:
                 continue
-        return {}
+            if isinstance(d, dict):
+                if __version__ in d:
+                    return d
+                found = found or d
+        return found
 
     def get_patch_notes(self):
         """The current version's patch notes + whether to show the modal: shown
@@ -439,7 +490,7 @@ class SystemRoutes:
                 subprocess.Popen(['/bin/bash', sh], start_new_session=True, close_fds=True)
             else:
                 bat = os.path.join(tmp, 'updater.bat')
-                write_windows_bat(bat, src, get_base_dir(), 'BibleClipWeb.exe')
+                write_windows_bat(bat, src, get_app_dir(), 'BibleClipWeb.exe')
                 flags = (subprocess.CREATE_NEW_PROCESS_GROUP
                          | getattr(subprocess, 'CREATE_NO_WINDOW', 0x08000000))
                 subprocess.Popen(['cmd', '/c', bat], creationflags=flags, close_fds=True)
@@ -455,7 +506,7 @@ class SystemRoutes:
         while p and not p.endswith('.app'):
             parent = os.path.dirname(p)
             if parent == p:
-                return os.path.join(get_base_dir(), 'BibleClipWeb.app')
+                return os.path.join(get_app_dir(), 'BibleClipWeb.app')
             p = parent
         return p
 

@@ -14,7 +14,7 @@ import json
 
 from bibleclip.config import (
     BASE_DIR, SETTINGS_FILE, LEGACY_SETTINGS_FILE, BIBLE_DIR,
-    resolve_data_dir,
+    resolve_data_dir, data_dirs,
 )
 from bibleclip.core.engine import Engine
 from bibleclip.core.formatter import Formatter
@@ -22,7 +22,7 @@ from bibleclip.userconfig import load_user_config
 from bibleclip.core.clipboard_monitor import ClipboardMonitor
 from bibleclip.data.bible_db import BibleDB
 from bibleclip.data.original_lang import (
-    resolve_original_lang_dir, BethlehemDB, Lexicon, parse_korean_strongs,
+    find_original_lang_file, BethlehemDB, Lexicon, parse_korean_strongs,
     parse_english_strongs, parse_wonjun_verse, strip_korean_strongs,
 )
 
@@ -83,6 +83,9 @@ class Library:
         'web_cards_layout': None,         # web-only: serialized card layout for the
                                           # modular multi-card viewer (list of card
                                           # descriptors; None until the web UI saves one)
+        # v1.2.1 첫 실행 안내(web/js/tour.js)를 봤는지. False 면 시작할 때 자동으로 뜬다.
+        # 이 키가 없는 기존 설정 파일 = 이미 쓰던 사람 → load_settings 가 True 로 둔다.
+        'tour_done': False,
     }
 
     def __init__(self):
@@ -128,40 +131,51 @@ class Library:
     # ---- Database loading ----
 
     def load_databases(self):
-        db_dir = resolve_data_dir(BIBLE_DIR)
-        if not os.path.isdir(db_dir):
-            os.makedirs(db_dir, exist_ok=True)
+        if not data_dirs(BIBLE_DIR):
+            os.makedirs(resolve_data_dir(BIBLE_DIR), exist_ok=True)
             return
-        for fname in sorted(os.listdir(db_dir)):
-            if fname.lower().endswith(('.sqlite3', '.sqlite', '.db')):
-                path = os.path.join(db_dir, fname)
+        self._scan_databases()
+
+    def _scan_databases(self):
+        """Load every DB not loaded yet from ALL bible_versions folders (see
+        config.data_dirs). The first folder wins on a name clash, so a user's
+        copy next to the app overrides the bundled one. Returns the new names."""
+        added = []
+        for db_dir in data_dirs(BIBLE_DIR):
+            for fname in sorted(os.listdir(db_dir)):
+                if not fname.lower().endswith(('.sqlite3', '.sqlite', '.db')):
+                    continue
+                if os.path.splitext(fname)[0] in self.dbs:
+                    continue
                 try:
-                    db = BibleDB(path)
+                    db = BibleDB(os.path.join(db_dir, fname))
                     self.dbs[db.name] = db
+                    added.append(db.name)
                 except Exception as e:
                     print(f"Error loading {fname}: {e}")
+        return added
 
     def load_bethlehem(self):
-        """Load KRV-with-Strong's + lexicons from the original_lang folder."""
-        bdir = resolve_original_lang_dir(BASE_DIR)
-        if not os.path.isdir(bdir):
-            return
-        strongs_path = os.path.join(bdir, '개역한글S.sdb')
-        if os.path.exists(strongs_path):
+        """Load KRV-with-Strong's + lexicons from the original_lang folder(s).
+        Each file is looked up across every candidate folder (bundled + user)."""
+        # The macOS build ships it as KRV_S.sdb (an ASCII name keeps the .app's
+        # signature intact through a Finder copy); 개역한글S.sdb everywhere else.
+        strongs_path = find_original_lang_file('개역한글S.sdb', 'KRV_S.sdb')
+        if strongs_path:
             try:
                 self.bethlehem_strongs = BethlehemDB(strongs_path)
             except Exception as e:
                 print(f"개역한글S load error: {e}")
-        wonjun_path = os.path.join(bdir, '원전분해.sdb')
-        if os.path.exists(wonjun_path):
+        wonjun_path = find_original_lang_file('원전분해.sdb')
+        if wonjun_path:
             try:
                 self.bethlehem_wonjun = BethlehemDB(wonjun_path)
             except Exception as e:
                 print(f"원전분해 load error: {e}")
         for fname, attr in (('HebGrkKo.dct', 'lexicon_ko'),
                             ('HebGrkEn.dct', 'lexicon_en')):
-            p = os.path.join(bdir, fname)
-            if os.path.exists(p):
+            p = find_original_lang_file(fname)
+            if p:
                 try:
                     setattr(self, attr, Lexicon(p))
                 except Exception as e:
@@ -176,23 +190,113 @@ class Library:
         Returns the list of newly loaded version names (so a UI can refresh its
         own version lists).
         """
-        db_dir = resolve_data_dir(BIBLE_DIR)
-        if not os.path.isdir(db_dir):
-            return []
-        existing = set(self.dbs.keys())
-        added = []
-        for fname in sorted(os.listdir(db_dir)):
-            if fname.lower().endswith(('.sqlite3', '.sqlite', '.db')):
-                name = os.path.splitext(fname)[0]
-                if name not in existing:
-                    path = os.path.join(db_dir, fname)
+        return self._scan_databases()
+
+    _BIBLE_EXTS = ('.sqlite3', '.sqlite', '.db')
+    _MAX_BIBLE_BYTES = 512 * 1024 * 1024   # one bible is ~5–50MB; caps a zip bomb
+
+    def import_bible_files(self, paths):
+        """Copy bible DB files — or the DBs inside .zip files — into the data
+        folder's bible_versions/ and load them ([성경 파일 추가…], v1.2.1).
+
+        Each one is checked before it is copied: it has to open as a bible
+        (info/books/verses tables, with verses) and its name must not clash with
+        a loaded version or a file already there (case-insensitively, as on the
+        macOS/Windows file systems). Zip members are taken by their bare
+        filename, so nothing is written outside the folder.
+        Returns {'added': [{'name', 'display'}], 'errors': [{'file', 'code'}]},
+        code = exists | invalid | empty_zip | read_error | copy_error."""
+        import shutil
+        import tempfile
+        dest = os.path.join(BASE_DIR, BIBLE_DIR)
+        os.makedirs(dest, exist_ok=True)
+        taken = {n.casefold() for n in self.dbs}
+        taken |= {os.path.splitext(f)[0].casefold() for f in os.listdir(dest)}
+        errors = []
+        tmp = tempfile.mkdtemp(prefix='bibleclip_add_')
+        try:
+            cands = []   # (filename, path on disk)
+            for p in paths:
+                label = os.path.basename(p)
+                if label.lower().endswith('.zip'):
                     try:
-                        db = BibleDB(path)
-                        self.dbs[db.name] = db
-                        added.append(db.name)
+                        found = self._extract_bibles(p, tmp)
+                    except Exception:
+                        errors.append({'file': label, 'code': 'read_error'})
+                        continue
+                    if not found:
+                        errors.append({'file': label, 'code': 'empty_zip'})
+                    cands += found
+                else:
+                    cands.append((label, p))
+            for fname, src in cands:
+                key = os.path.splitext(fname)[0].casefold()
+                if key in taken:
+                    errors.append({'file': fname, 'code': 'exists'})
+                    continue
+                if not fname.lower().endswith(self._BIBLE_EXTS) or not self._is_bible_db(src):
+                    errors.append({'file': fname, 'code': 'invalid'})
+                    continue
+                try:
+                    shutil.copyfile(src, os.path.join(dest, fname))
+                except Exception:
+                    errors.append({'file': fname, 'code': 'copy_error'})
+                    continue
+                taken.add(key)
+        finally:
+            shutil.rmtree(tmp, ignore_errors=True)
+        added = [{'name': n, 'display': self.dbs[n].display_name}
+                 for n in self._scan_databases()]
+        return {'added': added, 'errors': errors}
+
+    def _extract_bibles(self, zip_path, tmp):
+        """Pull the bible DB members out of a zip into fresh folders under tmp.
+        [(filename, extracted path)]; bare names only (no zip-slip)."""
+        import shutil
+        import tempfile
+        import zipfile
+        out = []
+        with zipfile.ZipFile(zip_path) as zf:
+            for info in zf.infolist():
+                if info.is_dir() or info.filename.startswith('__MACOSX/'):
+                    continue
+                base = info.filename.replace('\\', '/').rsplit('/', 1)[-1]
+                if not (info.flag_bits & 0x800):   # no UTF-8 flag: Korean zips are cp949
+                    try:
+                        base = base.encode('cp437').decode('cp949')
                     except Exception:
                         pass
-        return added
+                if (not base or base.startswith('.') or os.sep in base or ':' in base
+                        or not base.lower().endswith(self._BIBLE_EXTS)
+                        or info.file_size > self._MAX_BIBLE_BYTES):
+                    continue
+                path = os.path.join(tempfile.mkdtemp(dir=tmp), base)
+                with zf.open(info) as r, open(path, 'wb') as w:
+                    shutil.copyfileobj(r, w)
+                if os.path.getsize(path) <= self._MAX_BIBLE_BYTES:
+                    out.append((base, path))
+        return out
+
+    @staticmethod
+    def _is_bible_db(path):
+        """Opens as a MyBible-style bible: info/books/verses tables, verses present."""
+        import pathlib
+        import sqlite3
+        try:
+            uri = pathlib.Path(path).absolute().as_uri() + '?mode=ro'
+            conn = sqlite3.connect(uri, uri=True)
+        except Exception:
+            return False
+        try:
+            tables = {r[0] for r in conn.execute(
+                "SELECT name FROM sqlite_master WHERE type='table'")}
+            if not {'info', 'books', 'verses'} <= tables:
+                return False
+            return conn.execute("SELECT 1 FROM verses LIMIT 1").fetchone() is not None
+        except Exception:
+            return False
+        finally:
+            conn.close()
 
     # ---- Settings ----
 
@@ -214,6 +318,8 @@ class Library:
                 for k, v in saved.items():
                     if k in self.settings:
                         self.settings[k] = v
+                if 'tour_done' not in saved:
+                    self.settings['tour_done'] = True
             except Exception:
                 pass
 
@@ -277,8 +383,11 @@ class Library:
     # ---- Read API (UI-agnostic) ----
 
     def versions(self):
-        """[{'name', 'display'}] for every loaded version, in load order."""
-        return [{'name': name, 'display': db.display_name}
+        """[{'name', 'display', 'lang'}] for every loaded version, in load order.
+        lang = the DB's info.language as written ('' when the DB has none — the
+        UI then guesses from the name's script); used to group version menus."""
+        return [{'name': name, 'display': db.display_name,
+                 'lang': str(db.info.get('language') or '').strip().lower()}
                 for name, db in self.dbs.items()]
 
     def books(self, version):
