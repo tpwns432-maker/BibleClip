@@ -570,6 +570,14 @@ def main():
     else:
         print(f"patch modal guard OK (no notes for v{__version__})")
 
+    # 동봉 글꼴 (v1.2.1): 파일 이름은 영문(맥 서명), 메뉴 라벨·저장값은 한글 그대로.
+    fonts = {f['family']: f for f in api.list_fonts() if f['builtin']}
+    assert fonts['나눔고딕']['file'] == 'NanumGothic.ttf', fonts
+    assert fonts['나눔명조']['file'] == 'NanumMyeongjo.ttf', fonts
+    assert (api.get_font('NanumGothic.ttf') or {}).get('b64')
+    assert api.add_bible_files()['ok'] is False          # headless: no window → no dialog
+    print("bundled fonts (ASCII files, Korean labels) + add_bible_files headless OK")
+
     print("\nALL WEBUI API CHECKS PASSED ✅")
 
 

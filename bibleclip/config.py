@@ -39,20 +39,39 @@ KILLSWITCH_URL = f"https://raw.githubusercontent.com/{GITHUB_OWNER}/{GITHUB_REPO
 # to disable, or repoint at a dedicated analytics/count endpoint.
 USAGE_PING_URL = f"https://api.github.com/repos/{GITHUB_OWNER}/{GITHUB_REPO}"
 
-def get_base_dir():
-    """Get the base directory - works for both script and PyInstaller bundle.
+def _is_mac_app():
+    """True when running from inside a frozen macOS .app bundle."""
+    return (getattr(sys, 'frozen', False) and sys.platform == 'darwin'
+            and os.path.dirname(sys.executable).endswith(os.path.join('Contents', 'MacOS')))
 
-    On Windows the data folders sit next to BibleClip.exe. On a macOS .app
-    bundle, sys.executable lives in BibleClip.app/Contents/MacOS/, so walk up
-    out of the bundle to look for the data folders next to BibleClip.app.
-    """
+
+def get_app_dir():
+    """Folder that holds the program: BibleClip.exe's folder, the folder the
+    macOS .app sits in, or the source tree. The updater replaces files here."""
     if getattr(sys, 'frozen', False):
         exe_dir = os.path.dirname(sys.executable)
-        if sys.platform == 'darwin' and exe_dir.endswith(os.path.join('Contents', 'MacOS')):
+        if _is_mac_app():
             # exe_dir = /path/BibleClip.app/Contents/MacOS -> /path
             return os.path.dirname(os.path.dirname(os.path.dirname(exe_dir)))
         return exe_dir
     return os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+
+
+MAC_DATA_DIR = os.path.join('~', 'Library', 'Application Support', 'BibleClip')
+
+
+def get_base_dir():
+    """Writable data folder: settings, userdata/, bible_versions/, fonts/.
+
+    Windows and the source tree keep it next to the program (get_app_dir). A
+    macOS .app uses ~/Library/Application Support/BibleClip (v1.2.1~): next to
+    the .app is /Applications, which a standard account can't write to, and an
+    app run from the DMG or moved inside a folder is "translocated" to a
+    read-only temp path, where settings and notes were silently lost.
+    """
+    if _is_mac_app():
+        return os.path.expanduser(MAC_DATA_DIR)
+    return get_app_dir()
 
 def get_resource_dir():
     """Get bundled resource directory (for --add-data assets inside exe)."""
@@ -90,7 +109,7 @@ USERDATA_DIR = "userdata"
 
 
 def get_userdata_dir():
-    """Writable folder for app-managed config (userdata/), next to the exe/app.
+    """Writable folder for app-managed config (userdata/), in the data folder.
     Created on demand; failures are swallowed (caller falls back to defaults)."""
     d = os.path.join(BASE_DIR, USERDATA_DIR)
     try:
@@ -107,7 +126,7 @@ BIBLE_DIR = "bible_versions"
 def candidate_data_roots():
     """Folders to search for data (bible_versions, original_lang), in order.
 
-    BASE_DIR first (next to the exe / .app — lets users drop in extra data).
+    BASE_DIR first (the data folder — lets users drop in extra data).
     On a frozen build also the executable's own dir, and inside a macOS .app
     Contents/Resources, where bundled data lives (v1.2.1~) so it survives App
     Translocation and the app being moved. Data used to sit in Contents/MacOS,
@@ -145,7 +164,7 @@ def data_dirs(name):
     """Every existing `name` folder across the candidate roots, in priority order.
 
     Unlike resolve_data_dir (first hit only), callers that load files merge all
-    of them: on macOS a bible_versions folder the user makes next to the .app
+    of them: on macOS the bible_versions folder in the user's data folder
     must ADD to the bible bundled inside it, not hide it. Symlinked duplicates
     (e.g. Contents/MacOS/x -> Contents/Resources/x) are listed once.
     """
@@ -158,3 +177,49 @@ def data_dirs(name):
                 seen.add(real)
                 out.append(p)
     return out
+
+
+# What the data folder holds, copied over once when it moves (see prepare_data_dir).
+_MIGRATE_ITEMS = (SETTINGS_FILE, LEGACY_SETTINGS_FILE, USERDATA_DIR, BIBLE_DIR,
+                  'fonts', 'original_lang')
+
+
+def prepare_data_dir(base=None, legacy=None):
+    """Make sure the data folder exists before anything reads settings.
+
+    When it is not the program folder (macOS: Application Support), copy the
+    user's files from the old place next to the .app once — only while the new
+    folder has no settings/userdata yet, and copying, never moving, so the old
+    files stay as a fallback. bible_versions/ is always created there so that
+    files written into it (aliases_override.json, added bibles) never land
+    inside the signed .app bundle. Returns the names copied."""
+    base = base or BASE_DIR
+    legacy = legacy or get_app_dir()
+    import shutil
+    copied = []
+    try:
+        os.makedirs(base, exist_ok=True)
+    except Exception:
+        return copied
+    if os.path.realpath(base) == os.path.realpath(legacy):
+        return copied
+    fresh = not (os.path.exists(os.path.join(base, SETTINGS_FILE))
+                 or os.path.exists(os.path.join(base, USERDATA_DIR)))
+    if fresh:
+        for name in _MIGRATE_ITEMS:
+            src, dst = os.path.join(legacy, name), os.path.join(base, name)
+            if not os.path.exists(src) or os.path.exists(dst):
+                continue
+            try:
+                if os.path.isdir(src):
+                    shutil.copytree(src, dst)
+                else:
+                    shutil.copy2(src, dst)
+                copied.append(name)
+            except Exception:
+                pass
+    try:
+        os.makedirs(os.path.join(base, BIBLE_DIR), exist_ok=True)
+    except Exception:
+        pass
+    return copied

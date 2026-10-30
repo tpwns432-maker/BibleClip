@@ -134,7 +134,11 @@
       <section class="card set-card">
         <div class="card-head set-head">
           <span data-i18n="setview.orderHead">출력 순서 · 복사에 사용할 역본</span>
-          <button class="set-mini" id="db-refresh" title="bible_versions 폴더 다시 스캔" data-i18n-title="setview.dbRefreshTitle" data-i18n="setview.dbRefresh">DB 새로고침</button>
+          <span class="set-head-acts">
+            <button class="set-mini accent" id="db-add" title="성경 파일(.SQLite3 · .zip)을 골라 추가" data-i18n-title="setview.dbAddTitle" data-i18n="setview.dbAdd">＋ 성경 파일 추가…</button>
+            <button class="set-mini" id="db-folder" title="추가한 성경 파일이 있는 폴더" data-i18n-title="setview.dbFolderTitle" data-i18n="setview.dbFolder">성경 폴더 열기</button>
+            <button class="set-mini" id="db-refresh" title="bible_versions 폴더 다시 스캔" data-i18n-title="setview.dbRefreshTitle" data-i18n="setview.dbRefresh">DB 새로고침</button>
+          </span>
         </div>
         <div class="card-body" id="set-order"></div>
       </section>

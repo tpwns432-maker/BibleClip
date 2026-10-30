@@ -2015,6 +2015,11 @@
 
     // DB rescan (settings tab). Refreshes available versions everywhere.
     if ($("db-refresh")) $("db-refresh").addEventListener("click", refreshDbs);
+    if ($("db-add")) $("db-add").addEventListener("click", addBibles);
+    if ($("db-folder")) $("db-folder").addEventListener("click", async () => {
+      const r = await api().open_bible_folder();
+      if (!r || !r.ok) toast(I18N.t("toast.folderOpenFail"));
+    });
 
     // Keyboard: ←/→ steps the ACTIVE bible card (the focused/neon-stroked one;
     // falls back to the primary card) when the viewer is active.
@@ -2028,12 +2033,33 @@
     });
   }
 
+  function applyVersions(versions) {
+    state.versions = versions;
+    state.versionsNames = versions.map((v) => v.name);
+    if (setState) { setState.versions = versions; renderOrder(); }
+  }
+
   async function refreshDbs() {
     const res = await api().refresh_databases();
-    state.versions = res.versions;
-    state.versionsNames = res.versions.map((v) => v.name);
-    if (setState) { setState.versions = res.versions; renderOrder(); }
+    applyVersions(res.versions);
     toast(res.added && res.added.length ? I18N.t("toast.versionsAdded", { n: res.added.length }) : I18N.t("toast.noNewVersions"));
+  }
+
+  // [성경 파일 추가…] (v1.2.1): 파일 선택 → 데이터 폴더 bible_versions 로 복사 → 바로 로드.
+  // 폴더를 직접 만들고 이름을 맞추던 절차(맥 테스터 피드백)를 대신한다.
+  async function addBibles() {
+    const res = await api().add_bible_files();
+    if (!res || !res.ok) {
+      if (!res || res.error !== "cancelled") toast(I18N.t("toast.bibleAddFail"));
+      return;
+    }
+    applyVersions(res.versions);
+    const msgs = (res.errors || []).map((e) => I18N.t("bibleAdd.err." + e.code, { file: e.file }));
+    if (res.added.length) {
+      msgs.unshift(I18N.t("toast.biblesAdded", { names: res.added.map((a) => a.display || a.name).join(", ") }));
+    }
+    if (!msgs.length) msgs.push(I18N.t("toast.noNewVersions"));
+    msgs.slice(0, 4).forEach((m) => toast(m));
   }
 
   // 라이브 UI 언어 전환 시 지속 렌더 영역을 현재 언어로 다시 그린다. 전부 메모리/DOM
