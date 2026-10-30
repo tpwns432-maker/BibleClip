@@ -463,7 +463,10 @@ window.Tour = (() => {
     back.style.pointerEvents = step.wait === "monitor" ? "none" : "";
 
     // 대상 없음 → 어둡게 깐 배경 + 가운데 말풍선. 대상 있음 → 구멍 뚫린 스포트라이트.
-    back.classList.toggle("dim", !r);
+    // 대상이 화면을 거의 다 차지하면(성경 카드를 가득 채운 배치) 말풍선이 대상 위에 겹친다.
+    // 그때 대상을 밝게 두면 같은 카드 색의 말풍선이 본문에 묻혀 '카드 뒤'처럼 보이므로,
+    // 대상까지 어둡게 하고 테두리만 남긴다(over).
+    let over = false;
     spot.hidden = !r;
     const pad = 6, gap = 14, W = window.innerWidth, H = window.innerHeight;
     const tw = tip.offsetWidth, th = tip.offsetHeight;
@@ -484,8 +487,12 @@ window.Tour = (() => {
       } else {
         // 큰 대상(카드 영역 등): 위·아래에 자리가 없으면 대상 안쪽 아래에 겹쳐 둔다.
         left = r.left + r.width / 2 - tw / 2; top = r.bottom - th - 16;
+        over = true;
       }
     }
+    back.classList.toggle("dim", !r || over);
+    back.classList.toggle("over", over);
+    spot.classList.toggle("ring", over);
     tip.style.left = Math.max(12, Math.min(left, W - tw - 12)) + "px";
     tip.style.top = Math.max(12, Math.min(top, H - th - 12)) + "px";
 
