@@ -49,8 +49,14 @@ dist/BibleClip-mac/BibleClip.app   ← 더블클릭
 ```
 
 성경/원어 데이터는 `BibleClip.app` **번들 안(`Contents/Resources/`)에** 들어있어,
-앱을 어디로 옮기든 함께 따라갑니다. (추가 성경을 넣고 싶으면 `.app`과 같은 폴더에
-`bible_versions` 폴더를 두면 번들 안의 기본 성경과 **합쳐서** 인식됩니다.)
+앱을 어디로 옮기든 함께 따라갑니다. 설정·메모·추가한 성경은 앱 옆이 아니라
+`~/Library/Application Support/BibleClip/`에 저장됩니다(v1.2.1~, 처음 실행할 때 앱 옆의
+예전 파일을 한 번 복사해 옴). 추가 성경은 출력 설정의 **[＋ 성경 파일 추가…]**로 넣으며,
+그 폴더의 `bible_versions`와 번들 안의 기본 성경이 **합쳐서** 인식됩니다.
+
+> ⚠️ `.app` 안의 파일 이름은 **영문만** 씁니다. 한글 이름은 서명 때 NFC로 기록되는데,
+> Finder가 앱을 응용 프로그램으로 복사하면서 NFD로 바꿔 서명이 깨집니다("손상됨").
+> 그래서 원어 파일은 `original_lang/KRV_S.sdb`로 넣고, CI는 비ASCII 이름이 있으면 실패합니다.
 
 > ⚠️ 데이터를 `Contents/MacOS/`에 넣으면 안 됩니다. codesign은 그 폴더의 파일을
 > 코드로 취급해 서명되지 않은 `.SQLite3` 때문에 서명 검증이 실패하고, Gatekeeper가
