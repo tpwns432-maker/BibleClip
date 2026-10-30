@@ -16,6 +16,7 @@
   "nav.log": "Clipboard Log",
   "nav.order": "Version Order",
   "nav.theme": "Toggle Theme",
+  "nav.tour": "Replay the tour",
   "nav.appSettings": "Settings",
   "nav.cart": "Cart",
   "nav.notes": "Meditation Notes",
@@ -83,6 +84,7 @@
   "modal.presetWhite": "White",
   "modal.presetTheme": "App theme",
   "modal.subtitlePresetNote": "Background and text color of the subtitle window (F9). High contrast projects best. The font follows the reading font above.",
+  "modal.subtitlePresetNote@mac": "Background and text color of the subtitle window (⌘J). High contrast projects best. The font follows the reading font above.",
   "subtitle.openFail": "Could not open the subtitle window",
 "subtitle.windowTitle": "Subtitle",
   "subtitle.qsPlaceholder": "Reference to project, then Enter (e.g. Mt 18:19-20 · 22)",
@@ -92,6 +94,7 @@
 
   "present.qsPlaceholder": "Reference or keyword, then Enter (e.g. Jn 1:1 · 22 = v.22 here)",
   "present.hint": "F2 search · +/− font size · ESC to exit",
+  "present.hint@mac": "⌘K search · +/− font size · ESC to exit",
 
   "modal.title": "Settings",
   "modal.grpLang": "Language",
@@ -127,6 +130,7 @@
   "alias.empty": "No aliases yet.",
   "alias.errFormat": "Invalid alias (digits only at the start, at least one letter)",
   "alias.errBook": "Pick a target book",
+  "alias.errTaken": "That name already resolves to another book, so the alias would have no effect",
   "alias.errWrite": "Failed to save the alias",
   "alias.noBooks": "Could not load the book list",
   "modal.grpSearch": "Search · Updates",

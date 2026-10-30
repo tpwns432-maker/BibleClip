@@ -55,18 +55,20 @@ if [ -z "$APP" ]; then
 fi
 
 echo "==> Bundling data inside BibleClip.app (survives moving / translocation)"
-MACOS="$APP/Contents/MacOS"
+# Contents/Resources, NOT Contents/MacOS: codesign treats everything in MacOS as
+# code, and an unsigned .SQLite3 there makes Gatekeeper call the app "damaged".
+RES="$APP/Contents/Resources"
 # Copyright guard: bundle ONLY copyright-clean data — KRV(개역한글, royalty-free),
 # 개역한글S(KRV+Strong tags), KJV+(King James 1769 + Strong's, public domain →
 # 영어권 원전 분해 기본 소스). Other bibles and lexicons are user modules.
 if [ -d "bible_versions" ]; then
-  mkdir -p "$MACOS/bible_versions"
-  cp bible_versions/KRV.SQLite3 "$MACOS/bible_versions/" 2>/dev/null || true
-  cp "bible_versions/KJV+.SQLite3" "$MACOS/bible_versions/" 2>/dev/null || true
+  mkdir -p "$RES/bible_versions"
+  cp bible_versions/KRV.SQLite3 "$RES/bible_versions/" 2>/dev/null || true
+  cp "bible_versions/KJV+.SQLite3" "$RES/bible_versions/" 2>/dev/null || true
 fi
 if [ -d "original_lang" ]; then
-  mkdir -p "$MACOS/original_lang"
-  cp "original_lang/개역한글S.sdb" "$MACOS/original_lang/" 2>/dev/null || true
+  mkdir -p "$RES/original_lang"
+  cp "original_lang/개역한글S.sdb" "$RES/original_lang/" 2>/dev/null || true
 fi
 
 # Stamp the real version into Info.plist (PyInstaller leaves 0.0.0)
@@ -83,6 +85,7 @@ fi
 # doesn't report the app as "damaged".
 echo "==> Re-signing (ad-hoc) BibleClip.app"
 codesign --force --deep --sign - "$APP" || echo "  (codesign failed; continuing)"
+codesign --verify --deep --strict "$APP" || echo "  WARNING: signature check failed - macOS may report the app as damaged"
 
 echo "==> Assembling distribution folder dist/BibleClip-mac/"
 OUT="dist/BibleClip-mac"

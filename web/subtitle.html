@@ -68,6 +68,10 @@
   var emptyEl = document.getElementById("empty");
   var pageEl = document.getElementById("page");
   var stage = document.getElementById("stage");
+  // 맥은 F9 대신 ⌘J (search-notes.js 의 단축키와 같음).
+  if (/Mac/i.test(navigator.platform || navigator.userAgent || "")) {
+    emptyEl.textContent = emptyEl.textContent.replace("F9", "⌘J");
+  }
   var current = null;          // 마지막으로 받은 슬라이드(창 크기 변경 시 다시 그림)
 
   // ---- 폭 측정 ----

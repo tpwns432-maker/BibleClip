@@ -48,9 +48,14 @@ chmod +x packaging/build_mac.sh
 dist/BibleClip-mac/BibleClip.app   ← 더블클릭
 ```
 
-성경/원어 데이터는 `BibleClip.app` **번들 안에** 들어있어, 앱을 어디로 옮기든
-함께 따라갑니다. (추가 성경을 넣고 싶으면 `.app`과 같은 폴더에 `bible_versions`
-폴더를 두면 인식됩니다.)
+성경/원어 데이터는 `BibleClip.app` **번들 안(`Contents/Resources/`)에** 들어있어,
+앱을 어디로 옮기든 함께 따라갑니다. (추가 성경을 넣고 싶으면 `.app`과 같은 폴더에
+`bible_versions` 폴더를 두면 번들 안의 기본 성경과 **합쳐서** 인식됩니다.)
+
+> ⚠️ 데이터를 `Contents/MacOS/`에 넣으면 안 됩니다. codesign은 그 폴더의 파일을
+> 코드로 취급해 서명되지 않은 `.SQLite3` 때문에 서명 검증이 실패하고, Gatekeeper가
+> 앱을 "손상됨"으로 판정합니다(v1.2.0 맥 테스터 제보). 빌드 스크립트는 끝에
+> `codesign --verify --deep --strict`로 이를 확인합니다.
 
 ### 처음 실행 시 Gatekeeper 경고
 
