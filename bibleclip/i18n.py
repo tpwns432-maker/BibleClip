@@ -74,8 +74,8 @@ def resolve_ui_lang(settings=None):
             lang = None
         return lang if isinstance(lang, str) and lang else DEFAULT_LANG
     try:
-        from bibleclip.config import SETTINGS_FILE
-        with open(SETTINGS_FILE, 'r', encoding='utf-8') as f:
+        from bibleclip.config import BASE_DIR, SETTINGS_FILE
+        with open(os.path.join(BASE_DIR, SETTINGS_FILE), 'r', encoding='utf-8') as f:
             d = json.load(f)
         lang = d.get('ui_lang')
         return lang if isinstance(lang, str) and lang else DEFAULT_LANG

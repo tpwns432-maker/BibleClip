@@ -5,7 +5,7 @@
 // (맥 테스터가 만든 투어를 바탕으로, 단축키·문구를 OS 별로 나눴다.)
 //
 // 처음 쓰는 사람 기준: 1부(기본 사용법)는 모니터링 켜기 → 복사 → 붙여넣기를
-// 말풍선 안에서 '직접 해 보게' 하고, 끝에서 2부(더 알아보기)로 갈지 고르게 한다.
+// 말풍선 안에서 '직접 해 보게' 하고, 끝에서 2부(활용 기능)로 갈지 고르게 한다.
 // 문구의 {copy} {paste} 같은 자리는 render 때 OS 별 키(KEYS)·문장(PLAT)으로 바뀐다.
 
 "use strict";
@@ -38,7 +38,7 @@ window.Tour = (() => {
 
   // target: CSS 선택자 하나 또는 배열(여러 요소를 감싸는 영역). 없으면 화면 가운데.
   // side: 말풍선 위치(bottom/right). optional: 대상이 없으면 그 단계는 건너뜀.
-  // part: 1 = 기본 사용법, 2 = 더 알아보기.
+  // part: 1 = 기본 사용법, 2 = 활용 기능.
   // wait: 직접 해 보기 — "monitor"(모니터링 켜기) / "reference"(구절 인식) / "paste"(붙여넣기).
   //   done 은 성공했을 때 덧붙는 문구. choice: 1부 끝 갈림길(마치기 / 계속).
   const STEPS = [
@@ -182,7 +182,7 @@ window.Tour = (() => {
               "You can replay this tour any time with the <b>?</b> icon at the bottom left." },
     },
 
-    // ---------------- 2부: 더 알아보기 ----------------
+    // ---------------- 2부: 활용 기능 ----------------
     {
       part: 2, target: "#nav-search", side: "right",
       title: "단어로 찾기 (검색)",
@@ -299,13 +299,13 @@ window.Tour = (() => {
       title: "화면 색 · 앱 설정 · 성경 추가",
       body: "<b>달</b> 아이콘으로 밝은 화면 / 어두운 화면을 바꿉니다.<br>" +
             "<b>톱니바퀴</b> 아이콘에서 화면 언어(한국어/English), 글꼴 등을 바꿔요.<br>" +
-            "새 성경 파일(.SQLite3)을 넣으려면: <b>설정 ▸ [데이터 폴더 열기]</b>로 열린 폴더의 " +
-            "<b>bible_versions</b> 폴더(없으면 만드세요)에 넣고, <b>출력 설정 ▸ [DB 새로고침]</b>을 누르세요.",
+            "새 성경 파일(.SQLite3 또는 받은 .zip)은 <b>출력 설정 ▸ [＋ 성경 파일 추가…]</b>에서 " +
+            "골라 넣으면 바로 목록에 나타납니다.",
       en: { title: "Colours · app settings · adding Bibles",
         body: "The <b>moon</b> icon switches between a light and a dark screen.<br>" +
               "The <b>gear</b> icon changes the display language (한국어/English), fonts and more.<br>" +
-              "To add a Bible file (.SQLite3): open <b>Settings ▸ [Open data folder]</b>, put it in the " +
-              "<b>bible_versions</b> folder there (create it if missing), then press <b>Output Settings ▸ [Refresh DB]</b>." },
+              "To add a Bible file (.SQLite3, or the .zip you downloaded), pick it in " +
+              "<b>Output Settings ▸ [+ Add Bible files…]</b> — it shows up in the list right away." },
     },
     {
       part: 2, target: "#tour-help", side: "right",
@@ -322,13 +322,13 @@ window.Tour = (() => {
 
   // 화면 언어(설정 ▸ 표시 언어)를 따라간다. 단계 문구는 en 이 있으면 영어, 없으면 한국어.
   const UI = {
-    ko: { skip: "건너뛰기", prev: "이전", next: "다음", done: "시작하기", part1: "기본 사용법", part2: "더 알아보기",
-          finish: "여기서 마치기", more: "더 알아보기 →", toPart2: "이미 알아요 · 더 알아보기로",
+    ko: { skip: "건너뛰기", prev: "이전", next: "다음", done: "시작하기", part1: "기본 사용법", part2: "활용 기능",
+          finish: "여기서 마치기", more: "활용 기능 보기 →", toPart2: "활용 기능부터 보기 →",
           copyFallback: "잘 안 되면 여기를 눌러 대신 복사하기", pastePh: "여기를 클릭하고 " + (I18N.IS_MAC ? "⌘ + V" : "Ctrl + V"),
           waitMonitor: "※ 먼저 앞 단계에서 <b>모니터링 시작</b>을 눌러야 해요. [이전]으로 돌아가 켜 주세요.",
           practice: "요 3:16" },
-    en: { skip: "Skip", prev: "Back", next: "Next", done: "Get started", part1: "Basics", part2: "More features",
-          finish: "Finish here", more: "More features →", toPart2: "I know the basics · skip ahead",
+    en: { skip: "Skip", prev: "Back", next: "Next", done: "Get started", part1: "Basics", part2: "Advanced features",
+          finish: "Finish here", more: "See advanced features →", toPart2: "Jump to advanced features →",
           copyFallback: "Not working? Click here to copy it for you", pastePh: "Click here, then " + (I18N.IS_MAC ? "⌘ + V" : "Ctrl + V"),
           waitMonitor: "※ <b>Start Monitoring</b> must be on first. Go [Back] and turn it on.",
           practice: "Jn 3:16" },

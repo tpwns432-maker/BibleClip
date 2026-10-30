@@ -158,7 +158,9 @@ class Library:
     def load_bethlehem(self):
         """Load KRV-with-Strong's + lexicons from the original_lang folder(s).
         Each file is looked up across every candidate folder (bundled + user)."""
-        strongs_path = find_original_lang_file('개역한글S.sdb')
+        # The macOS build ships it as KRV_S.sdb (an ASCII name keeps the .app's
+        # signature intact through a Finder copy); 개역한글S.sdb everywhere else.
+        strongs_path = find_original_lang_file('개역한글S.sdb', 'KRV_S.sdb')
         if strongs_path:
             try:
                 self.bethlehem_strongs = BethlehemDB(strongs_path)
@@ -189,6 +191,112 @@ class Library:
         own version lists).
         """
         return self._scan_databases()
+
+    _BIBLE_EXTS = ('.sqlite3', '.sqlite', '.db')
+    _MAX_BIBLE_BYTES = 512 * 1024 * 1024   # one bible is ~5–50MB; caps a zip bomb
+
+    def import_bible_files(self, paths):
+        """Copy bible DB files — or the DBs inside .zip files — into the data
+        folder's bible_versions/ and load them ([성경 파일 추가…], v1.2.1).
+
+        Each one is checked before it is copied: it has to open as a bible
+        (info/books/verses tables, with verses) and its name must not clash with
+        a loaded version or a file already there (case-insensitively, as on the
+        macOS/Windows file systems). Zip members are taken by their bare
+        filename, so nothing is written outside the folder.
+        Returns {'added': [{'name', 'display'}], 'errors': [{'file', 'code'}]},
+        code = exists | invalid | empty_zip | read_error | copy_error."""
+        import shutil
+        import tempfile
+        dest = os.path.join(BASE_DIR, BIBLE_DIR)
+        os.makedirs(dest, exist_ok=True)
+        taken = {n.casefold() for n in self.dbs}
+        taken |= {os.path.splitext(f)[0].casefold() for f in os.listdir(dest)}
+        errors = []
+        tmp = tempfile.mkdtemp(prefix='bibleclip_add_')
+        try:
+            cands = []   # (filename, path on disk)
+            for p in paths:
+                label = os.path.basename(p)
+                if label.lower().endswith('.zip'):
+                    try:
+                        found = self._extract_bibles(p, tmp)
+                    except Exception:
+                        errors.append({'file': label, 'code': 'read_error'})
+                        continue
+                    if not found:
+                        errors.append({'file': label, 'code': 'empty_zip'})
+                    cands += found
+                else:
+                    cands.append((label, p))
+            for fname, src in cands:
+                key = os.path.splitext(fname)[0].casefold()
+                if key in taken:
+                    errors.append({'file': fname, 'code': 'exists'})
+                    continue
+                if not fname.lower().endswith(self._BIBLE_EXTS) or not self._is_bible_db(src):
+                    errors.append({'file': fname, 'code': 'invalid'})
+                    continue
+                try:
+                    shutil.copyfile(src, os.path.join(dest, fname))
+                except Exception:
+                    errors.append({'file': fname, 'code': 'copy_error'})
+                    continue
+                taken.add(key)
+        finally:
+            shutil.rmtree(tmp, ignore_errors=True)
+        added = [{'name': n, 'display': self.dbs[n].display_name}
+                 for n in self._scan_databases()]
+        return {'added': added, 'errors': errors}
+
+    def _extract_bibles(self, zip_path, tmp):
+        """Pull the bible DB members out of a zip into fresh folders under tmp.
+        [(filename, extracted path)]; bare names only (no zip-slip)."""
+        import shutil
+        import tempfile
+        import zipfile
+        out = []
+        with zipfile.ZipFile(zip_path) as zf:
+            for info in zf.infolist():
+                if info.is_dir() or info.filename.startswith('__MACOSX/'):
+                    continue
+                base = info.filename.replace('\\', '/').rsplit('/', 1)[-1]
+                if not (info.flag_bits & 0x800):   # no UTF-8 flag: Korean zips are cp949
+                    try:
+                        base = base.encode('cp437').decode('cp949')
+                    except Exception:
+                        pass
+                if (not base or base.startswith('.') or os.sep in base or ':' in base
+                        or not base.lower().endswith(self._BIBLE_EXTS)
+                        or info.file_size > self._MAX_BIBLE_BYTES):
+                    continue
+                path = os.path.join(tempfile.mkdtemp(dir=tmp), base)
+                with zf.open(info) as r, open(path, 'wb') as w:
+                    shutil.copyfileobj(r, w)
+                if os.path.getsize(path) <= self._MAX_BIBLE_BYTES:
+                    out.append((base, path))
+        return out
+
+    @staticmethod
+    def _is_bible_db(path):
+        """Opens as a MyBible-style bible: info/books/verses tables, verses present."""
+        import pathlib
+        import sqlite3
+        try:
+            uri = pathlib.Path(path).absolute().as_uri() + '?mode=ro'
+            conn = sqlite3.connect(uri, uri=True)
+        except Exception:
+            return False
+        try:
+            tables = {r[0] for r in conn.execute(
+                "SELECT name FROM sqlite_master WHERE type='table'")}
+            if not {'info', 'books', 'verses'} <= tables:
+                return False
+            return conn.execute("SELECT 1 FROM verses LIMIT 1").fetchone() is not None
+        except Exception:
+            return False
+        finally:
+            conn.close()
 
     # ---- Settings ----
 

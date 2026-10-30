@@ -68,7 +68,8 @@ if [ -d "bible_versions" ]; then
 fi
 if [ -d "original_lang" ]; then
   mkdir -p "$RES/original_lang"
-  cp "original_lang/개역한글S.sdb" "$RES/original_lang/" 2>/dev/null || true
+  # ASCII name: a Korean one breaks the signature once Finder copies the app.
+  cp "original_lang/개역한글S.sdb" "$RES/original_lang/KRV_S.sdb" 2>/dev/null || true
 fi
 
 # Stamp the real version into Info.plist (PyInstaller leaves 0.0.0)
@@ -84,6 +85,8 @@ fi
 # Copying into the bundle invalidated the signature; re-sign ad-hoc so macOS
 # doesn't report the app as "damaged".
 echo "==> Re-signing (ad-hoc) BibleClip.app"
+echo "==> Checking for non-ASCII file names inside the app"
+"$PYTHON" -c "import os,sys; bad=[os.path.join(r,n) for r,ds,fs in os.walk(sys.argv[1]) for n in ds+fs if not n.isascii()]; print(chr(10).join(bad)); sys.exit(1 if bad else 0)" "$APP"   || echo "  WARNING: rename these - Finder re-encodes them on copy and breaks the signature"
 codesign --force --deep --sign - "$APP" || echo "  (codesign failed; continuing)"
 codesign --verify --deep --strict "$APP" || echo "  WARNING: signature check failed - macOS may report the app as damaged"
 

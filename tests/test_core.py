@@ -186,6 +186,8 @@ def main():
     settings_persist_check()
     tour_done_check()
     data_dirs_merge_check()
+    prepare_data_dir_check()
+    import_bibles_check()
 
     print("\nALL CORE CHECKS PASSED ✅")
 
@@ -293,8 +295,101 @@ def data_dirs_merge_check():
         # versions() carries the DB's own language for menu grouping
         assert all(v['lang'] == 'ko' for v in lib.versions()), lib.versions()
         print("data dirs merged (user+bundled, user wins clash, refresh, per-file original_lang, lang) OK")
+        # the mac build ships 개역한글S under an ASCII name; either name is found
+        open(os.path.join(bundled, 'original_lang', 'KRV_S.sdb'), 'w').close()
+        assert ol.find_original_lang_file('개역한글S.sdb', 'KRV_S.sdb').endswith('KRV_S.sdb')
     finally:
         cfg.candidate_data_roots, ol.candidate_data_roots = orig_cfg, orig_ol
+
+
+def prepare_data_dir_check():
+    """v1.2.1: a macOS .app keeps its data in Application Support. On first run
+    the user's files next to the .app are COPIED there once; bible_versions/ is
+    always created so nothing gets written inside the signed bundle."""
+    import tempfile
+    import bibleclip.config as cfg
+
+    legacy, base = tempfile.mkdtemp(), os.path.join(tempfile.mkdtemp(), 'BibleClip')
+    with open(os.path.join(legacy, cfg.SETTINGS_FILE), 'w', encoding='utf-8') as f:
+        f.write('{"dark_mode": true}')
+    os.makedirs(os.path.join(legacy, 'userdata'))
+    open(os.path.join(legacy, 'userdata', 'notes.json'), 'w').close()
+    os.makedirs(os.path.join(legacy, 'fonts'))
+    open(os.path.join(legacy, 'unrelated.txt'), 'w').close()
+
+    copied = cfg.prepare_data_dir(base, legacy)
+    assert sorted(copied) == sorted([cfg.SETTINGS_FILE, 'userdata', 'fonts']), copied
+    assert os.path.isfile(os.path.join(base, 'userdata', 'notes.json'))
+    assert os.path.isdir(os.path.join(base, 'bible_versions'))       # always made
+    assert not os.path.exists(os.path.join(base, 'unrelated.txt'))
+    assert os.path.isfile(os.path.join(legacy, cfg.SETTINGS_FILE))   # copied, not moved
+    # once only: the new folder already has settings → later runs copy nothing
+    os.makedirs(os.path.join(legacy, 'bible_versions'))
+    assert cfg.prepare_data_dir(base, legacy) == []
+    assert cfg.prepare_data_dir(legacy, legacy) == []                # Windows: same folder
+    print("prepare_data_dir (one-time copy, bible_versions made, same-dir no-op) OK")
+
+
+def import_bibles_check():
+    """v1.2.1 [성경 파일 추가…]: picked .SQLite3 files and the DBs inside zips are
+    validated, copied into the data folder's bible_versions/ and loaded. Name
+    clashes (case-insensitive), non-bibles and zip path tricks are refused."""
+    import shutil
+    import sqlite3
+    import tempfile
+    import zipfile
+    import bibleclip.config as cfg
+    import bibleclip.core.library as libmod
+    import bibleclip.data.original_lang as ol
+
+    repo = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    krv = os.path.join(repo, 'bible_versions', 'KRV.SQLite3')
+    user, bundled, src = tempfile.mkdtemp(), tempfile.mkdtemp(), tempfile.mkdtemp()
+    os.makedirs(os.path.join(bundled, 'bible_versions'))
+    shutil.copy(krv, os.path.join(bundled, 'bible_versions', 'KRV.SQLite3'))
+
+    def p(name):
+        return os.path.join(src, name)
+    shutil.copy(krv, p('MYV.SQLite3'))
+    shutil.copy(krv, p('krv.sqlite3'))                    # clashes with KRV
+    with open(p('junk.SQLite3'), 'w') as f:
+        f.write('not a database')
+    conn = sqlite3.connect(p('notes.SQLite3'))            # sqlite, but not a bible
+    conn.execute('CREATE TABLE info (name, value)')
+    conn.commit()
+    conn.close()
+    with zipfile.ZipFile(p('pack.zip'), 'w') as z:
+        z.write(krv, '../../evil/ZIPV.SQLite3')            # path trick → bare name only
+        z.writestr('readme.txt', 'hi')
+    with zipfile.ZipFile(p('empty.zip'), 'w') as z:
+        z.writestr('readme.txt', 'hi')
+    with open(p('broken.zip'), 'w') as f:
+        f.write('nope')
+
+    orig = (cfg.candidate_data_roots, ol.candidate_data_roots, libmod.BASE_DIR)
+    cfg.candidate_data_roots = ol.candidate_data_roots = lambda: [user, bundled]
+    libmod.BASE_DIR = user
+    try:
+        lib = libmod.Library()
+        assert set(lib.dbs) == {'KRV'}, sorted(lib.dbs)
+        res = lib.import_bible_files([p(n) for n in (
+            'MYV.SQLite3', 'krv.sqlite3', 'junk.SQLite3', 'notes.SQLite3',
+            'pack.zip', 'empty.zip', 'broken.zip')])
+        assert sorted(a['name'] for a in res['added']) == ['MYV', 'ZIPV'], res
+        errs = {e['file']: e['code'] for e in res['errors']}
+        assert errs == {'krv.sqlite3': 'exists', 'junk.SQLite3': 'invalid',
+                        'notes.SQLite3': 'invalid', 'empty.zip': 'empty_zip',
+                        'broken.zip': 'read_error'}, errs
+        assert set(lib.dbs) == {'KRV', 'MYV', 'ZIPV'}
+        assert sorted(os.listdir(os.path.join(user, 'bible_versions'))) == [
+            'MYV.SQLite3', 'ZIPV.SQLite3']
+        assert os.listdir(user) == ['bible_versions'], os.listdir(user)   # nothing escaped
+        again = lib.import_bible_files([p('MYV.SQLite3')])
+        assert again['added'] == [] and again['errors'] == [
+            {'file': 'MYV.SQLite3', 'code': 'exists'}], again
+        print("import_bible_files (sqlite+zip, clash/invalid/zip errors, no zip-slip) OK")
+    finally:
+        cfg.candidate_data_roots, ol.candidate_data_roots, libmod.BASE_DIR = orig
 
 
 def alias_check(lib):

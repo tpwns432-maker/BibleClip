@@ -65,7 +65,7 @@
       <ul class="clean">
         <li>설치 과정이 따로 없습니다. 받은 압축(zip)을 풀고 실행 파일만 더블클릭하세요.</li>
         <li><b>Windows</b> — 폴더 안의 <span class="ref">BibleClipWeb.exe</span> 실행</li>
-        <li><b>macOS</b> — <span class="ref">BibleClipWeb.app</span> 실행 (또는 dmg를 열어 응용 프로그램으로 드래그)</li>
+        <li><b>macOS</b> — <span class="ref">BibleClipWeb.app</span> 실행 (또는 dmg를 열어 응용 프로그램으로 드래그). 처음 실행할 때 “Apple에서 확인할 수 없습니다” 창이 뜨면 <span class="ref">완료</span>를 누른 뒤 <b>시스템 설정 → 개인정보 보호 및 보안</b> 아래쪽의 <span class="ref">그래도 열기</span>를 누르세요(처음 한 번만). 설정·메모·추가한 성경은 <span class="ref">~/라이브러리/Application Support/BibleClip</span> 에 저장됩니다.</li>
         <li>별도 런타임이 필요 없습니다. Windows 11은 WebView2 기본 내장, macOS는 내장 웹엔진 사용.</li>
       </ul>
       <div class="call warn">
@@ -74,7 +74,7 @@
       </div>
       <div class="call note">
         <svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12M7 10l5 5 5-5"/><path d="M5 21h14"/></svg>
-        <div><b>역본·사전 직접 추가 (모듈).</b> 기본 배포에는 <b>개역한글</b>만 들어 있습니다. 다른 역본(ESV·개역개정 등)이나 원어 사전은 <b>본인이 권리를 가진 모듈을 직접 추가</b>해서 쓰는 방식입니다. <a href="https://www.ph4.org/b4_index.php" target="_blank" style="color:var(--accent);font-weight:700">ph4.org ↗</a> 에서 받은 성경 모듈(<span class="ref">.SQLite3</span>)을 <span class="ref">bible_versions</span> 폴더에, 원어 사전(<span class="ref">.dct</span>)을 <span class="ref">original_lang</span> 폴더에 넣고 앱을 다시 켜면(성경은 출력 설정의 <span class="ref">DB 새로고침</span>) 바로 인식됩니다. <span class="muted">(자세히 → 6번 “새 성경 번역본 추가”)</span></div>
+        <div><b>역본·사전 직접 추가 (모듈).</b> 기본 배포에는 <b>개역한글</b>만 들어 있습니다. 다른 역본(ESV·개역개정 등)이나 원어 사전은 <b>본인이 권리를 가진 모듈을 직접 추가</b>해서 쓰는 방식입니다. <a href="https://www.ph4.org/b4_index.php" target="_blank" style="color:var(--accent);font-weight:700">ph4.org ↗</a> 에서 받은 성경 모듈(<span class="ref">.SQLite3</span>, 또는 받은 zip 그대로)은 출력 설정의 <span class="ref">＋ 성경 파일 추가…</span>로 골라 넣으면 바로 인식됩니다. 원어 사전(<span class="ref">.dct</span>)은 <span class="ref">original_lang</span> 폴더에 넣고 앱을 다시 켜세요. <span class="muted">(자세히 → 6번 “새 성경 번역본 추가”)</span></div>
       </div>
     </section>
 
@@ -281,8 +281,8 @@
       <h3><span class="pin"></span>출력 순서 &amp; 새 역본 추가</h3>
       <ul class="clean">
         <li>복사에 쓸 역본 목록을 <span class="kbd">↑</span> <span class="kbd">↓</span> 로 정렬, <b>✕</b> 제외, <span class="ref">＋ 역본 추가</span>. (여러 역본은 순서대로 함께 복사)</li>
-        <li>새 번역본(MyBible 모듈)은 <a href="https://www.ph4.org/b4_index.php" target="_blank" style="color:var(--accent);font-weight:700">ph4.org</a> 에서 받아 <span class="ref">.SQLite3</span> 를 bible_versions 폴더에 넣고 <span class="ref">DB 새로고침</span>.</li>
-        <li><b>macOS</b> — <span class="ref">데이터 폴더 열기</span>로 열린 폴더(앱이 있는 폴더)에 <span class="ref">bible_versions</span> 폴더를 새로 만들어 넣으세요. 앱 안의 기본 성경과 합쳐서 보입니다. 앱 안(패키지 내용 보기)에 넣으면 앱이 “손상됨”으로 열리지 않을 수 있습니다.</li>
+        <li>새 번역본(MyBible 모듈)은 <a href="https://www.ph4.org/b4_index.php" target="_blank" style="color:var(--accent);font-weight:700">ph4.org</a> 에서 받아 출력 설정의 <span class="ref">＋ 성경 파일 추가…</span>로 고르면 끝입니다(zip도 그대로, 여러 개 한꺼번에). 이미 있는 역본이나 성경 파일이 아닌 것은 알려 주고 건너뜁니다.</li>
+        <li><span class="ref">성경 폴더 열기</span> — 추가한 성경 파일이 있는 폴더를 엽니다. 직접 넣었다면 <span class="ref">DB 새로고침</span>을 누르세요. macOS는 앱 안(패키지 내용 보기)에 넣으면 앱이 “손상됨”으로 열리지 않을 수 있습니다.</li>
       </ul>
       <p class="muted">※ 여러 역본을 함께 복사하면 각 역본이 자기 언어의 책이름을 따릅니다 (영어 성경은 영어식 표기 + 하이픈).</p>
     </section>
