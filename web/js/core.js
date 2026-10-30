@@ -28,6 +28,42 @@ window.BC = window.BC || {};
     });
   });
 
+  // ---- 맥 전체화면 발표 대체 (v1.2.1) ----
+  // 맥 WKWebView 는 요소 전체화면 API 가 꺼져 있어(requestFullscreen === undefined)
+  // F11 발표가 아무 반응 없이 끝났다. 같은 인터페이스(requestFullscreen /
+  // exitFullscreen / fullscreenElement / fullscreenchange)를 흉내 내 카드에
+  // .pseudo-fs 를 붙인다 → 기존 발표 코드는 그대로 동작하고, 창은 presentToggle 이
+  // set_native_fullscreen 으로 OS 전체화면을 만든다. API 가 있는 Windows(WebView2)는
+  // 이 블록을 타지 않는다. (맥 테스터 제보·수정 반영)
+  if (!Element.prototype.requestFullscreen) {
+    let fsEl = null;
+    const fire = () => document.dispatchEvent(new Event("fullscreenchange"));
+    Object.defineProperty(document, "fullscreenElement", { get: () => fsEl, configurable: true });
+    Element.prototype.requestFullscreen = function () {
+      if (fsEl) fsEl.classList.remove("pseudo-fs");
+      fsEl = this;
+      this.classList.add("pseudo-fs");
+      fire();
+      return Promise.resolve();
+    };
+    document.exitFullscreen = function () {
+      if (!fsEl) return Promise.resolve();
+      fsEl.classList.remove("pseudo-fs");
+      fsEl = null;
+      fire();
+      return Promise.resolve();
+    };
+    document.addEventListener("keydown", (e) => {
+      if (e.key !== "Escape" || !fsEl) return;
+      // 처리 안 된 ESC 는 맥이 받아 창의 전체화면만 풀어 버리므로(카드는 발표 상태로
+      // 남음) 발표 중에는 항상 막는다.
+      e.preventDefault();
+      // 입력창·메뉴가 열려 있으면 ESC 는 그것부터 닫는다(그쪽 핸들러가 처리).
+      if (e.target.closest("input, textarea") || document.querySelector(".menu")) return;
+      document.exitFullscreen();
+    });
+  }
+
   // ---- Helpers ----
 
   const esc = (s) =>
@@ -50,6 +86,13 @@ window.BC = window.BC || {};
     menu.className = "menu" + (opts.grid ? " chapters" : "");
     items.forEach((it) => {
       const el = document.createElement("div");
+      if (it.header) {
+        // 클릭 안 되는 그룹 제목(역본 메뉴의 언어 구분 — versionMenuItems).
+        el.className = "menu-head";
+        el.textContent = it.label;
+        menu.appendChild(el);
+        return;
+      }
       el.className = "menu-item" + (it.on ? " on" : "");
       el.textContent = it.label;
       el.addEventListener("click", () => {
@@ -122,6 +165,9 @@ window.BC = window.BC || {};
   document.addEventListener("mouseout", (e) => {
     if (e.target.closest("[data-tip]")) hideTooltip();
   });
+  // 클릭으로 대상이 DOM 에서 사라지면(카드 ✕ 등) mouseout 이 오지 않아 말풍선이
+  // 화면에 남는다 → 누르는 순간 닫는다.
+  document.addEventListener("mousedown", hideTooltip, true);
 
   // ---- Rail drawer slide animation (shared by log/cart/notes drawers) ----
   // CSS drives the motion (transform transition + .open class). slideOpen unhides
@@ -246,6 +292,45 @@ window.BC = window.BC || {};
     const b = (state.booksCache[version] || []).find((x) => x.num === num);
     return b ? b.short : "?";
   }
+  // ---- 역본 메뉴 언어별 묶기 (v1.2.1) ----
+  // 언어는 백엔드가 DB info.language 를 v.lang 으로 준다. 비어 있으면 표시 이름의
+  // 글자로 추정한다. 그룹 순서는 LANG_ORDER, 그 밖은 라벨순, 모르는 것("기타")은 맨 끝.
+  const LANG_LABELS = { ko: "한국어", en: "English", my: "မြန်မာ (Myanmar)", ctd: "Tedim", lus: "Mizo" };
+  const LANG_ORDER = ["ko", "en", "my", "ctd", "lus"];
+  function versionLang(v) {
+    if (v.lang) return v.lang;
+    const s = (v.display || "") + v.name;
+    if (/[가-힣]/.test(s)) return "ko";
+    if (/[က-႟]/.test(s)) return "my";
+    return "";
+  }
+  // versions: [{name, display, lang}], toItem(v) → 메뉴 항목. 언어가 둘 이상이면
+  // 언어 제목 항목({header})을 끼워 넣고, 그룹 안은 이름순으로 정렬해 돌려준다.
+  function versionMenuItems(versions, toItem) {
+    const groups = new Map();
+    versions.forEach((v) => {
+      const lang = versionLang(v);
+      if (!groups.has(lang)) groups.set(lang, []);
+      groups.get(lang).push(v);
+    });
+    const other = window.I18N && I18N.getLang() === "en" ? "Other" : "기타";
+    const label = (lang) => lang ? (LANG_LABELS[lang] || lang) : other;
+    const rank = (lang) => {
+      if (!lang) return LANG_ORDER.length + 1;
+      const i = LANG_ORDER.indexOf(lang);
+      return i < 0 ? LANG_ORDER.length : i;
+    };
+    const langs = [...groups.keys()].sort((a, b) => rank(a) - rank(b) || label(a).localeCompare(label(b)));
+    const out = [];
+    langs.forEach((lang) => {
+      if (langs.length > 1) out.push({ header: true, label: label(lang) });
+      groups.get(lang)
+        .sort((a, b) => (a.display || a.name).localeCompare(b.display || b.name))
+        .forEach((v) => out.push(toItem(v)));
+    });
+    return out;
+  }
+
   function displayName(name) {
     const v = state.versions.find((x) => x.name === name);
     return v ? v.display : name;
@@ -291,6 +376,7 @@ window.BC = window.BC || {};
     state.searchSyn = init.search_synonyms !== false;   // 기본 켜짐
     state.viewMode = init.view_mode === "split" ? "split" : "interleave";
     state.subtitlePreset = init.subtitle_preset || "green";
+    state.tourDone = !!init.tour_done;
     const verLabel = $("app-ver");
     if (verLabel && init.version) verLabel.textContent = "v" + init.version;
 
@@ -319,6 +405,8 @@ window.BC = window.BC || {};
     wireAliasManager();
     if (init.auto_update_check) checkUpdate(true); // silent startup check
     maybePatchModal(); // first-run-after-update patch notes (Phase 4)
+    Tour.wire();
+    Tour.maybeAutoStart(); // 첫 실행 안내(patch notes 창이 닫힌 뒤)
   }
 
   // ============================================================

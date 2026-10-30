@@ -65,7 +65,7 @@ jobs:
         run: >
           python -m PyInstaller --onedir --windowed --noconfirm --clean
           --collect-submodules bibleclip --hidden-import pyperclip
-          ($env:KIWI_EXCLUDE -split ' ') --add-data "web;web"
+          ($env:KIWI_EXCLUDE -split ' ') --add-data "web;web" --add-data "version_changes.json;."
           --icon=icon.ico --name BibleClipWeb bibleclip_web.py
 
       - name: Assemble package
@@ -125,9 +125,9 @@ jobs:
       - name: Build BibleClipWeb.app
         run: |
           if [ -f icon.icns ]; then
-            python -m PyInstaller --onedir --windowed --noconfirm --clean --collect-submodules bibleclip --hidden-import pyperclip $KIWI_EXCLUDE --add-data "web:web" --icon=icon.icns --name BibleClipWeb bibleclip_web.py
+            python -m PyInstaller --onedir --windowed --noconfirm --clean --collect-submodules bibleclip --hidden-import pyperclip $KIWI_EXCLUDE --add-data "web:web" --add-data "version_changes.json:." --icon=icon.icns --name BibleClipWeb bibleclip_web.py
           else
-            python -m PyInstaller --onedir --windowed --noconfirm --clean --collect-submodules bibleclip --hidden-import pyperclip $KIWI_EXCLUDE --add-data "web:web" --name BibleClipWeb bibleclip_web.py
+            python -m PyInstaller --onedir --windowed --noconfirm --clean --collect-submodules bibleclip --hidden-import pyperclip $KIWI_EXCLUDE --add-data "web:web" --add-data "version_changes.json:." --name BibleClipWeb bibleclip_web.py
           fi
 
       - name: Assemble package
@@ -138,29 +138,40 @@ jobs:
           else
             APP="dist/BibleClipWeb/BibleClipWeb.app"
           fi
-          # Data INSIDE the bundle (Contents/MacOS) — config.candidate_data_roots
-          # checks the executable dir, so it's found there even after the app moves.
-          MACOS="$APP/Contents/MacOS"
-          mkdir -p "$MACOS/bible_versions" && cp bible_versions/KRV.SQLite3 "$MACOS/bible_versions/"
+          # Data INSIDE the bundle (Contents/Resources) — config.candidate_data_roots
+          # checks it, so it's found there even after the app moves. NOT Contents/MacOS:
+          # codesign treats everything there as code, and an unsigned .SQLite3 made
+          # Gatekeeper call the whole app "damaged" (v1.2.0 mac tester report).
+          RES="$APP/Contents/Resources"
+          mkdir -p "$RES/bible_versions" && cp bible_versions/KRV.SQLite3 "$RES/bible_versions/"
           # KJV+(King James 1769 + Strong's, public domain) — 영어권 원전 분해 기본 소스
-          cp "bible_versions/KJV+.SQLite3" "$MACOS/bible_versions/"
+          cp "bible_versions/KJV+.SQLite3" "$RES/bible_versions/"
           # Copyright guard: only the copyright-clean 개역한글S (lexicons are user modules).
-          mkdir -p "$MACOS/original_lang" && cp "original_lang/개역한글S.sdb" "$MACOS/original_lang/"
+          # Shipped as KRV_S.sdb — see the ASCII-name check below.
+          mkdir -p "$RES/original_lang" && cp "original_lang/개역한글S.sdb" "$RES/original_lang/KRV_S.sdb"
           # Stamp the real version into Info.plist (PyInstaller leaves 0.0.0)
           PLIST="$APP/Contents/Info.plist"
           /usr/libexec/PlistBuddy -c "Set :CFBundleShortVersionString $V" "$PLIST" 2>/dev/null \
             || /usr/libexec/PlistBuddy -c "Add :CFBundleShortVersionString string $V" "$PLIST"
           /usr/libexec/PlistBuddy -c "Set :CFBundleVersion $V" "$PLIST" 2>/dev/null \
             || /usr/libexec/PlistBuddy -c "Add :CFBundleVersion string $V" "$PLIST"
+          # ASCII-only file names inside the bundle: Finder re-encodes a Korean name
+          # (NFC -> NFD) when the app is dragged to Applications, codesign then finds
+          # the sealed file "missing" and the installed app is "damaged" (v1.2.1
+          # tester report). Fails the build, listing the offending paths.
+          python -c "import os,sys; bad=[os.path.join(r,n) for r,ds,fs in os.walk(sys.argv[1]) for n in ds+fs if not n.isascii()]; print(chr(10).join(bad)); sys.exit(1 if bad else 0)" "$APP"
           # Re-sign ad-hoc (copying data invalidated PyInstaller's signature, which
           # otherwise makes macOS report the app as "damaged").
-          codesign --force --deep --sign - "$APP" || echo "codesign failed (continuing)"
+          codesign --force --deep --sign - "$APP"
+          # Fail the build if the seal is broken — the "damaged" report can't be
+          # seen without a Mac, so CI is where it must be caught.
+          codesign --verify --deep --strict --verbose=2 "$APP"
           # ditto (NOT cp -R) preserves the signature.
           OUT="BibleClipWeb-mac"
           rm -rf "$OUT" && mkdir -p "$OUT"
           ditto "$APP" "$OUT/BibleClipWeb.app"
           cp 사용법.txt "$OUT/"
-          cp 사용법.html 사용법.css 사용법.js version_changes.json "$OUT/" 2>/dev/null || true
+          cp 사용법.html 사용법.css 사용법.js "$OUT/" 2>/dev/null || true
           # zip — used by the in-app auto-updater
           ( cd "$OUT" && zip -r -y "../BibleClipWeb-macos-v$V.zip" . )
           # dmg — friendly drag-to-Applications installer
@@ -168,7 +179,7 @@ jobs:
           rm -rf "$STAGE" && mkdir -p "$STAGE"
           ditto "$APP" "$STAGE/BibleClipWeb.app"
           cp 사용법.txt "$STAGE/"
-          cp 사용법.html 사용법.css 사용법.js version_changes.json "$STAGE/" 2>/dev/null || true
+          cp 사용법.html 사용법.css 사용법.js "$STAGE/" 2>/dev/null || true
           ln -s /Applications "$STAGE/Applications"
           hdiutil create -volname "BibleClipWeb" -srcfolder "$STAGE" -ov \
             -format UDZO "BibleClipWeb-macos-v$V.dmg"

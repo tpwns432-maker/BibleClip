@@ -48,6 +48,7 @@ python -m PyInstaller --onedir --windowed --noconfirm --clean `
   --hidden-import pyperclip `
   @kiwiExclude `
   --add-data "web;web" `
+  --add-data "version_changes.json;." `
   --icon=icon.ico --name BibleClipWeb `
   --distpath dist_web --workpath build_web `
   bibleclip_web.py

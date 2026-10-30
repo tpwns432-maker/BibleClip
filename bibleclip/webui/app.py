@@ -8,7 +8,7 @@ import html as _html
 import os
 
 from bibleclip import i18n
-from bibleclip.config import __version__, get_resource_dir, IS_WINDOWS
+from bibleclip.config import __version__, get_resource_dir, IS_WINDOWS, prepare_data_dir
 from bibleclip.core.library import Library
 from bibleclip.killswitch import check_killswitch
 from bibleclip.webui.api import Api
@@ -335,6 +335,10 @@ def main():
     보안·차단) instead of always blaming .NET. Non-runtime errors propagate."""
     try:
         _strip_motw()
+    except Exception:
+        pass
+    try:
+        prepare_data_dir()   # 맥: Application Support 폴더 준비 + 예전 파일 1회 복사
     except Exception:
         pass
     try:

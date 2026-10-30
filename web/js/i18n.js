@@ -21,6 +21,9 @@
 
   const tables = {};        // lang -> { key: "translated string" }
   let current = DEFAULT_LANG;
+  // v1.2.1 맥 단축키(⌘J 등)는 문구가 OS 마다 다르다. 맥에서는 "key@mac" 이 있으면
+  // 그것을, 없으면 "key" 를 쓴다(테이블에 맥용 키만 더하면 됨).
+  const IS_MAC = /Mac/i.test(navigator.platform || navigator.userAgent || "");
 
   try {
     const saved = localStorage.getItem(STORE_KEY);
@@ -40,10 +43,17 @@
 
   // DOM-sweep lookup: current → ko, but NO key/literal fallback. Returns
   // undefined when untranslated so the sweep leaves the authored text intact.
-  function lookup(key) {
+  function lookup1(key) {
     let v = rawLookup(current, key);
     if (v == null && current !== DEFAULT_LANG) v = rawLookup(DEFAULT_LANG, key);
     return v;
+  }
+  function lookup(key) {
+    if (IS_MAC) {
+      const m = lookup1(key + "@mac");
+      if (m != null) return m;
+    }
+    return lookup1(key);
   }
 
   // Programmatic translate (for JS-built strings). `vars`:
@@ -133,7 +143,7 @@
 
   window.I18N = {
     register, t, lookup, apply, getLang, setLang, load, boot,
-    SUPPORTED, DEFAULT_LANG,
+    SUPPORTED, DEFAULT_LANG, IS_MAC,
   };
 
   // Initial sweep with whatever is registered (nothing yet → leaves authored

@@ -24,6 +24,23 @@ def resolve_original_lang_dir(base_dir=None):
                 return p
     return os.path.join(BASE_DIR, ORIGINAL_LANG_DIR)
 
+
+def find_original_lang_file(*fnames):
+    """Path of the file in the first original-language dir that HAS it, or None.
+    Several names = the same file under alternative names, tried per folder.
+
+    Looked up per file (not per folder) so that a user's original_lang folder
+    holding only a lexicon doesn't hide the 개역한글S.sdb bundled in the app.
+    """
+    names = [ORIGINAL_LANG_DIR] + LEGACY_ORIGINAL_LANG_DIRS
+    for root in candidate_data_roots():
+        for name in names:
+            for fname in fnames:
+                p = os.path.join(root, name, fname)
+                if os.path.isfile(p):
+                    return p
+    return None
+
 # Bethlehem dbs use 1..66 Protestant numbering. Map to/from our 10..730 scheme
 # (deuterocanonical slots 170,180,200,210,270,280,320 are skipped).
 PROTESTANT_BOOK_ORDER = [

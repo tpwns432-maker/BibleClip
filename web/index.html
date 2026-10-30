@@ -51,6 +51,10 @@
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="4" width="20" height="13" rx="2"/><path d="M8 21h8M12 17v4"/><path d="M7 9h10"/><path d="M7 12.5h6"/></svg>
     </div>
     <div class="spacer"></div>
+    <div class="nav-icon" id="tour-help" title="사용 안내 다시 보기" aria-label="사용 안내 다시 보기" data-i18n-title="nav.tour" data-i18n-aria="nav.tour">
+      <!-- help circle -->
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M9.3 9.2a2.8 2.8 0 0 1 5.4 1c0 1.9-2.7 2.5-2.7 4"/><path d="M12 17.3h.01"/></svg>
+    </div>
     <div class="nav-icon" id="theme-toggle" title="테마 전환" aria-label="테마 전환" data-i18n-title="nav.theme" data-i18n-aria="nav.theme">
       <!-- moon -->
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"/></svg>
@@ -130,7 +134,11 @@
       <section class="card set-card">
         <div class="card-head set-head">
           <span data-i18n="setview.orderHead">출력 순서 · 복사에 사용할 역본</span>
-          <button class="set-mini" id="db-refresh" title="bible_versions 폴더 다시 스캔" data-i18n-title="setview.dbRefreshTitle" data-i18n="setview.dbRefresh">DB 새로고침</button>
+          <span class="set-head-acts">
+            <button class="set-mini accent" id="db-add" title="성경 파일(.SQLite3 · .zip)을 골라 추가" data-i18n-title="setview.dbAddTitle" data-i18n="setview.dbAdd">＋ 성경 파일 추가…</button>
+            <button class="set-mini" id="db-folder" title="추가한 성경 파일이 있는 폴더" data-i18n-title="setview.dbFolderTitle" data-i18n="setview.dbFolder">성경 폴더 열기</button>
+            <button class="set-mini" id="db-refresh" title="bible_versions 폴더 다시 스캔" data-i18n-title="setview.dbRefreshTitle" data-i18n="setview.dbRefresh">DB 새로고침</button>
+          </span>
         </div>
         <div class="card-body" id="set-order"></div>
       </section>
@@ -368,6 +376,7 @@
      v1.0.6: i18n.js 를 가장 먼저 로드 → window.I18N 이 이후 모듈에 준비됨. -->
 <script src="js/i18n.js"></script>
 <script src="js/core.js"></script>
+<script src="js/tour.js"></script>
 <script src="js/cards.js"></script>
 <script src="js/search-notes.js"></script>
 </body>
