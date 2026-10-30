@@ -138,14 +138,16 @@ jobs:
           else
             APP="dist/BibleClipWeb/BibleClipWeb.app"
           fi
-          # Data INSIDE the bundle (Contents/MacOS) — config.candidate_data_roots
-          # checks the executable dir, so it's found there even after the app moves.
-          MACOS="$APP/Contents/MacOS"
-          mkdir -p "$MACOS/bible_versions" && cp bible_versions/KRV.SQLite3 "$MACOS/bible_versions/"
+          # Data INSIDE the bundle (Contents/Resources) — config.candidate_data_roots
+          # checks it, so it's found there even after the app moves. NOT Contents/MacOS:
+          # codesign treats everything there as code, and an unsigned .SQLite3 made
+          # Gatekeeper call the whole app "damaged" (v1.2.0 mac tester report).
+          RES="$APP/Contents/Resources"
+          mkdir -p "$RES/bible_versions" && cp bible_versions/KRV.SQLite3 "$RES/bible_versions/"
           # KJV+(King James 1769 + Strong's, public domain) — 영어권 원전 분해 기본 소스
-          cp "bible_versions/KJV+.SQLite3" "$MACOS/bible_versions/"
+          cp "bible_versions/KJV+.SQLite3" "$RES/bible_versions/"
           # Copyright guard: only the copyright-clean 개역한글S (lexicons are user modules).
-          mkdir -p "$MACOS/original_lang" && cp "original_lang/개역한글S.sdb" "$MACOS/original_lang/"
+          mkdir -p "$RES/original_lang" && cp "original_lang/개역한글S.sdb" "$RES/original_lang/"
           # Stamp the real version into Info.plist (PyInstaller leaves 0.0.0)
           PLIST="$APP/Contents/Info.plist"
           /usr/libexec/PlistBuddy -c "Set :CFBundleShortVersionString $V" "$PLIST" 2>/dev/null \
@@ -154,7 +156,10 @@ jobs:
             || /usr/libexec/PlistBuddy -c "Add :CFBundleVersion string $V" "$PLIST"
           # Re-sign ad-hoc (copying data invalidated PyInstaller's signature, which
           # otherwise makes macOS report the app as "damaged").
-          codesign --force --deep --sign - "$APP" || echo "codesign failed (continuing)"
+          codesign --force --deep --sign - "$APP"
+          # Fail the build if the seal is broken — the "damaged" report can't be
+          # seen without a Mac, so CI is where it must be caught.
+          codesign --verify --deep --strict --verbose=2 "$APP"
           # ditto (NOT cp -R) preserves the signature.
           OUT="BibleClipWeb-mac"
           rm -rf "$OUT" && mkdir -p "$OUT"

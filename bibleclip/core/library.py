@@ -14,7 +14,7 @@ import json
 
 from bibleclip.config import (
     BASE_DIR, SETTINGS_FILE, LEGACY_SETTINGS_FILE, BIBLE_DIR,
-    resolve_data_dir,
+    resolve_data_dir, data_dirs,
 )
 from bibleclip.core.engine import Engine
 from bibleclip.core.formatter import Formatter
@@ -22,7 +22,7 @@ from bibleclip.userconfig import load_user_config
 from bibleclip.core.clipboard_monitor import ClipboardMonitor
 from bibleclip.data.bible_db import BibleDB
 from bibleclip.data.original_lang import (
-    resolve_original_lang_dir, BethlehemDB, Lexicon, parse_korean_strongs,
+    find_original_lang_file, BethlehemDB, Lexicon, parse_korean_strongs,
     parse_english_strongs, parse_wonjun_verse, strip_korean_strongs,
 )
 
@@ -83,6 +83,9 @@ class Library:
         'web_cards_layout': None,         # web-only: serialized card layout for the
                                           # modular multi-card viewer (list of card
                                           # descriptors; None until the web UI saves one)
+        # v1.2.1 첫 실행 안내(web/js/tour.js)를 봤는지. False 면 시작할 때 자동으로 뜬다.
+        # 이 키가 없는 기존 설정 파일 = 이미 쓰던 사람 → load_settings 가 True 로 둔다.
+        'tour_done': False,
     }
 
     def __init__(self):
@@ -128,40 +131,49 @@ class Library:
     # ---- Database loading ----
 
     def load_databases(self):
-        db_dir = resolve_data_dir(BIBLE_DIR)
-        if not os.path.isdir(db_dir):
-            os.makedirs(db_dir, exist_ok=True)
+        if not data_dirs(BIBLE_DIR):
+            os.makedirs(resolve_data_dir(BIBLE_DIR), exist_ok=True)
             return
-        for fname in sorted(os.listdir(db_dir)):
-            if fname.lower().endswith(('.sqlite3', '.sqlite', '.db')):
-                path = os.path.join(db_dir, fname)
+        self._scan_databases()
+
+    def _scan_databases(self):
+        """Load every DB not loaded yet from ALL bible_versions folders (see
+        config.data_dirs). The first folder wins on a name clash, so a user's
+        copy next to the app overrides the bundled one. Returns the new names."""
+        added = []
+        for db_dir in data_dirs(BIBLE_DIR):
+            for fname in sorted(os.listdir(db_dir)):
+                if not fname.lower().endswith(('.sqlite3', '.sqlite', '.db')):
+                    continue
+                if os.path.splitext(fname)[0] in self.dbs:
+                    continue
                 try:
-                    db = BibleDB(path)
+                    db = BibleDB(os.path.join(db_dir, fname))
                     self.dbs[db.name] = db
+                    added.append(db.name)
                 except Exception as e:
                     print(f"Error loading {fname}: {e}")
+        return added
 
     def load_bethlehem(self):
-        """Load KRV-with-Strong's + lexicons from the original_lang folder."""
-        bdir = resolve_original_lang_dir(BASE_DIR)
-        if not os.path.isdir(bdir):
-            return
-        strongs_path = os.path.join(bdir, '개역한글S.sdb')
-        if os.path.exists(strongs_path):
+        """Load KRV-with-Strong's + lexicons from the original_lang folder(s).
+        Each file is looked up across every candidate folder (bundled + user)."""
+        strongs_path = find_original_lang_file('개역한글S.sdb')
+        if strongs_path:
             try:
                 self.bethlehem_strongs = BethlehemDB(strongs_path)
             except Exception as e:
                 print(f"개역한글S load error: {e}")
-        wonjun_path = os.path.join(bdir, '원전분해.sdb')
-        if os.path.exists(wonjun_path):
+        wonjun_path = find_original_lang_file('원전분해.sdb')
+        if wonjun_path:
             try:
                 self.bethlehem_wonjun = BethlehemDB(wonjun_path)
             except Exception as e:
                 print(f"원전분해 load error: {e}")
         for fname, attr in (('HebGrkKo.dct', 'lexicon_ko'),
                             ('HebGrkEn.dct', 'lexicon_en')):
-            p = os.path.join(bdir, fname)
-            if os.path.exists(p):
+            p = find_original_lang_file(fname)
+            if p:
                 try:
                     setattr(self, attr, Lexicon(p))
                 except Exception as e:
@@ -176,23 +188,7 @@ class Library:
         Returns the list of newly loaded version names (so a UI can refresh its
         own version lists).
         """
-        db_dir = resolve_data_dir(BIBLE_DIR)
-        if not os.path.isdir(db_dir):
-            return []
-        existing = set(self.dbs.keys())
-        added = []
-        for fname in sorted(os.listdir(db_dir)):
-            if fname.lower().endswith(('.sqlite3', '.sqlite', '.db')):
-                name = os.path.splitext(fname)[0]
-                if name not in existing:
-                    path = os.path.join(db_dir, fname)
-                    try:
-                        db = BibleDB(path)
-                        self.dbs[db.name] = db
-                        added.append(db.name)
-                    except Exception:
-                        pass
-        return added
+        return self._scan_databases()
 
     # ---- Settings ----
 
@@ -214,6 +210,8 @@ class Library:
                 for k, v in saved.items():
                     if k in self.settings:
                         self.settings[k] = v
+                if 'tour_done' not in saved:
+                    self.settings['tour_done'] = True
             except Exception:
                 pass
 
@@ -277,8 +275,11 @@ class Library:
     # ---- Read API (UI-agnostic) ----
 
     def versions(self):
-        """[{'name', 'display'}] for every loaded version, in load order."""
-        return [{'name': name, 'display': db.display_name}
+        """[{'name', 'display', 'lang'}] for every loaded version, in load order.
+        lang = the DB's info.language as written ('' when the DB has none — the
+        UI then guesses from the name's script); used to group version menus."""
+        return [{'name': name, 'display': db.display_name,
+                 'lang': str(db.info.get('language') or '').strip().lower()}
                 for name, db in self.dbs.items()]
 
     def books(self, version):

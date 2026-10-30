@@ -16,6 +16,7 @@
   "nav.log": "클립보드 로그",
   "nav.order": "역본 순서",
   "nav.theme": "테마 전환",
+  "nav.tour": "사용 안내 다시 보기",
   "nav.appSettings": "설정",
   "nav.cart": "장바구니",
   "nav.notes": "묵상 노트",
@@ -83,6 +84,7 @@
   "modal.presetWhite": "흰색",
   "modal.presetTheme": "앱 테마",
   "modal.subtitlePresetNote": "자막 창(F9)의 배경·글자색입니다. 투사 환경에서는 대비가 큰 쪽이 잘 보입니다. 글꼴은 위의 읽기 글꼴을 따릅니다.",
+  "modal.subtitlePresetNote@mac": "자막 창(⌘J)의 배경·글자색입니다. 투사 환경에서는 대비가 큰 쪽이 잘 보입니다. 글꼴은 위의 읽기 글꼴을 따릅니다.",
   "subtitle.openFail": "자막 창을 열 수 없습니다",
 "subtitle.windowTitle": "자막",
   "subtitle.qsPlaceholder": "자막에 띄울 구절 입력 후 Enter (예: 마 18:19-20 · 22)",
@@ -92,6 +94,7 @@
 
   "present.qsPlaceholder": "구절·키워드 입력 후 Enter (예: 창 1:1 · 22 = 이 장 22절)",
   "present.hint": "F2 검색 · +/− 글자 크기 · ESC 나가기",
+  "present.hint@mac": "⌘K 검색 · +/− 글자 크기 · ESC 나가기",
 
   "modal.title": "설정",
   "modal.grpLang": "언어",
@@ -127,6 +130,7 @@
   "alias.empty": "등록된 약칭이 없습니다.",
   "alias.errFormat": "약칭 형식이 올바르지 않습니다 (숫자는 맨 앞에만, 한 글자 이상의 문자 필요)",
   "alias.errBook": "대상 책을 선택하세요",
+  "alias.errTaken": "이미 다른 책으로 인식되는 이름이라 약칭으로 등록해도 적용되지 않습니다",
   "alias.errWrite": "약칭 저장에 실패했습니다",
   "alias.noBooks": "책 목록을 불러오지 못했습니다",
   "modal.grpSearch": "검색 · 업데이트",

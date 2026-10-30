@@ -614,6 +614,12 @@ body {
 }
 .menu .menu-item:hover { background: var(--seg-bg); }
 .menu .menu-item.on { color: var(--accent-text); background: var(--pill-sel-bg); }
+/* 역본 메뉴의 언어 제목(클릭 안 됨, core.js versionMenuItems) */
+.menu .menu-head {
+  font-size: 11px; font-weight: 700; color: var(--text-muted);
+  padding: 8px 11px 3px; white-space: nowrap; cursor: default;
+}
+.menu .menu-head:not(:first-child) { margin-top: 4px; border-top: 1px solid var(--card-border); }
 .menu.chapters { display: grid; grid-template-columns: repeat(5, 1fr); gap: 2px; min-width: 200px; }
 .menu.chapters .menu-item { text-align: center; padding: 7px 0; }
 .menu::-webkit-scrollbar { width: 9px; }
@@ -753,7 +759,7 @@ html[data-theme="dark"] .search-highlight {
 }
 .note-badge:hover { opacity: 1; transform: scale(1.18); }
 /* Part3-2: F11 프리젠테이션에서는 순수 성경 텍스트만 — 노트 알림 아이콘 숨김 */
-.mcard:fullscreen .note-badge { display: none !important; }
+.mcard:is(:fullscreen, .pseudo-fs) .note-badge { display: none !important; }
 
 .ctx-menu {
   position: fixed; z-index: 1200; min-width: 148px;
@@ -954,8 +960,16 @@ html[data-theme="dark"] .note-modal-back { background: rgba(0,0,0,.55); }
   font-size: 11.5px; font-weight: 600; color: var(--text-muted); user-select: none; }
 .cart-foot .btn { padding: 6px 11px; font-size: 12px; }
 
-/* ---- F11 presentation (fullscreen card) + F2 quick search ---- */
-.mcard:fullscreen {
+/* ---- F11 presentation (fullscreen card) + F2 quick search ----
+   v1.2.1: 맥 WKWebView 는 요소 전체화면 API 가 꺼져 있어 core.js 가 흉내 낸다 — 카드에
+   .pseudo-fs 를 붙이고 창 전체를 덮는다. 그래서 발표 규칙은 모두 :is(:fullscreen,
+   .pseudo-fs) 로 두 경우를 함께 받는다(:is 는 모르는 선택자만 버리고 나머지는 살린다). */
+.mcard.pseudo-fs {
+  /* 진짜 전체화면은 top layer 라 위치가 저절로 잡히지만, 흉내는 직접 덮어야 한다 */
+  position: fixed !important; z-index: 5000 !important;
+  right: 0 !important; bottom: 0 !important;
+}
+.mcard:is(:fullscreen, .pseudo-fs) {
   width: 100% !important; height: 100% !important;
   left: 0 !important; top: 0 !important;
   /* ⚠️ v1.1.13 이전에는 `var(--bg)` 였는데 그런 토큰은 정의된 적이 없다. 미정의
@@ -969,16 +983,16 @@ html[data-theme="dark"] .note-modal-back { background: rgba(0,0,0,.55); }
   border-radius: 0; border: none; background: var(--app-bg);
   display: flex; flex-direction: column;
 }
-.mcard:fullscreen .card-hd,
-.mcard:fullscreen .rs,
-.mcard:fullscreen .card-grip { display: none !important; }
-.mcard:fullscreen .card-body {
+.mcard:is(:fullscreen, .pseudo-fs) .card-hd,
+.mcard:is(:fullscreen, .pseudo-fs) .rs,
+.mcard:is(:fullscreen, .pseudo-fs) .card-grip { display: none !important; }
+.mcard:is(:fullscreen, .pseudo-fs) .card-body {
   flex: 1; overflow-y: auto;
   padding: 6vh 9vw;
   /* 반응형 기준 × A−/A+(--reading-scale): 전체화면에서 +/− 키로 조절된다 */
   font-size: calc(clamp(26px, 3.4vw, 60px) * var(--reading-scale)); line-height: 1.7;
 }
-.mcard:fullscreen .card-body .v { margin-bottom: .5em; }
+.mcard:is(:fullscreen, .pseudo-fs) .card-body .v { margin-bottom: .5em; }
 /* 발표 화면에서는 절 배경이 물들지 않게 한다 — 청중에게 보이는 화면에 조작 흔적이
    뜨는 건 소음이다(노트 배지를 숨기는 것과 같은 이유).
    :hover = 마우스가 스칠 때, .copied = 절 클릭으로 복사됐을 때의 초록 플래시.
@@ -988,33 +1002,33 @@ html[data-theme="dark"] .note-modal-back { background: rgba(0,0,0,.55); }
    호버 배경이 매 순간 깔려 초록이 그 소음에 섞여 보이지 않았을 뿐이다.
    ⚠️ 복사 자체는 그대로 일어난다(F11 에서는 토스트도 fullscreen 요소 밖이라 안 보이므로
    발표 중 절 클릭은 아무 표시 없이 클립보드를 덮는다). */
-.mcard:fullscreen .scripture .v:hover,
-.mcard:fullscreen .scripture .v.copied { background: none; box-shadow: none; }
+.mcard:is(:fullscreen, .pseudo-fs) .scripture .v:hover,
+.mcard:is(:fullscreen, .pseudo-fs) .scripture .v.copied { background: none; box-shadow: none; }
 /* 구절 찾기(F2·클립보드 인식)로 점프한 절의 강조도 발표 화면에서는 끈다.
    ⚠️ 클래스 자체는 지우면 안 된다 — `.v.hl` 은 색칠 표식이자 centerHighlightVerse()
    가 '어느 절로 스크롤할지' 찾는 앵커라서, 클래스를 없애면 점프해도 그 절로
    이동하지 않는다. 그래서 여기서는 **보이는 것만** 죽인다.
    .scripture .v.hl 이 걸어둔 음수 마진/패딩까지 되돌려야 그 절만 좌우로 튀어나오지
    않는다(발표 화면은 좌우 여백이 9vw 라 8px 밀림이 눈에 띈다). */
-.mcard:fullscreen .scripture .v.hl {
+.mcard:is(:fullscreen, .pseudo-fs) .scripture .v.hl {
   background: none; box-shadow: none; animation: none;
   margin-left: 0; margin-right: 0; padding: 0; border-radius: 0;
 }
 /* 전체화면 병렬 독서(split): 행 정렬 유지 + 발표용 여백 확대(스크롤러는 본문 하나) */
-.mcard:fullscreen .card-body.split-cols { display: block; overflow-y: auto; padding: 0; }
-.mcard:fullscreen .split-cols .v { margin-bottom: 0; }
-.mcard:fullscreen .split-cols .scell { padding: .7em 2.6vw; }
+.mcard:is(:fullscreen, .pseudo-fs) .card-body.split-cols { display: block; overflow-y: auto; padding: 0; }
+.mcard:is(:fullscreen, .pseudo-fs) .split-cols .v { margin-bottom: 0; }
+.mcard:is(:fullscreen, .pseudo-fs) .split-cols .scell { padding: .7em 2.6vw; }
 /* F11 역본명 띠 — 발표 화면의 세 구역(틀고정 헤더 / 역본명 / 본문)이 각각 다른
    면으로 읽혀야 한다. 색 층은 --seg-bg(헤더) → --card-bg(역본명) → --app-bg(본문)
    순으로 내려가고, 여기에 헤더와 같은 굵은 그림자 + 경계선을 더한다. 이 띠는 sticky
    라 본문이 그 아래로 밀려 들어가므로 그림자가 특히 잘 먹는다.
    windowed(작은 카드) 모드는 이 굵기가 과하므로 건드리지 않는다 — F11 한정. */
-.mcard:fullscreen .split-cols .shead {
+.mcard:is(:fullscreen, .pseudo-fs) .split-cols .shead {
   background: var(--card-bg);
   border-bottom: 1px solid var(--present-bar-line);
   box-shadow: var(--present-bar-shadow);
 }
-.mcard:fullscreen .split-cols .shead .scell {
+.mcard:is(:fullscreen, .pseudo-fs) .split-cols .shead .scell {
   font-size: calc(14px * var(--reading-scale)); padding: .5em 2.6vw;
 }
 .present-hint {
@@ -1148,3 +1162,57 @@ html[data-theme="dark"] .note-modal-back { background: rgba(0,0,0,.55); }
 
 /* Search-bar version picker (reuses .pill.dropdown) */
 .search-bar .pill.dropdown { align-self: stretch; display: flex; align-items: center; }
+
+
+/* ---- 첫 실행 안내 투어 (tour.js, v1.2.1) ---- */
+.tour-back { position: fixed; inset: 0; z-index: 2000; background: transparent; }
+.tour-back.dim { background: rgba(20, 12, 40, .55); }
+.tour-spot {
+  position: fixed; z-index: 2001; pointer-events: none;
+  border-radius: var(--r-md);
+  box-shadow: 0 0 0 3px var(--accent), 0 0 0 9999px rgba(20, 12, 40, .55);
+  transition: left .25s, top .25s, width .25s, height .25s;
+}
+.tour-tip {
+  position: fixed; z-index: 2002; width: min(440px, calc(100vw - 24px));
+  background: var(--card-bg); color: var(--text);
+  border: 1px solid var(--card-border); border-radius: var(--r-lg);
+  box-shadow: 0 30px 70px -28px rgba(60, 40, 100, .6);
+  padding: 16px 18px 14px; display: flex; flex-direction: column; gap: 8px;
+}
+.tour-count { font-size: 11px; font-weight: 700; color: var(--accent-text); }
+.tour-title { font-size: 15px; font-weight: 800; }
+.tour-body { font-size: 13.5px; line-height: 1.7; color: var(--text-muted); }
+.tour-body b { color: var(--text); }
+.tour-body code, .tour-body kbd {
+  font-family: inherit; font-size: 12px; font-weight: 700;
+  padding: 1px 6px; border-radius: 5px;
+  background: var(--chip-bg); color: var(--chip-fg);
+  white-space: nowrap;   /* "Jn 3:16" 같은 표기가 줄 끝에서 둘로 갈라지지 않게 */
+}
+.tour-foot { display: flex; align-items: center; gap: 6px; margin-top: 6px; }
+.tour-spacer { flex: 1; }
+.tour-skip { border-color: transparent; background: transparent; color: var(--text-muted); }
+/* 직접 해 보기 연습 칸 · 성공 표시 */
+.tour-practice, .tour-paste {
+  width: 100%; box-sizing: border-box; font-family: inherit;
+  border: 2px solid var(--accent); border-radius: var(--r-md);
+  background: var(--app-bg); color: var(--text);
+}
+.tour-practice { font-size: 22px; font-weight: 800; text-align: center; padding: 10px; }
+.tour-paste { font-size: 13px; line-height: 1.6; padding: 8px 10px; resize: none; }
+.tour-link {
+  align-self: flex-start; border: none; background: none; padding: 0; cursor: pointer;
+  font-family: inherit; font-size: 12px; color: var(--accent-text); text-decoration: underline;
+}
+.tour-hint { font-size: 12px; line-height: 1.6; color: #d9822b; }
+.tour-done {
+  font-size: 13px; line-height: 1.65; color: var(--text);
+  background: rgba(46, 160, 67, .14); border: 1px solid rgba(46, 160, 67, .45);
+  border-radius: var(--r-md); padding: 8px 10px;
+}
+.tour-pulse { animation: tour-pulse 1.2s ease-in-out infinite; }
+@keyframes tour-pulse {
+  0%, 100% { box-shadow: 0 0 0 0 var(--accent-blur); }
+  50% { box-shadow: 0 0 0 6px transparent; }
+}

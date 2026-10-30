@@ -184,6 +184,8 @@ def main():
 
     alias_check(lib)
     settings_persist_check()
+    tour_done_check()
+    data_dirs_merge_check()
 
     print("\nALL CORE CHECKS PASSED ✅")
 
@@ -223,6 +225,76 @@ def settings_persist_check():
         print("settings persistence (font80/reading_font/ui_lang/auto_copy; clamp=400) OK")
     finally:
         libmod.BASE_DIR, libmod.SETTINGS_FILE = orig_base, orig_file
+
+
+def tour_done_check():
+    """v1.2.1 첫 실행 안내: 설정 파일이 없는 새 설치는 tour_done=False(자동 시작),
+    키 없이 저장된 기존 설정 파일 = 이미 쓰던 사람 → True(업데이트만으로는 안 뜸)."""
+    import json
+    import tempfile
+    import bibleclip.core.library as libmod
+    from bibleclip.core.library import Library
+
+    orig_base, orig_file = libmod.BASE_DIR, libmod.SETTINGS_FILE
+    libmod.BASE_DIR = tempfile.mkdtemp()
+    libmod.SETTINGS_FILE = 'test_settings.json'
+    try:
+        assert Library().settings['tour_done'] is False          # fresh install
+        with open(os.path.join(libmod.BASE_DIR, 'test_settings.json'), 'w', encoding='utf-8') as f:
+            json.dump({'dark_mode': True}, f)                    # pre-1.2.1 file
+        assert Library().settings['tour_done'] is True
+        lib = Library()
+        lib.settings['tour_done'] = False                        # saved explicitly
+        lib.save_settings()
+        assert Library().settings['tour_done'] is False
+        print("tour_done (fresh=False, existing user=True, explicit kept) OK")
+    finally:
+        libmod.BASE_DIR, libmod.SETTINGS_FILE = orig_base, orig_file
+
+
+def data_dirs_merge_check():
+    """v1.2.1: bible_versions / original_lang are merged across every candidate
+    root. Before, the FIRST root holding a bible_versions folder won, so a mac
+    user's folder next to the .app hid the bibles bundled inside it."""
+    import shutil
+    import tempfile
+    import bibleclip.config as cfg
+    import bibleclip.data.original_lang as ol
+    from bibleclip.core.library import Library
+
+    repo = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    user, bundled = tempfile.mkdtemp(), tempfile.mkdtemp()   # next to .app / inside it
+    for root in (user, bundled):
+        os.makedirs(os.path.join(root, 'bible_versions'))
+        os.makedirs(os.path.join(root, 'original_lang'))
+    krv = os.path.join(repo, 'bible_versions', 'KRV.SQLite3')
+    shutil.copy(krv, os.path.join(bundled, 'bible_versions', 'KRV.SQLite3'))
+    shutil.copy(krv, os.path.join(user, 'bible_versions', 'MYV.SQLite3'))
+    shutil.copy(krv, os.path.join(user, 'bible_versions', 'KRV.SQLite3'))   # name clash
+    open(os.path.join(user, 'original_lang', 'only_user.dct'), 'w').close()
+    open(os.path.join(bundled, 'original_lang', 'only_bundled.sdb'), 'w').close()
+
+    orig_cfg, orig_ol = cfg.candidate_data_roots, ol.candidate_data_roots
+    cfg.candidate_data_roots = ol.candidate_data_roots = lambda: [user, bundled]
+    try:
+        assert cfg.data_dirs('bible_versions') == [
+            os.path.join(user, 'bible_versions'), os.path.join(bundled, 'bible_versions')]
+        lib = Library()
+        assert set(lib.dbs) == {'KRV', 'MYV'}, sorted(lib.dbs)
+        # the first root wins a name clash (user's copy overrides the bundled one)
+        assert os.path.dirname(lib.dbs['KRV'].db_path) == os.path.join(user, 'bible_versions')
+        assert lib.refresh_databases() == []                       # nothing new
+        shutil.copy(krv, os.path.join(bundled, 'bible_versions', 'LATE.SQLite3'))
+        assert lib.refresh_databases() == ['LATE']                 # rescans every root
+        # original_lang is looked up per FILE, not per folder
+        assert ol.find_original_lang_file('only_user.dct').startswith(user)
+        assert ol.find_original_lang_file('only_bundled.sdb').startswith(bundled)
+        assert ol.find_original_lang_file('missing.sdb') is None
+        # versions() carries the DB's own language for menu grouping
+        assert all(v['lang'] == 'ko' for v in lib.versions()), lib.versions()
+        print("data dirs merged (user+bundled, user wins clash, refresh, per-file original_lang, lang) OK")
+    finally:
+        cfg.candidate_data_roots, ol.candidate_data_roots = orig_cfg, orig_ol
 
 
 def alias_check(lib):

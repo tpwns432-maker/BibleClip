@@ -108,15 +108,21 @@ def candidate_data_roots():
     """Folders to search for data (bible_versions, original_lang), in order.
 
     BASE_DIR first (next to the exe / .app — lets users drop in extra data).
-    On a frozen build also the executable's own dir: inside a macOS .app this
-    is Contents/MacOS, where bundled data lives so it survives App
-    Translocation and the app being moved.
+    On a frozen build also the executable's own dir, and inside a macOS .app
+    Contents/Resources, where bundled data lives (v1.2.1~) so it survives App
+    Translocation and the app being moved. Data used to sit in Contents/MacOS,
+    but codesign treats everything there as code and an unsigned .SQLite3 made
+    Gatekeeper report the whole app as "damaged".
     """
     roots = [BASE_DIR]
     if getattr(sys, 'frozen', False):
         exe_dir = os.path.dirname(sys.executable)
         if exe_dir not in roots:
             roots.append(exe_dir)
+        if sys.platform == 'darwin':
+            res = os.path.join(os.path.dirname(exe_dir), 'Resources')
+            if res not in roots:
+                roots.append(res)
         try:
             mei = sys._MEIPASS
             if mei not in roots:
@@ -133,3 +139,22 @@ def resolve_data_dir(name):
         if os.path.isdir(p):
             return p
     return os.path.join(BASE_DIR, name)
+
+
+def data_dirs(name):
+    """Every existing `name` folder across the candidate roots, in priority order.
+
+    Unlike resolve_data_dir (first hit only), callers that load files merge all
+    of them: on macOS a bible_versions folder the user makes next to the .app
+    must ADD to the bible bundled inside it, not hide it. Symlinked duplicates
+    (e.g. Contents/MacOS/x -> Contents/Resources/x) are listed once.
+    """
+    out, seen = [], set()
+    for root in candidate_data_roots():
+        p = os.path.join(root, name)
+        if os.path.isdir(p):
+            real = os.path.realpath(p)
+            if real not in seen:
+                seen.add(real)
+                out.append(p)
+    return out

@@ -667,6 +667,8 @@
         toast(I18N.t("toast.convertedCopied", { ref: `${r.short_name} ${r.chapter}:${vlist(r.verses)}` }));
         showView("viewer"); // a caught reference always returns to the bible view
         CardManager.goToRef(r.book_num, r.chapter, r.verses);
+        // 첫 실행 안내(tour.js)의 '직접 복사해 보기' 단계가 인식 성공을 알 수 있게 알린다.
+        document.dispatchEvent(new CustomEvent("bc:reference", { detail: r }));
       },
       onKeyword(keyword) {
         refLog.push({ kind: "keyword", keyword });
@@ -1119,7 +1121,8 @@
     box.addEventListener("mousedown", (e) => { if (e.target === box) closeQuickSearch(); });
     input.addEventListener("keydown", async (e) => {
       e.stopPropagation();
-      if (e.key === "Escape") { closeQuickSearch(); }
+      // preventDefault: 처리 안 된 ESC 는 맥이 받아 창의 전체화면까지 풀어 버린다.
+      if (e.key === "Escape") { e.preventDefault(); closeQuickSearch(); }
       else if (e.key === "Enter") {
         const q = input.value.trim();
         closeQuickSearch();
@@ -1197,11 +1200,17 @@
     } catch (_) {}
   }
 
-  // F11 = present the active card fullscreen; F2 = quick jump.
+  // F11 = present the active card fullscreen; F2 = quick jump; F9 = 자막 입력.
+  // 맥 대체키(v1.2.1): 맥북 F키는 기본이 밝기·음악 키라 fn 을 같이 눌러야 하고, F11 은
+  // macOS 의 '데스크탑 보기'에 잡혀 앱까지 오지 않는다 → ⌘⏎(발표, PowerPoint 와 같음) ·
+  // ⌘K(빠른 이동) · ⌘J(자막). 한글 입력 상태에서도 잡히도록 e.key 대신 물리 키(e.code).
+  // Windows 의 metaKey 는 Win 키라 맥에서만 켠다.
   document.addEventListener("keydown", (e) => {
-    if (e.key === "F11") { e.preventDefault(); CardManager.presentToggle(); }
-    else if (e.key === "F2") { e.preventDefault(); openQuickSearch(); }
-    else if (e.key === "F9") { e.preventDefault(); openSlideInput(); }
+    const cmd = I18N.IS_MAC && e.metaKey && !e.ctrlKey && !e.altKey && !e.shiftKey;
+    const typing = e.target.closest && e.target.closest("input, textarea, [contenteditable]");
+    if (e.key === "F11" || (cmd && e.code === "Enter" && !typing)) { e.preventDefault(); CardManager.presentToggle(); }
+    else if (e.key === "F2" || (cmd && e.code === "KeyK")) { e.preventDefault(); openQuickSearch(); }
+    else if (e.key === "F9" || (cmd && e.code === "KeyJ")) { e.preventDefault(); openSlideInput(); }
   });
 
   // 현재 송출 중인 슬라이드(백엔드가 밀어준 것). 제어 UI 가 붙기 전까지는 보관만.
@@ -1351,6 +1360,16 @@
     const alias = (inp.value || "").trim();
     if (!alias || !ALIAS_RE.test(alias)) { toast(I18N.t("alias.errFormat")); return; }
     if (aliasBookNum == null) { toast(I18N.t("alias.errBook")); return; }
+    // 이미 다른 책을 가리키는 이름(예: "요한" = 요한복음)은 기본 인식이 우선해서 등록해도
+    // 적용되지 않는다 → 조용히 저장하지 말고 알린다. 내가 등록해 둔 약칭을 다른 책으로
+    // 바꾸는 경우는 지금 인식 결과가 '옛 대상'이므로 검사하지 않는다.
+    try {
+      const mine = (await api().get_aliases()) || [];
+      if (!mine.some((a) => a.alias === alias)) {
+        const taken = await api().resolve_reference(alias + " 1:1");
+        if (taken && taken.book_num !== aliasBookNum) { toast(I18N.t("alias.errTaken")); return; }
+      }
+    } catch (_) {}
     const r = await api().add_alias(alias, aliasBookNum);
     if (!r || !r.ok) { toast(bridgeErr(r, "alias.errFormat")); return; }
     inp.value = "";
@@ -1639,7 +1658,7 @@
       add.addEventListener("click", () => {
         openMenu(
           add,
-          avail.map((v) => ({ label: v.display, value: v.name, on: false })),
+          versionMenuItems(avail, (v) => ({ label: v.display, value: v.name, on: false })),
           (name) => commitOrder([...setState.output_order, name])
         );
       });
@@ -1902,7 +1921,7 @@
       sv.addEventListener("click", () => {
         openMenu(
           sv,
-          state.versions.map((v) => ({
+          versionMenuItems(state.versions, (v) => ({
             label: v.display, value: v.name, on: v.name === state.searchVersion,
           })),
           (name) => {
@@ -1953,7 +1972,7 @@
         if (!avail.length) { toast(I18N.t("toast.allVersionsSelected")); return; }
         openMenu(
           verAdd,
-          avail.map((v) => ({ label: v.display, value: v.name })),
+          versionMenuItems(avail, (v) => ({ label: v.display, value: v.name })),
           async (name) => { await updateViewerVersions([...state.viewer, name]); }
         );
       });
