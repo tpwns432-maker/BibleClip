@@ -38,6 +38,8 @@
 .rail .nav-dot { top: 9px; right: calc(50% - 17px); }
 /* 자막(PPT) 창은 데스크톱 전용 — 안드로이드에는 없다. */
 .rail #subtitle-toggle { display: none; }
+/* Typing (mobile.js kb-open): the keyboard takes the bottom — the menu steps aside. */
+.kb-open .rail { display: none; }
 
 /* Drawers (클립보드 로그·장바구니·노트) stop above the menu bar. */
 .drawer { bottom: var(--bc-nav-h); max-width: 92vw; }

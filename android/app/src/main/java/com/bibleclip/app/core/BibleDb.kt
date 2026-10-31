@@ -1,5 +1,8 @@
 package com.bibleclip.app.core
 
+/** A verse row as stored (markup intact). */
+data class RawVerse(val book: Int, val chapter: Int, val verse: Int, val text: String)
+
 /**
  * One MyBible-format bible (.SQLite3: info / books / verses tables) — port of
  * bibleclip/data/bible_db.py's read API. The SQL lives here; subclasses only
@@ -41,6 +44,11 @@ abstract class BibleDb(val name: String, private val text: TextUtils) {
     fun getVerses(book: Int, chapter: Int): List<Pair<Int, String>> =
         query("SELECT verse, text FROM verses WHERE book_number=? AND chapter=? ORDER BY verse", book, chapter)
             .map { num(it[0]) to text.cleanText(it[1]?.toString()) }
+
+    /** Every verse in canonical order, raw — the search index source. */
+    fun allVerses(): List<RawVerse> =
+        query("SELECT book_number, chapter, verse, text FROM verses ORDER BY book_number, chapter, verse")
+            .map { RawVerse(num(it[0]), num(it[1]), num(it[2]), it[3]?.toString() ?: "") }
 
     /** Cleaned text of one verse, '' when missing. */
     fun getVerseText(book: Int, chapter: Int, verse: Int): String =

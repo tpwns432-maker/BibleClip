@@ -76,6 +76,8 @@ class Bridge(private val app: BibleClipApp, private val web: WebView, private va
         "set_output_order" -> names(a.optJSONArray(0)).filter { it in lib.dbs }.distinct().let {
             save("output_order", JSONArray(it)); JSONArray(it)
         }
+        "search" -> lib.searchReply(a.optString(0), if (a.isNull(1)) null else a.optString(1),
+            if (a.isNull(2)) 200 else a.optInt(2, 200), if (a.isNull(3)) "and" else a.optString(3))
         "add_bible_files" -> addBibleFiles()
         "refresh_databases" -> JSONObject().put("added", JSONArray(app.scanBibles())).put("versions", versions())
         "note_position" -> {

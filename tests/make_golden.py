@@ -26,6 +26,8 @@ from bibleclip.core.engine import Engine
 from bibleclip.core.library import Library
 from bibleclip.data.bible_db import BibleDB
 from bibleclip import constants as C
+from bibleclip import korean, morph
+from bibleclip.webui.routes.bible import BibleRoutes
 from bibleclip.text_utils import clean_text, convert_qwerty_to_hangul
 
 GOLDEN_DIR = os.path.join(ROOT, 'tests', 'golden')
@@ -96,6 +98,42 @@ FORMATS = [
 ]
 
 
+# (query, version, mode, search_synonyms). Version None = the route's default.
+SEARCHES = [
+    ('사랑', 'KRV', 'and', True),
+    ('하나님의 사랑', 'KRV', 'and', True),
+    ('하나님 사랑', 'KRV', 'or', True),
+    ('이집트', 'KRV', 'and', True),             # 유의어 → 애굽
+    ('이집트', 'KRV', 'and', False),            # 확장 끄면 BM25 0건 → 폴백
+    ('창조', 'KRV', 'and', True),               # 어간 부분일치 → 창조하시니라
+    ('태초에 하나님이', 'KRV', 'and', True),
+    ('여호와는 나의 목자', 'KRV', 'and', True),
+    ('하나님이세상을', 'KRV', 'and', True),       # 띄어쓰기 없는 구절 → 완전일치 폴백
+    ('하나님이 세상을 이처럼 사랑하샤', 'KRV', 'and', True),   # 오타 → trigram 폴백
+    ('#믿음 소망', 'KRV', 'and', True),
+    ('love', 'KJV+', 'and', True),
+    ('In the beginning', 'KJV+', 'and', True),
+    ('shepherd', None, 'and', True),
+    ('zzqq', 'KRV', 'and', True),
+    ('', 'KRV', 'and', True),
+    ('그 또', 'KRV', 'and', True),              # 불용어만 → 토큰 없음
+]
+
+
+def search_case(dbs, q, ver, mode, expand):
+    """routes.bible.search over exactly ``dbs`` — the reply the Android bridge must give."""
+    lib = make_library(dbs, {'search_synonyms': expand}, [])
+    lib.settings['viewer_versions'] = ['KRV']
+    r = object.__new__(BibleRoutes)
+    r.lib = lib
+    out = r.search(q, ver, 200, mode)
+    hits = out.pop('hits')
+    out['hit_count'] = len(hits)
+    out['hit_refs'] = [[h['book'], h['chapter'], h['verse']] for h in hits[:60]]
+    out['hit_heads'] = hits[:3]
+    return {'in': {'q': q, 'version': ver, 'mode': mode, 'synonyms': expand}, 'out': out}
+
+
 def load_dbs():
     return {v: BibleDB(os.path.join(ROOT, 'bible_versions', f'{v}.SQLite3')) for v in VERSIONS}
 
@@ -125,6 +163,10 @@ def tables():
 
 
 def build():
+    # The shipped desktop build has no Kiwi (morph.py disables it in frozen
+    # builds), and neither has Android — pin the golden to that path even when
+    # kiwipiepy happens to be installed on this machine.
+    morph._kiwi, morph._kiwi_tried = None, True
     dbs = load_dbs()
     lib = make_library(dbs, {}, [])
     aliases = lib.book_aliases()
@@ -145,6 +187,11 @@ def build():
         golden('text.json'): {'clean_text': [{'in': t, 'out': clean_text(t)} for t in TEXTS],
                               'qwerty': [{'in': t, 'out': convert_qwerty_to_hangul(t)} for t in QWERTY]},
         golden('format.json'): {'cases': formats},
+        golden('search.json'): {
+            'tokenize': [{'in': t, 'out': korean.tokenize(t)} for t in REFERENCES + TEXTS + [
+                '하나님의 사랑은', '「여호와는」, 나의 목자시니…', '그리고 또한 및', '으로서', '포도주를']],
+            'cases': [search_case(dbs, *c) for c in SEARCHES],
+        },
     }
 
 

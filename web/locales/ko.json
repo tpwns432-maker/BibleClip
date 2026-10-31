@@ -60,6 +60,8 @@
   "search.modeTitle": "여러 단어 검색: AND=모두 포함 / OR=하나라도",
   "search.go": "검색",
   "search.empty": "검색어를 입력하거나, 다른 앱에서 <b>#키워드</b>를 복사하세요.",
+  "search.placeholderPhone": "검색어 · 구절  (예: 사랑 / 창 1:1)",
+  "search.emptyPhone": "검색어나 구절(예: 요 3:16)을 입력하세요.<br>다른 앱에서는 구절을 길게 눌러 선택하고 <b>BibleClip 구절</b>을 누르면 본문으로 바뀌어요.",
 
   "drawer.logHead": "클립보드 로그",
   "drawer.logEmpty": "모니터링 중 인식한 구절이 여기에 쌓입니다.",

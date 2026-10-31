@@ -60,6 +60,8 @@
   "search.modeTitle": "Multi-word search: AND = all terms / OR = any term",
   "search.go": "Search",
   "search.empty": "Type a search term, or copy <b>#keyword</b> from another app.",
+  "search.placeholderPhone": "Keyword · reference  (e.g. love / Jn 1:1)",
+  "search.emptyPhone": "Type a keyword or a reference (e.g. Jn 3:16).<br>In other apps, select a reference and tap <b>BibleClip verse</b> to turn it into the text.",
 
   "drawer.logHead": "Clipboard Log",
   "drawer.logEmpty": "References caught while monitoring will appear here.",

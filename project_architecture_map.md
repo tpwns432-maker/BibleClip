@@ -435,7 +435,7 @@ BibleClip Project/
 - `test_versebreak.js` — 자동 줄바꿈 엔진(**node**, 12개 절: 등급 판정/절 경계/기준 사례(마 18:19-20 = 사람이 만든 슬라이드와 줄 단위 일치)/나열문 구제/**문장 경계 강제 + 오탐 목록**/자동 분할(절 누락·중복 없음, 무한 재귀 방지))
 - `test_quickjump_parse.js` — F2 상대 참조 파서(**node**, 33건: 절/범위/장:절/장, 전각 문자, 역순 입력, **건드리면 안 되는 입력 14종이 `null` 로 빠지는지**)
 - `test_highlight_ranges.js` — 형광펜 구간 대수(**node**, `node tests/test_highlight_ranges.js`). cards.js 소스에서 `hlColor`/`hlMark`/`hlTextHTML`/`normRanges`/`mergeRange`/`subtractRange` 정의를 **이름으로 잘라 eval** — 로직 복사본을 만들지 않아 갈라지지 않는다. 함수명을 바꾸면 이 테스트가 먼저 실패한다
-- `make_golden.py` / `test_golden.py` / `golden/*.json` — **데스크톱↔안드로이드 골든 벡터**. Python 엔진으로 참조 파싱(별칭 유무)·`clean_text`·두벌식 변환·`build_output`(설정 28종)의 입력→기대출력을 뽑고, 안드로이드 JUnit(`android/app/src/test/.../GoldenTest.kt`)이 같은 JSON과 비교한다. KRV·KJV+(git 추적 역본)만 쓴다. `test_golden.py` 는 JSON이 현재 엔진과 다르면 실패 — **엔진을 고치면 `python -X utf8 tests/make_golden.py` 재실행 → Kotlin이 깨지면 같은 수정 이식**. 같은 스크립트가 Kotlin 런타임 표(`android/app/src/main/assets/core/tables.json` = constants.py 책이름·자판맵 + DEFAULT_SETTINGS)도 생성
+- `make_golden.py` / `test_golden.py` / `golden/*.json` — **데스크톱↔안드로이드 골든 벡터**. Python 엔진으로 참조 파싱(별칭 유무)·`clean_text`·두벌식 변환·`build_output`(설정 28종)·검색(토큰화 + routes.search 17건, Kiwi 강제 끔)의 입력→기대출력을 뽑고, 안드로이드 JUnit(`android/app/src/test/.../GoldenTest.kt`)이 같은 JSON과 비교한다. KRV·KJV+(git 추적 역본)만 쓴다. `test_golden.py` 는 JSON이 현재 엔진과 다르면 실패 — **엔진을 고치면 `python -X utf8 tests/make_golden.py` 재실행 → Kotlin이 깨지면 같은 수정 이식**. 같은 스크립트가 Kotlin 런타임 표(`android/app/src/main/assets/core/tables.json` = constants.py 책이름·자판맵 + DEFAULT_SETTINGS)도 생성
 
 ---
 
@@ -452,6 +452,7 @@ Kotlin 앱이 `web/` 을 WebView로 띄우고, pywebview `js_api` 와 **같은 �
   - `BibleDb.kt` — MyBible 읽기 API. SQL은 여기, 하위 클래스는 쿼리 실행만(안드로이드 `AndroidBibleDb` / 테스트 JDBC)
   - `Settings.kt` — 데스크톱과 같은 설정 JSON + Python 식 truthiness
   - `Library.kt` — 별칭 맵·`validateSettings`(load_settings 검증)·`buildOutput`·`formatReference`
+- `core/Search.kt` — **검색**(골든 `tests/golden/search.json`): `Korean.tokenize`(korean.py), `Synonyms`(synonyms.py, 사전은 첫 검색 때 지연 로드), `VerseSearch`(bible_db.search: BM25+유의어 신뢰도 가중 → 띄어쓰기 무시 완전일치 → trigram ≥0.7. smart_search 는 BM25 후보가 상위집합이라 도달 불가 → 생략, Kiwi 는 배포판처럼 끔). `Library.searchReply` = routes.bible.search 와 같은 응답. 앱 시작 후 기본 검색 역본 색인을 저우선 스레드로 미리 만든다(S20 FE 약 4초, 첫 화면엔 영향 없음)
 - `core/BibleImporter.kt` — **[＋ 성경 파일 추가…]**(Library.import_bible_files 이식): 이름 충돌(대소문자 무시)·info/books/verses+절 존재(`BibleDb.looksLikeBible`)·zip 은 맨 이름만(zip-slip 차단)·UTF-8 플래그 없는 zip 은 cp949·512MB 상한. 오류 코드 exists/invalid/empty_zip/read_error/copy_error 데스크톱과 동일. JVM 테스트 `BibleImporterTest`
 - `Bridge.add_bible_files` — 시스템 파일 선택 창(SAF `ACTION_OPEN_DOCUMENT`, 여러 개, `*/*` — .SQLite3 는 MIME 이 없어 거르면 안 보임) → `BibleClipApp.importBibles` → `scanBibles`. 반환 모양이 데스크톱과 같아 web/ 무수정. 브리지 워커는 선택 창이 닫힐 때까지 대기(MainActivity `pickBibleFiles`/`onActivityResult`, onDestroy 에서 빈 결과로 풀어줌). `refresh_databases` 도 구현(폰에선 버튼 숨김)
 - `AndroidBibleDb` 는 no-op DatabaseErrorHandler 로 연다 — 안드로이드 기본 핸들러는 손상 DB 파일을 **삭제**한다(사용자 역본 보호)
