@@ -16,8 +16,10 @@ android {
         applicationId = "com.bibleclip.app"
         minSdk = 26
         targetSdk = 34
-        versionCode = 1
-        versionName = "0.1.0"
+        // 데스크톱과 같은 번호. versionCode = 주·부·수 각 두 자리(1.2.1 → 10201) — 늘기만 해야
+        // 덮어 설치(업데이트)가 된다. android-v<versionName> 태그와 맞지 않으면 CI 가 멈춘다.
+        versionCode = 10201
+        versionName = "1.2.1"
     }
 
     // 개인 APK 배포: CI 가 BIBLECLIP_KEYSTORE* 환경변수로 서명한다. 없으면(로컬)

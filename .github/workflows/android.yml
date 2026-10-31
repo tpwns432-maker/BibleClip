@@ -11,6 +11,9 @@ name: Android
 # A tag build refuses to run without them — every release must carry the same
 # key, or installed copies can't update. A manual run without them is
 # debug-signed (fine for a quick look, not for testers).
+#
+# The release is never marked "Latest": the desktop update check reads
+# releases/latest and would find no .zip in an Android release.
 on:
   push:
     tags:
@@ -25,6 +28,16 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+
+      - name: Tag matches versionName
+        if: startsWith(github.ref, 'refs/tags/')
+        run: |
+          want="${GITHUB_REF_NAME#android-v}"
+          have=$(grep -m1 '^ *versionName *=' android/app/build.gradle.kts | cut -d'"' -f2)
+          if [ "$want" != "$have" ]; then
+            echo "::error::tag $GITHUB_REF_NAME but versionName is '$have' — bump versionName/versionCode first"
+            exit 1
+          fi
 
       - uses: actions/setup-python@v5
         with:
@@ -79,4 +92,18 @@ jobs:
         if: startsWith(github.ref, 'refs/tags/')
         uses: softprops/action-gh-release@v2
         with:
+          name: BibleClip 안드로이드 ${{ github.ref_name }}
+          make_latest: false
           files: out/*.apk
+          body: |
+            ## 설치
+            1. 아래 **Assets**의 `.apk` 파일을 폰에서 내려받아 엽니다.
+            2. "출처를 알 수 없는 앱" 설치를 묻으면 허용합니다(처음 한 번).
+            3. Play 프로텍트가 "알 수 없는 앱"이라고 경고하면 **세부정보 더보기 → 무시하고 설치**를 누릅니다. 스토어 밖에서 받은 앱이라 뜨는 경고입니다.
+
+            새 버전은 **지우지 말고 그대로 덮어 설치**하세요. 지우면 노트·형광펜·장바구니도 함께 지워집니다.
+
+            ## 쓰는 법
+            - 다른 앱(카톡·메모 등)에서 "요 3:16" 같은 글자를 선택 → 메뉴의 **BibleClip** → 본문으로 바뀝니다(바꿀 수 없는 칸이면 복사).
+            - 앱에서: 성경 읽기·병렬 보기·검색·형광펜(길게 눌러 선택)·절 메뉴(2초 누르기).
+            - 개역한글·KJV+가 들어 있고, 다른 역본은 **성경 파일 추가**로 직접 넣습니다.
