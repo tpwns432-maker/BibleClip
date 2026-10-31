@@ -407,13 +407,13 @@
       if (b2) {
         // 'split'(병렬 독서)은 역본 2개 이상일 때만 의미 — 좌우 컬럼으로 분할한다.
         // 그 외(절별 대조 / 단일 역본)는 기존 세로 교차 렌더.
-        if (state.viewMode === "split" && viewerVers.length > 1) {
-          b2.classList.add("split-cols");
-          renderSplitVersesInto(b2, viewerVers, chapDataArr, highlight);
-        } else {
-          b2.classList.remove("split-cols");
-          renderMultiVersesInto(b2, viewerVers, chapDataArr, highlight);
-        }
+        // 폰(안드로이드)은 좌우 칸 대신 위아래 창(renderSplitPanesInto).
+        const split = state.viewMode === "split" && viewerVers.length > 1;
+        b2.classList.toggle("split-cols", split && !IS_ANDROID);
+        b2.classList.toggle("split-panes", split && IS_ANDROID);
+        if (split && IS_ANDROID) renderSplitPanesInto(b2, viewerVers, chapDataArr, highlight);
+        else if (split) renderSplitVersesInto(b2, viewerVers, chapDataArr, highlight);
+        else renderMultiVersesInto(b2, viewerVers, chapDataArr, highlight);
       }
       updateBibleHeader(card);
       updateNavButtons(card);
@@ -1558,7 +1558,10 @@
     // 순회하는 형태라 다시 다중 스크롤러가 생겨도 무해하다.
     function scriptureScrollers(card) {
       const body = bodyEl(card.id);
-      return body ? [body] : [];
+      if (!body) return [];
+      // 폰 병렬 독서: 역본마다 따로 스크롤하는 위아래 창 — 서로 절 앵커로 추종한다.
+      const panes = body.querySelectorAll(".spane-body");
+      return panes.length ? [...panes] : [body];
     }
     // 정규 앵커(히스토리/점프 기준) = 카드 본문.
     function primaryScroller(card) { return scriptureScrollers(card)[0] || null; }
@@ -1808,7 +1811,7 @@
         hideTip();
         const el = e.target;
         if (!el.classList) return;
-        if (!el.classList.contains("scripture")) return;
+        if (!el.classList.contains("scripture") && !el.classList.contains("spane-body")) return;
         const sec = el.closest(".mcard");
         if (!sec || sec.dataset.type !== "bible") return;
         const card = cardById(sec.dataset.id);
@@ -2051,6 +2054,25 @@
       `</div>`).join("");
     body.innerHTML = head + rows;
     if (hl.size) centerHighlightVerse(body);
+  }
+
+  // 병렬 독서 — 폰(안드로이드): 역본마다 가로로 넓은 창을 위아래로 쌓는다. 좌우 칸은
+  // 폰 폭에서 몇 글자씩 끊겨 읽기 어렵다. 창(.spane-body)마다 따로 스크롤하고, 절 앵커
+  // 싱크(syncFrom → scriptureScrollers)가 다른 창을 같은 절·같은 높이로 맞춘다.
+  function renderSplitPanesInto(body, versions, chapDataArr, highlight) {
+    const hl = new Set(highlight || []);
+    const lists = versions.map((_, vi) => (chapDataArr[vi] && chapDataArr[vi].verses) || []);
+    if (!lists.some((l) => l.length)) {
+      body.innerHTML = `<div class="panel-loading">${I18N.t("card.noText")}</div>`;
+      return;
+    }
+    body.innerHTML = versions.map((ver, vi) =>
+      `<div class="spane"><div class="spane-head">${esc(ver)}</div><div class="spane-body">` +
+      lists[vi].map((v) =>
+        `<div class="v${hl.has(v.n) ? " hl" : ""}" data-v="${v.n}">` +
+        `<span class="vnum">${v.n}</span>${vtxHTML(ver, v.text)}</div>`).join("") +
+      `</div></div>`).join("");
+    if (hl.size) body.querySelectorAll(".spane-body").forEach(centerHighlightVerse);
   }
 
   function renderInterlinearInto(body, data) {
