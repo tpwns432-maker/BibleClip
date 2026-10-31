@@ -8,6 +8,7 @@ import com.bibleclip.app.core.ImportError
 import com.bibleclip.app.core.ImportSource
 import com.bibleclip.app.core.Library
 import com.bibleclip.app.core.Settings
+import com.bibleclip.app.core.Synonyms
 import com.bibleclip.app.core.Tables
 import org.json.JSONObject
 import java.io.File
@@ -39,7 +40,19 @@ class BibleClipApp : Application() {
         val lib = Library(tables, settings) { readJson(aliasFile) ?: JSONObject() }
         scanBibles(lib)
         lib.validateSettings()
+        lib.synonymsLoader = {
+            Synonyms(runCatching { assets.open(Synonyms.ASSET).bufferedReader().use { it.readText() } }.getOrNull())
+        }
         Log.i(TAG, "library: ${lib.dbs.keys} in ${(System.nanoTime() - t0) / 1_000_000} ms")
+        // Index the default search version in the background so the first search is instant.
+        Thread {
+            val t1 = System.nanoTime()
+            runCatching {
+                lib.synonyms
+                lib.searchVersion()?.let { lib.searcher(it)?.warm() }
+            }
+            Log.i(TAG, "search index warm in ${(System.nanoTime() - t1) / 1_000_000} ms")
+        }.apply { isDaemon = true; priority = Thread.MIN_PRIORITY }.start()
         return lib
     }
 
