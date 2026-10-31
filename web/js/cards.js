@@ -85,6 +85,10 @@
 
     function defaultLayout() {
       const v = state.primary;
+      if (IS_ANDROID) {
+        return [{ id: "bible-1", type: "bible", version: v, book: state.lastBook, chapter: state.lastChapter,
+          locked: false, x: 0, y: 0, w: 100, h: 100, z: 1 }];
+      }
       // 본문 | 원어 | 사전 side by side, attached, filling the workspace.
       return [
         { id: "bible-1", type: "bible", version: v, book: state.lastBook, chapter: state.lastChapter,
@@ -118,7 +122,7 @@
             x: raw.x, y: raw.y, w: raw.w, h: raw.h, z: raw.z,
           });
           bibleN++;
-        } else if (raw.type === "interlinear" || raw.type === "lexicon") {
+        } else if (!IS_ANDROID && (raw.type === "interlinear" || raw.type === "lexicon")) {
           out.push({
             rawId: raw.id, id: "", type: raw.type,
             link: typeof raw.link === "string" ? raw.link : null,
@@ -149,6 +153,15 @@
         out.forEach((c, i) => {
           c.x = Math.min(i * w, 100 - w); c.y = 0; c.w = w; c.h = 100; c.z = i + 1;
         });
+      }
+      // Phone: a lone card fills the screen; two stack top/bottom, keeping the
+      // split the user dragged to (as a ratio, clamped so neither vanishes).
+      if (IS_ANDROID && out.length === 1) Object.assign(out[0], { x: 0, y: 0, w: 100, h: 100 });
+      if (IS_ANDROID && out.length === 2) {
+        const [top, bottom] = [...out].sort((a, b) => a.y - b.y);
+        const split = Math.round(Math.max(20, Math.min(80, (top.h / (top.h + bottom.h)) * 100)));
+        Object.assign(top, { x: 0, y: 0, w: 100, h: split });
+        Object.assign(bottom, { x: 0, y: split, w: 100, h: 100 - split });
       }
       // Assign clean ids in order and build an old→new id map.
       const counters = { bible: 0, interlinear: 0, lexicon: 0 };
@@ -784,6 +797,12 @@
         y: Math.min((100 - h) / 2 + off, 100 - h),
         w, h, z: ++zTop,
       };
+      if (IS_ANDROID && cards.length === 1) {
+        // Phone: split the screen — the existing card takes the top half.
+        Object.assign(cards[0], { x: 0, y: 0, w: 100, h: 50 });
+        applyGeom(cards[0]);
+        Object.assign(geom, { x: 0, y: 50, w: 100, h: 50 });
+      }
       let card;
       if (type === "bible") {
         const base = firstBible();
@@ -809,6 +828,11 @@
       const wasBible = cards[i].type === "bible";
       cards.splice(i, 1);
       unmountCard(id);   // BUG-03: detach only this card (others untouched)
+      if (IS_ANDROID && cards.length === 1) {
+        // Phone: the remaining card takes the whole screen back.
+        Object.assign(cards[0], { x: 0, y: 0, w: 100, h: 100 });
+        applyGeom(cards[0]);
+      }
       // Dependents linked to a removed bible card fall back to the first bible —
       // re-point + reload just those (not a global re-render).
       if (wasBible) {
@@ -1369,16 +1393,52 @@
         applyGeom(card);
         renderGuides(guides);
       };
-      const onUp = () => {
-        document.removeEventListener("mousemove", onMove);
-        document.removeEventListener("mouseup", onUp);
+      trackDrag(e, onMove, () => {
         sec.classList.remove("moving");
         clearGuides();
         interacting = false;
         if (moved) saveLayout();
+      });
+    }
+
+    // Phone (Android): two cards stack top/bottom at full width, so dragging the
+    // edge between them moves that shared border — one grows, the other shrinks.
+    // (The desktop push model would just stall against the top of the screen.)
+    function startSplitDrag(card, sec, dirs, e) {
+      if (cards.length !== 2) return;
+      const [top, bottom] = [...cards].sort((a, b) => a.y - b.y);
+      if (!((card === top && dirs.includes("s")) || (card === bottom && dirs.includes("n")))) return;
+      interacting = true;
+      const cont = container().getBoundingClientRect();
+      sec.classList.add("resizing");
+      const onMove = (ev) => {
+        const split = Math.max(20, Math.min(80, ((ev.clientY - cont.top) / cont.height) * 100));
+        Object.assign(top, { x: 0, y: 0, w: 100, h: split });
+        Object.assign(bottom, { x: 0, y: split, w: 100, h: 100 - split });
+        applyGeom(top);
+        applyGeom(bottom);
       };
-      document.addEventListener("mousemove", onMove);
-      document.addEventListener("mouseup", onUp);
+      trackDrag(e, onMove, () => {
+        sec.classList.remove("resizing");
+        interacting = false;
+        saveLayout();
+      });
+    }
+
+    // Follow a move/resize drag to its end. Mouse (desktop): mousemove/mouseup,
+    // as before. Touch/pen (Android): pointermove/pointerup — a finger never
+    // produces the mousemove stream — and pointercancel ends it too.
+    function trackDrag(e, onMove, onUp) {
+      const touch = !!e.pointerType && e.pointerType !== "mouse";
+      const move = touch ? "pointermove" : "mousemove";
+      const ends = touch ? ["pointerup", "pointercancel"] : ["mouseup"];
+      const end = () => {
+        document.removeEventListener(move, onMove);
+        ends.forEach((t) => document.removeEventListener(t, end));
+        onUp();
+      };
+      document.addEventListener(move, onMove);
+      ends.forEach((t) => document.addEventListener(t, end));
     }
 
     // Edge/corner resize with gutter-snap + joinAt-based PUSH (see computePush).
@@ -1387,6 +1447,7 @@
     //   "e" grow: east edge moves right.   "w" grow: west edge moves left.
     //   "s" grow: south edge moves down.   "n" grow: north edge moves up.
     function startResizeCard(card, sec, dirs, e) {
+      if (IS_ANDROID) { startSplitDrag(card, sec, dirs, e); return; }
       interacting = true; // block layout writes for the whole gesture (Phase 2)
       bringToFront(card);
       const cont = container().getBoundingClientRect();
@@ -1470,16 +1531,12 @@
         cards.forEach(applyGeom);
         renderGuides(guides);
       };
-      const onUp = () => {
-        document.removeEventListener("mousemove", onMove);
-        document.removeEventListener("mouseup", onUp);
+      trackDrag(e, onMove, () => {
         sec.classList.remove("resizing");
         clearGuides();
         interacting = false;
         saveLayout();
-      };
-      document.addEventListener("mousemove", onMove);
-      document.addEventListener("mouseup", onUp);
+      });
     }
 
     // ---- 본문 스크롤 동기화 (절 앵커 기반) ----
@@ -1769,8 +1826,12 @@
         }, 500);
       }, true);
 
-      // Mousedown: resize handles → resize, header → move, anywhere else → raise.
-      c.addEventListener("mousedown", (e) => {
+      // Press: resize handles → resize, header → move, anywhere else → raise.
+      // Mouse arrives as mousedown (desktop, unchanged); a finger as a touch
+      // pointerdown (Android) — its compat mousedown only comes after the tap.
+      c.addEventListener("mousedown", onPress);
+      c.addEventListener("pointerdown", (e) => { if (e.pointerType !== "mouse") onPress(e); });
+      function onPress(e) {
         const sec = e.target.closest(".mcard");
         if (!sec) return;
         const card = cardById(sec.dataset.id);
@@ -1782,13 +1843,14 @@
           return;
         }
         const hd = e.target.closest(".card-hd");
-        if (hd && !e.target.closest("[data-act], .hd-pill, .hd-mini")) {
+        // Phone: cards stay stacked (no free move); the header only raises.
+        if (hd && !IS_ANDROID && !e.target.closest("[data-act], .hd-pill, .hd-mini")) {
           e.preventDefault();
           startMove(card, sec, e);
           return;
         }
         bringToFront(card);
-      });
+      }
     }
 
     function refreshSearchPrimary() {

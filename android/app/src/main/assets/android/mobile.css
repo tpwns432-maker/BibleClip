@@ -41,6 +41,26 @@
 /* Drawers (클립보드 로그·장바구니·노트) stop above the menu bar. */
 .drawer { bottom: var(--bc-nav-h); max-width: 92vw; }
 
+/* ---- Things that do nothing on a phone ---- */
+#monitor-btn, #status-badge,          /* 클립보드 감시 — 글자 선택 메뉴로 대체 */
+#update-btn, #update-banner,          /* 업데이트는 새 APK 로 */
+#add-inter, #add-lex,                 /* 원어·사전 데이터가 안드로이드에 없다 */
+.rail #log-toggle,                    /* 감시 기록 */
+.rail #tour-help,                     /* 데스크톱 안내 투어 */
+#cart-popout,                         /* 새 창 */
+#db-add, #db-folder { display: none !important; }   /* 성경 파일 추가는 1단계(저장소 선택 창) */
+
+/* ---- Cards: up to two, stacked; drag the border between them ---- */
+/* Only the top/bottom edges resize (cards.js startSplitDrag). The browser must
+   not pan under the drag, or it cancels the gesture. */
+.rs { touch-action: none; }
+.rs-e, .rs-w, .rs-ne, .rs-nw, .rs-se, .rs-sw { display: none; }
+/* The border grip: mostly the upper card's bottom strip, plus a thin band on
+   the lower card's top so its header buttons (✕, 책·장) stay tappable. */
+.rs-s { left: 0; right: 0; height: 20px; }
+.rs-n { left: 0; right: 0; height: 8px; }
+.card-hd { cursor: default; }
+
 /* ---- Card header: ✕ first, so it never slides off a narrow card ---- */
 .card-hd .card-x {
   order: -1;

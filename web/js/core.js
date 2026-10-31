@@ -413,7 +413,11 @@ window.BC = window.BC || {};
   //  CardManager — modular multi-card workspace
   // ============================================================
 
-  const MAX_BIBLE = 4;
+  // Android app (android/app/src/main/assets/android/bridge.js marks itself):
+  // a phone screen holds at most two cards, 성경 본문 only — no original-
+  // language data ships on Android, so 원어/사전 cards would sit empty.
+  const IS_ANDROID = !!(window.pywebview && window.pywebview.platform === "android");
+  const MAX_BIBLE = IS_ANDROID ? 2 : 4;
   // 카드 타입 라벨. TYPE_LABEL은 ko 베이스(= i18n 폴백), typeLabel()은 렌더 시점의
   // 현재 언어 문자열을 돌려준다. card-title span은 data-i18n도 달아 언어 전환 시
   // apply() 재스윕으로 즉시 갱신된다(카드 재렌더 불필요).
