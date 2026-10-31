@@ -2,14 +2,23 @@ package com.bibleclip.app
 
 import android.content.ClipData
 import android.content.ClipboardManager
+import android.net.Uri
+import android.provider.OpenableColumns
 import android.util.Log
 import android.webkit.JavascriptInterface
 import android.webkit.WebView
+import com.bibleclip.app.core.ImportSource
 import com.bibleclip.app.core.Library
 import com.bibleclip.app.core.Output
 import org.json.JSONArray
 import org.json.JSONObject
+import java.util.concurrent.CountDownLatch
 import java.util.concurrent.Executors
+
+/** Opens the system file picker; [done] gets the picked files (empty = cancelled). */
+fun interface FilePicker {
+    fun pick(done: (List<Uri>) -> Unit)
+}
 
 /**
  * The Kotlin side of assets/android/bridge.js — same method names, arguments and
@@ -18,7 +27,7 @@ import java.util.concurrent.Executors
  * 0단계(시험 제작): reading, reference, copy and settings methods. Anything else
  * answers null (logged once) and the page degrades the way it does headless.
  */
-class Bridge(private val app: BibleClipApp, private val web: WebView) {
+class Bridge(private val app: BibleClipApp, private val web: WebView, private val picker: FilePicker) {
 
     private val worker = Executors.newSingleThreadExecutor()
     private val unknown = mutableSetOf<String>()
@@ -67,6 +76,8 @@ class Bridge(private val app: BibleClipApp, private val web: WebView) {
         "set_output_order" -> names(a.optJSONArray(0)).filter { it in lib.dbs }.distinct().let {
             save("output_order", JSONArray(it)); JSONArray(it)
         }
+        "add_bible_files" -> addBibleFiles()
+        "refresh_databases" -> JSONObject().put("added", JSONArray(app.scanBibles())).put("versions", versions())
         "note_position" -> {
             lib.settings["last_book_num"] = a.optInt(0)
             lib.settings["last_chapter"] = a.optInt(1)
@@ -149,6 +160,33 @@ class Bridge(private val app: BibleClipApp, private val web: WebView) {
         return ok(true).put("text", text).put("n_parts", nParts)
             .put("short_name", lib.displayBookName(book, order) ?: lib.engine.canon(book)?.short)
     }
+
+    /** [＋ 성경 파일 추가…]: system picker → checked copy into bible_versions → loaded.
+     *  Same reply as the desktop's add_bible_files, so web/ handles it unchanged. */
+    private fun addBibleFiles(): JSONObject {
+        val picked = CountDownLatch(1)
+        var uris: List<Uri> = emptyList()
+        web.post { picker.pick { uris = it; picked.countDown() } }
+        picked.await()   // this bridge worker waits while the picker is up
+        if (uris.isEmpty()) return ok(false).put("error", "cancelled")
+        val sources = uris.map { u ->
+            ImportSource(displayName(u)) {
+                app.contentResolver.openInputStream(u) ?: throw java.io.IOException("cannot open $u")
+            }
+        }
+        val (added, errors) = app.importBibles(sources)
+        return ok(true)
+            .put("added", JSONArray(added.map { n ->
+                JSONObject().put("name", n).put("display", lib.dbs[n]?.displayName ?: n)
+            }))
+            .put("errors", JSONArray(errors.map { JSONObject().put("file", it.file).put("code", it.code) }))
+            .put("versions", versions())
+    }
+
+    private fun displayName(u: Uri): String =
+        app.contentResolver.query(u, arrayOf(OpenableColumns.DISPLAY_NAME), null, null, null)?.use { c ->
+            if (c.moveToFirst()) c.getString(0) else null
+        } ?: u.lastPathSegment?.substringAfterLast('/') ?: "file"
 
     private fun locale(lang: String): JSONObject {
         if (!Regex("[a-z]{2,3}(?:-[A-Za-z]{2,4})?").matches(lang)) return JSONObject()
