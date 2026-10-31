@@ -336,7 +336,9 @@
       const c = container();
       if (!c) return;
       if (!cards.length) {
-        c.innerHTML = `<div class="panels-empty" data-i18n-html="card.empty">카드가 없습니다.<br>우측 상단의 <b>＋ 본문 · ＋ 원어 · ＋ 사전</b> 버튼으로 카드를 추가하세요.</div>`;
+        c.innerHTML = IS_ANDROID   // 폰엔 원어·사전 카드가 없고 버튼은 위에 있다
+          ? `<div class="panels-empty" data-i18n-html="card.emptyPhone">카드가 없습니다.<br>위의 <b>＋ 본문</b> 버튼으로 카드를 추가하세요.</div>`
+          : `<div class="panels-empty" data-i18n-html="card.empty">카드가 없습니다.<br>우측 상단의 <b>＋ 본문 · ＋ 원어 · ＋ 사전</b> 버튼으로 카드를 추가하세요.</div>`;
         if (window.I18N) I18N.apply(c);
         return;
       }
@@ -797,7 +799,10 @@
         y: Math.min((100 - h) / 2 + off, 100 - h),
         w, h, z: ++zTop,
       };
-      if (IS_ANDROID && cards.length === 1) {
+      if (IS_ANDROID && cards.length === 0) {
+        // Phone: the first card fills the screen (not the desktop's centered tile).
+        Object.assign(geom, { x: 0, y: 0, w: 100, h: 100 });
+      } else if (IS_ANDROID && cards.length === 1) {
         // Phone: split the screen — the existing card takes the top half.
         Object.assign(cards[0], { x: 0, y: 0, w: 100, h: 50 });
         applyGeom(cards[0]);
