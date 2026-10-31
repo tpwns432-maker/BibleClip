@@ -25,6 +25,11 @@
 | 4. 노트·형광펜 | 데스크톱과 같은 JSON, 파일 내보내기/가져오기 | 데스크톱 파일이 폰에서 열림 |
 | 5. 테스터 배포 | CI(`android-v*` 태그)로 서명된 APK → Release | 테스터 피드백 반영 |
 
+## 배포(개인 APK)
+- 서명 키는 저장소 밖에 둔다. GitHub secrets `ANDROID_KEYSTORE_B64`·`ANDROID_KEYSTORE_PASSWORD`·`ANDROID_KEY_ALIAS`·`ANDROID_KEY_PASSWORD`에 넣어 CI가 서명한다. **키를 잃으면 업데이트가 안 된다** — 사용자가 앱을 지우고 다시 깔아야 하고, 그때 노트·형광펜이 지워진다. 키 파일과 비밀번호는 따로 백업한다.
+- 새 버전: `build.gradle.kts`의 `versionName`·`versionCode`(1.2.1 → 10201)를 올리고 병합 → `android-v<versionName>` 태그 push → CI가 APK를 Release에 붙인다.
+- 안드로이드 Release는 "Latest"로 두지 않는다. 데스크톱 업데이트 확인이 `releases/latest`를 보기 때문이다.
+
 ## 두 벌의 로직을 맞추는 법 — 골든 테스트
 `tests/make_golden.py`가 Python 엔진으로 `tests/golden/*.json`(입력 → 기대 출력)을 만든다.
 - Python: `tests/test_golden.py`가 JSON이 현재 엔진 출력과 같은지 확인한다(엔진을 고치고 JSON을 안 다시 뽑으면 실패).
