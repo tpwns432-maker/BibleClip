@@ -618,7 +618,8 @@
     }
 
     // targets: selectionRanges() 결과 (또는 기존 하이라이트 하나).
-    function openHlPalette(card, targets, rect) {
+    // `below`: 폰은 선택 위에 안드로이드 기본 메뉴(복사·공유)가 뜨므로 아래가 기본.
+    function openHlPalette(card, targets, rect, below = false) {
       closeHlPalette();
       const p = document.createElement("div");
       p.className = "hl-pal";
@@ -636,15 +637,30 @@
       p.style.left = Math.max(6, Math.min(rect.left + rect.width / 2 - r.width / 2,
         window.innerWidth - r.width - 6)) + "px";
       const above = rect.top - r.height - 8;           // 선택 위가 기본, 좁으면 아래
-      p.style.top = (above > 6 ? above : rect.bottom + 8) + "px";
-      p.addEventListener("mousedown", (e) => {
+      // 폰: 선택 아래로 늘어지는 핸들(물방울)을 피해 그만큼 더 내린다.
+      const under = rect.bottom + (below ? 34 : 8);
+      p.style.top = (below
+        ? (under + r.height < window.innerHeight - 6 ? under : Math.max(6, above))
+        : (above > 6 ? above : under)) + "px";
+      const pick = (e) => {
         const b = e.target.closest(".hl-sw");
-        if (!b) return;
+        if (!b || hlPop !== p) return;
         e.preventDefault();
         e.stopPropagation();                            // 바깥클릭 닫힘 핸들러 차단
         applyHl(card, targets, b.classList.contains("hl-del") ? null : b.dataset.c);
         closeHlPalette();
-      });
+        if (IS_ANDROID) {
+          try { window.getSelection().removeAllRanges(); } catch (_) {}
+          // 이 탭의 click 은 팔레트가 사라진 뒤 아래 절에 떨어져 절 메뉴를 연다 — 삼킨다.
+          const eat = (ev) => { ev.stopPropagation(); ev.preventDefault(); };
+          document.addEventListener("click", eat, true);
+          setTimeout(() => document.removeEventListener("click", eat, true), 500);
+        }
+      };
+      p.addEventListener("mousedown", pick);
+      // 손가락: 선택이 걸린 채 누르면 브라우저가 탭을 선택 해제에 쓰고 mousedown 을
+      // 안 보낼 수 있다 — pointerdown 으로 바로 받는다(한 번만: 고른 뒤 팔레트는 닫힘).
+      p.addEventListener("pointerdown", (e) => { if (e.pointerType !== "mouse") pick(e); });
       hlPop = p;
     }
 
@@ -684,11 +700,12 @@
 
     // 한 절 안에서 특정 역본의 텍스트 래퍼. 역본명에 CSS 셀렉터 특수문자가 있어도
     // 안전하도록 속성 셀렉터 대신 순회로 찾는다.
+    // 폰 위아래 창은 같은 절이 역본 창마다 따로 있으므로 그 절의 .v 를 전부 본다.
     function vtxFor(body, n, ver) {
-      const vEl = body.querySelector('.v[data-v="' + n + '"]');
-      if (!vEl) return null;
-      for (const tx of vEl.querySelectorAll(".vtx[data-ver]")) {
-        if (tx.dataset.ver === ver) return tx;
+      for (const vEl of body.querySelectorAll('.v[data-v="' + n + '"]')) {
+        for (const tx of vEl.querySelectorAll(".vtx[data-ver]")) {
+          if (tx.dataset.ver === ver) return tx;
+        }
       }
       return null;
     }
@@ -1759,12 +1776,15 @@
           // 덮인다. 의도적 제스처인 드래그 복사와 우클릭 메뉴 복사는 그대로 남는다.
           if (document.fullscreenElement) return;
           const card = cardById(v.closest(".mcard").dataset.id);
-          if (card) copyVersesFromCard(card, [+v.dataset.v]);
+          // 폰: 길게 누르기는 글자 선택이 가져갔으므로 탭이 절 메뉴(복사·노트·장바구니)를 연다.
+          if (card && IS_ANDROID) showVerseMenu(card, +v.dataset.v, e.clientX, e.clientY);
+          else if (card) copyVersesFromCard(card, [+v.dataset.v]);
         }
       });
 
       // Drag-select across verses → copy the intersected range.
       c.addEventListener("mouseup", (e) => {
+        if (IS_ANDROID) return;   // 폰은 아래 selectionchange 경로
         const sel = window.getSelection();
         if (!sel || sel.isCollapsed || !sel.rangeCount || !sel.toString().trim()) return;
         const sec = e.target.closest('.mcard[data-type="bible"]');
@@ -1784,6 +1804,33 @@
         if (targets.length) openHlPalette(card, targets, rect);
       });
 
+      // 폰: 손가락 선택은 핸들로 늘리고 줄이므로 mouseup 이 없다. 선택이 멈추면
+      // (selectionchange 가 잠잠해지면) 형광펜 팔레트를 띄운다. 복사는 하지 않는다 —
+      // 안드로이드 기본 메뉴에 복사가 있고, 선택할 때마다 클립보드를 덮으면 거슬린다.
+      if (IS_ANDROID) {
+        let selTimer = null;
+        let shown = "";
+        document.addEventListener("selectionchange", () => {
+          clearTimeout(selTimer);
+          selTimer = setTimeout(() => {
+            const sel = window.getSelection();
+            if (!sel || sel.isCollapsed || !sel.rangeCount || !sel.toString().trim()) { shown = ""; return; }
+            const range = sel.getRangeAt(0);
+            const node = range.commonAncestorContainer;
+            const host = node.nodeType === 1 ? node : node.parentElement;
+            const sec = host && host.closest('.mcard[data-type="bible"]');
+            const card = sec && cardById(sec.dataset.id);
+            if (!card) return;
+            const key = sec.dataset.id + "|" + sel.toString();
+            if (key === shown && hlPop) return;
+            const targets = selectionRanges(sec, range);
+            if (!targets.length) return;
+            shown = key;
+            openHlPalette(card, targets, range.getBoundingClientRect(), true);
+          }, 450);
+        });
+      }
+
       // Right-click an original-language word / cross-ref → independent window.
       c.addEventListener("contextmenu", (e) => {
         const t = e.target.closest("[data-code]");
@@ -1802,7 +1849,9 @@
         }
         // Right-click a bible verse → context menu (복사 / 묵상 노트 / 원어, Phase 3)
         const vEl = e.target.closest('.mcard[data-type="bible"] .v[data-v]');
-        if (vEl) {
+        // 폰의 길게 누르기도 contextmenu 로 온다 — 그건 글자 선택(형광펜)에 양보한다.
+        // 절 메뉴는 폰에선 절 탭으로 연다(아래 click).
+        if (vEl && !IS_ANDROID) {
           const card = cardById(vEl.closest(".mcard").dataset.id);
           if (card) { e.preventDefault(); showVerseMenu(card, +vEl.dataset.v, e.clientX, e.clientY); }
         }
