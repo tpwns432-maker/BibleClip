@@ -1,0 +1,70 @@
+{
+ "clean_text": [
+  {
+   "in": "<n>[말씀이 육신이 되시다]</n> 태초에 말씀이 계시니라",
+   "out": "태초에 말씀이 계시니라"
+  },
+  {
+   "in": "<pb/>지존자여 십현금과",
+   "out": "지존자여 십현금과"
+  },
+  {
+   "in": "In the beginning<S>7225</S> God<S>430</S> created<S>1254</S>",
+   "out": "In the beginning God created"
+  },
+  {
+   "in": "<f>[a]</f>본문<f>각주</f> 끝",
+   "out": "본문 끝"
+  },
+  {
+   "in": "[말씀이 육신이 되시다] 태초에",
+   "out": "태초에"
+  },
+  {
+   "in": "  여러   칸  띄움  ",
+   "out": "여러 칸 띄움"
+  },
+  {
+   "in": "<J>Jesus</J> wept.",
+   "out": "Jesus wept."
+  },
+  {
+   "in": "",
+   "out": ""
+  }
+ ],
+ "qwerty": [
+  {
+   "in": "dy",
+   "out": "요"
+  },
+  {
+   "in": "cks",
+   "out": "찬"
+  },
+  {
+   "in": "rh",
+   "out": "고"
+  },
+  {
+   "in": "tkatkd",
+   "out": "삼상"
+  },
+  {
+   "in": "dyrlq",
+   "out": "요깁"
+  },
+  {
+   "in": "Dy",
+   "out": null
+  },
+  {
+   "in": "dy1",
+   "out": null
+  },
+  {
+   "in": "",
+   "out": ""
+  }
+ ]
+}

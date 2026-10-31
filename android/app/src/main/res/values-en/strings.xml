@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="process_text_label">BibleClip verse</string>
+    <string name="toast_copied">%1$s — copied</string>
+    <string name="toast_no_reference">No Bible reference found</string>
+    <string name="toast_keyword">Search keywords in the app</string>
+</resources>

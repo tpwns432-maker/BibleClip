@@ -99,6 +99,7 @@ BibleClip Project/
 ├─ bible_versions/                 # 성경 SQLite DB 드롭 폴더(KRV.SQLite3 등)
 ├─ original_lang/                  # 원어 데이터(HebGrkEn.dct, 개역한글S.sdb)
 ├─ tests/                          # test_core / test_webui_api / test_installer / test_killswitch
+├─ android/                        # ★ 안드로이드 앱(Kotlin + WebView로 web/ 재사용) — §11, docs/ANDROID_PLAN.md
 ├─ killswitch.json                 # 킬스위치 매니페스트(recommend_version 등)
 ├─ version_changes.json            # 버전별 패치노트 데이터
 └─ packaging/                      # build_web.ps1, build_mac.sh
@@ -434,3 +435,27 @@ BibleClip Project/
 - `test_versebreak.js` — 자동 줄바꿈 엔진(**node**, 12개 절: 등급 판정/절 경계/기준 사례(마 18:19-20 = 사람이 만든 슬라이드와 줄 단위 일치)/나열문 구제/**문장 경계 강제 + 오탐 목록**/자동 분할(절 누락·중복 없음, 무한 재귀 방지))
 - `test_quickjump_parse.js` — F2 상대 참조 파서(**node**, 33건: 절/범위/장:절/장, 전각 문자, 역순 입력, **건드리면 안 되는 입력 14종이 `null` 로 빠지는지**)
 - `test_highlight_ranges.js` — 형광펜 구간 대수(**node**, `node tests/test_highlight_ranges.js`). cards.js 소스에서 `hlColor`/`hlMark`/`hlTextHTML`/`normRanges`/`mergeRange`/`subtractRange` 정의를 **이름으로 잘라 eval** — 로직 복사본을 만들지 않아 갈라지지 않는다. 함수명을 바꾸면 이 테스트가 먼저 실패한다
+- `make_golden.py` / `test_golden.py` / `golden/*.json` — **데스크톱↔안드로이드 골든 벡터**. Python 엔진으로 참조 파싱(별칭 유무)·`clean_text`·두벌식 변환·`build_output`(설정 28종)의 입력→기대출력을 뽑고, 안드로이드 JUnit(`android/app/src/test/.../GoldenTest.kt`)이 같은 JSON과 비교한다. KRV·KJV+(git 추적 역본)만 쓴다. `test_golden.py` 는 JSON이 현재 엔진과 다르면 실패 — **엔진을 고치면 `python -X utf8 tests/make_golden.py` 재실행 → Kotlin이 깨지면 같은 수정 이식**. 같은 스크립트가 Kotlin 런타임 표(`android/app/src/main/assets/core/tables.json` = constants.py 책이름·자판맵 + DEFAULT_SETTINGS)도 생성
+
+---
+
+## 11. 안드로이드 (`android/`, 0단계 시험 제작)
+
+Kotlin 앱이 `web/` 을 WebView로 띄우고, pywebview `js_api` 와 **같은 메서드 이름**의 브리지를 Kotlin이 제공한다(웹 코드 무수정). 핵심 로직은 Kotlin 이식 — 화면 없이 도는 글자 선택 변환이 빨라야 해서. 계획·결정: `docs/ANDROID_PLAN.md`.
+
+- `app/build.gradle.kts` — minSdk 26. `repoAssets` 태스크가 저장소의 `web/`(Pretendard otf/ttf 제외)와 `bible_versions/KRV·KJV+` 를 빌드 때 assets 로 복사. release 서명은 `BIBLECLIP_KEYSTORE*` 환경변수(CI 시크릿), 없으면 debug 키
+- `core/` (순수 Kotlin, 기기 의존 없음 — JVM 테스트 가능)
+  - `Tables.kt` — tables.json 로더(책이름 맵·두벌식·DEFAULT_SETTINGS). **손으로 고치지 말 것**(make_golden.py 생성물)
+  - `TextUtils.kt` — `text_utils.py`(한글 조합·`clean_text`). `rx()` = Python 식 유니코드 `\d\s\w`
+  - `Engine.kt` — `engine.py` 이식(패턴 4종, 별칭, 두벌식 폴백)
+  - `Formatter.kt` — `formatter.py` 이식(템플릿·병렬 FEAT-05 포함)
+  - `BibleDb.kt` — MyBible 읽기 API. SQL은 여기, 하위 클래스는 쿼리 실행만(안드로이드 `AndroidBibleDb` / 테스트 JDBC)
+  - `Settings.kt` — 데스크톱과 같은 설정 JSON + Python 식 truthiness
+  - `Library.kt` — 별칭 맵·`validateSettings`(load_settings 검증)·`buildOutput`·`formatReference`
+- `BibleClipApp.kt` — Library 1개 보유. filesDir 에 `bible_versions/`(동봉 역본은 설치·업데이트 때 복사, 사용자 역본 보존)·`bibleclip_settings.json`
+- `MainActivity.kt` — WebView, `https://appassets.androidplatform.net/assets/web/index.html`. index.html 응답에 `assets/android/bridge.js` 를 첫 `<script>` 앞에 끼워 넣는다
+- `assets/android/bridge.js` — `window.pywebview.api` Proxy → `BibleClipNative.call(method, argsJson, id)` → `window.__bibleclipReply`
+- `Bridge.kt` — 0단계 구현: get_initial/get_books/get_chapters/get_chapter/resolve_reference/copy_reference/copy_text/get_locale/get_settings/get_preview/get_app_settings/set_setting/set_app_setting/save_cards_layout/set_dark_mode/set_font_size/set_viewer_versions/set_viewer_order/set_output_order/note_position. 나머지는 null(로그 1회)
+- `ProcessTextActivity.kt` — 글자 선택 메뉴(`ACTION_PROCESS_TEXT`) "BibleClip 구절": 편집 칸이면 선택한 참조를 본문으로 치환, 읽기 전용이면 클립보드 복사 + 토스트. 화면 없음(Translucent)
+- CI `.github/workflows/android.yml` — `android-v*` 태그 / 수동. 골든 최신 확인 → JUnit → 서명 APK → Release 첨부(태그는 릴리스 키 필수)
+- ⚠️ **로컬 빌드는 한글 경로에서 깨진다**(AGP 경로 검사, JUnit ClassNotFound). `subst B: "<프로젝트 폴더>"` 후 `B:\android` 에서 `gradlew` 실행(JAVA_HOME=C:\tools\jdk-21)
