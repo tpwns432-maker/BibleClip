@@ -92,7 +92,7 @@
 .rail #log-toggle,                    /* 감시 기록 */
 .rail #tour-help,                     /* 데스크톱 안내 투어 */
 #cart-popout,                         /* 새 창 */
-#db-add, #db-folder { display: none !important; }   /* 성경 파일 추가는 1단계(저장소 선택 창) */
+#db-folder, #db-refresh { display: none !important; }   /* 앱 폴더는 사용자가 못 연다 — [＋ 성경 파일 추가…]만 */
 
 /* ---- Cards: up to two, stacked; drag the border between them ---- */
 /* Only the top/bottom edges resize (cards.js startSplitDrag). The browser must

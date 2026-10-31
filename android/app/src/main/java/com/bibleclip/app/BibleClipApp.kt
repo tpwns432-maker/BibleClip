@@ -2,6 +2,10 @@ package com.bibleclip.app
 
 import android.app.Application
 import android.util.Log
+import com.bibleclip.app.core.BibleDb
+import com.bibleclip.app.core.BibleImporter
+import com.bibleclip.app.core.ImportError
+import com.bibleclip.app.core.ImportSource
 import com.bibleclip.app.core.Library
 import com.bibleclip.app.core.Settings
 import com.bibleclip.app.core.Tables
@@ -33,19 +37,38 @@ class BibleClipApp : Application() {
         // An existing settings file without tour_done = someone already using the app.
         if (saved != null && !saved.has("tour_done")) settings["tour_done"] = true
         val lib = Library(tables, settings) { readJson(aliasFile) ?: JSONObject() }
+        scanBibles(lib)
+        lib.validateSettings()
+        Log.i(TAG, "library: ${lib.dbs.keys} in ${(System.nanoTime() - t0) / 1_000_000} ms")
+        return lib
+    }
+
+    /** Load every bible file in bibleDir not loaded yet; returns the new names. */
+    @Synchronized
+    fun scanBibles(lib: Library = library): List<String> {
+        val added = mutableListOf<String>()
         bibleDir.listFiles()
             ?.filter { it.name.lowercase().run { endsWith(".sqlite3") || endsWith(".sqlite") || endsWith(".db") } }
             ?.sortedBy { it.name }
             ?.forEach { f ->
+                if (BibleDb.nameOf(f.name) in lib.dbs) return@forEach
                 try {
-                    lib.add(AndroidBibleDb(f, lib.text))
+                    if (lib.add(AndroidBibleDb(f, lib.text))) added += BibleDb.nameOf(f.name)
                 } catch (e: Exception) {
                     Log.w(TAG, "skip ${f.name}: $e")
                 }
             }
-        lib.validateSettings()
-        Log.i(TAG, "library: ${lib.dbs.keys} in ${(System.nanoTime() - t0) / 1_000_000} ms")
-        return lib
+        return added
+    }
+
+    /** [＋ 성경 파일 추가…]: copy the picked files (checked like the desktop's) into
+     *  bibleDir and load them. Returns (names loaded, files refused). */
+    @Synchronized
+    fun importBibles(sources: List<ImportSource>): Pair<List<String>, List<ImportError>> {
+        val lib = library
+        val importer = BibleImporter(bibleDir, cacheDir) { AndroidBibleDb(it, lib.text) }
+        val (_, errors) = importer.import(sources, lib.dbs.keys)
+        return scanBibles(lib) to errors
     }
 
     /** Copy the bundled bibles out of the APK (SQLite needs a real file) — on first
