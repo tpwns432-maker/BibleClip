@@ -26,6 +26,13 @@ def main():
     book_num, short, long_, chapter, verses = refs[0]
     assert book_num == 10 and chapter == 1 and verses == [1], refs[0]
     print(f"parse_reference('창 1:1') -> {refs[0]}")
+    # English-path fallback: an unknown word before a number is "no reference",
+    # not an AttributeError (v1.0.7 renamed the lookup and left this call behind).
+    from bibleclip.core.engine import Engine
+    assert Engine.parse_reference('Room 3:30') == []
+    assert lib.parse_reference('Foo 3:16') == []
+    assert lib.build_output('Meeting at Room 3:30') is None
+    assert Engine.parse_reference('Gen 1:1')[0][0] == 10   # no alias map → static English map
 
     # 2) chapter fetch (prefer KRV, else first loaded version)
     version = 'KRV' if 'KRV' in lib.dbs else sorted(lib.dbs)[0]
