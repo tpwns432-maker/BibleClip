@@ -51,6 +51,34 @@
   border-left: 0; border-right: 0;
   box-shadow: none;
 }
+/* Top control row stays ONE line however many versions are on: the version
+   chips scroll sideways in the space left; ＋ · ＋ 본문 · A− · A+ hold their spot.
+   (Wrapping made the row grow and shoved the cards down on every add.) */
+.controls, .viewer-controls { flex-wrap: nowrap; min-width: 0; }
+.viewer-controls { gap: 6px; }
+.viewer-controls > * { flex: 0 0 auto; }
+.viewer-controls > .ver-chips {
+  flex: 1 1 auto; min-width: 0;
+  flex-wrap: nowrap; overflow-x: auto; overflow-y: hidden;
+  scrollbar-width: none;
+}
+.ver-chips::-webkit-scrollbar { display: none; }
+/* More chips past an edge → that edge fades out (mobile.js sets fade-l/fade-r). */
+.ver-chips.fade-r {
+  -webkit-mask-image: linear-gradient(to right, #000 calc(100% - 32px), transparent);
+          mask-image: linear-gradient(to right, #000 calc(100% - 32px), transparent);
+}
+.ver-chips.fade-l {
+  -webkit-mask-image: linear-gradient(to right, transparent, #000 32px);
+          mask-image: linear-gradient(to right, transparent, #000 32px);
+}
+.ver-chips.fade-l.fade-r {
+  -webkit-mask-image: linear-gradient(to right, transparent, #000 32px, #000 calc(100% - 32px), transparent);
+          mask-image: linear-gradient(to right, transparent, #000 32px, #000 calc(100% - 32px), transparent);
+}
+.ver-chips .pill { flex: 0 0 auto; white-space: nowrap; }
+.viewer-controls .spacer, .controls .vsep { display: none; }
+
 /* Empty workspace hint: one centered paragraph (as flex, its text and <b> split
    into side-by-side columns on a narrow screen). */
 .panels-empty { display: block; height: 100%; padding: 28vh 24px 0; }
