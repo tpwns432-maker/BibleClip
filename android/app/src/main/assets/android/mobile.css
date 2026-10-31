@@ -29,6 +29,7 @@
 .rail .nav-icon {
   /* 4.4 per screen: the half-visible fifth button says "there's more, swipe". */
   flex: 0 0 calc((100vw - 12px) / 4.4);
+  max-width: 96px;          /* landscape: more buttons fit instead of a few huge ones */
   height: 52px;
   border-radius: 12px;
   scroll-snap-align: start;
@@ -40,6 +41,18 @@
 
 /* Drawers (클립보드 로그·장바구니·노트) stop above the menu bar. */
 .drawer { bottom: var(--bc-nav-h); max-width: 92vw; }
+
+/* ---- Use the whole screen: no title bar, cards edge to edge ---- */
+.topbar { display: none; }               /* BibleClip · 버전 */
+.controls { padding: 8px 10px 6px; gap: 6px; }
+.viewer-view { padding: 0; }
+.mcard {
+  border-radius: 0;
+  border-left: 0; border-right: 0;
+  box-shadow: none;
+}
+/* The desktop focus ring would draw a box around the whole screen. */
+.mcard.active { border-color: var(--card-border); box-shadow: none; }
 
 /* ---- Things that do nothing on a phone ---- */
 #monitor-btn, #status-badge,          /* 클립보드 감시 — 글자 선택 메뉴로 대체 */
