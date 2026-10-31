@@ -409,11 +409,12 @@
       if (b2) {
         // 'split'(병렬 독서)은 역본 2개 이상일 때만 의미 — 좌우 컬럼으로 분할한다.
         // 그 외(절별 대조 / 단일 역본)는 기존 세로 교차 렌더.
-        // 폰(안드로이드)은 좌우 칸 대신 위아래 창(renderSplitPanesInto).
+        // 폰(안드로이드) 세로 화면은 좌우 칸 대신 위아래 창(renderSplitPanesInto).
         const split = state.viewMode === "split" && viewerVers.length > 1;
-        b2.classList.toggle("split-cols", split && !IS_ANDROID);
-        b2.classList.toggle("split-panes", split && IS_ANDROID);
-        if (split && IS_ANDROID) renderSplitPanesInto(b2, viewerVers, chapDataArr, highlight);
+        const panes = split && phonePanes();
+        b2.classList.toggle("split-cols", split && !panes);
+        b2.classList.toggle("split-panes", panes);
+        if (panes) renderSplitPanesInto(b2, viewerVers, chapDataArr, highlight);
         else if (split) renderSplitVersesInto(b2, viewerVers, chapDataArr, highlight);
         else renderMultiVersesInto(b2, viewerVers, chapDataArr, highlight);
       }
@@ -1713,6 +1714,16 @@
       const c = container();
       if (!c) return;
 
+      // 폰을 돌리면 병렬 독서 배치를 바꾼다(세로 = 위아래 창, 가로 = 좌우 칸).
+      // 읽던 절은 그대로 — 바꾸기 전 앵커를 잡아 두었다가 다시 맞춘다.
+      if (IS_ANDROID && PORTRAIT) {
+        PORTRAIT.addEventListener("change", () => {
+          if (state.viewMode !== "split") return;
+          const anchors = snapshotAnchors();
+          reloadAllBible().then(() => realignAnchors(anchors));
+        });
+      }
+
       // Click: strong-code lookup, header actions, or verse copy.
       c.addEventListener("click", (e) => {
         const codeEl = e.target.closest("[data-code]");
@@ -2045,7 +2056,7 @@
       return;
     }
     const head = `<div class="srow shead">` +
-      versions.map((ver) => `<div class="scell">${esc(displayName(ver))}</div>`).join("") +
+      versions.map((ver) => `<div class="scell">${esc(IS_ANDROID ? ver : displayName(ver))}</div>`).join("") +
       `</div>`;
     const rows = [...nums].sort((a, b) => a - b).map((n) =>
       `<div class="v srow${hl.has(n) ? " hl" : ""}" data-v="${n}">` +
@@ -2064,6 +2075,10 @@
   // 병렬 독서 — 폰(안드로이드): 역본마다 가로로 넓은 창을 위아래로 쌓는다. 좌우 칸은
   // 폰 폭에서 몇 글자씩 끊겨 읽기 어렵다. 창(.spane-body)마다 따로 스크롤하고, 절 앵커
   // 싱크(syncFrom → scriptureScrollers)가 다른 창을 같은 절·같은 높이로 맞춘다.
+  // 위아래 창은 폰을 세로로 들었을 때만. 가로 화면은 폭이 넉넉해 좌우 칸이 낫다.
+  const PORTRAIT = window.matchMedia ? window.matchMedia("(orientation: portrait)") : null;
+  function phonePanes() { return IS_ANDROID && (!PORTRAIT || PORTRAIT.matches); }
+
   function renderSplitPanesInto(body, versions, chapDataArr, highlight) {
     const hl = new Set(highlight || []);
     const lists = versions.map((_, vi) => (chapDataArr[vi] && chapDataArr[vi].verses) || []);

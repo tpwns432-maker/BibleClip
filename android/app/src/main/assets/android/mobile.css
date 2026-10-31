@@ -63,6 +63,19 @@
   scrollbar-width: none;
 }
 .ver-chips::-webkit-scrollbar { display: none; }
+/* More chips past an edge → that edge fades out (mobile.js sets fade-l/fade-r). */
+.ver-chips.fade-r {
+  -webkit-mask-image: linear-gradient(to right, #000 calc(100% - 32px), transparent);
+          mask-image: linear-gradient(to right, #000 calc(100% - 32px), transparent);
+}
+.ver-chips.fade-l {
+  -webkit-mask-image: linear-gradient(to right, transparent, #000 32px);
+          mask-image: linear-gradient(to right, transparent, #000 32px);
+}
+.ver-chips.fade-l.fade-r {
+  -webkit-mask-image: linear-gradient(to right, transparent, #000 32px, #000 calc(100% - 32px), transparent);
+          mask-image: linear-gradient(to right, transparent, #000 32px, #000 calc(100% - 32px), transparent);
+}
 .ver-chips .pill { flex: 0 0 auto; white-space: nowrap; }
 .viewer-controls .spacer, .controls .vsep { display: none; }
 
