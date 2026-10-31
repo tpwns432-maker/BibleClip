@@ -27,6 +27,7 @@ from bibleclip.core.library import Library
 from bibleclip.data.bible_db import BibleDB
 from bibleclip import constants as C
 from bibleclip import korean, morph
+from bibleclip import cart as cart_mod, highlights as hl_mod, notes as notes_mod
 from bibleclip.webui.routes.bible import BibleRoutes
 from bibleclip.text_utils import clean_text, convert_qwerty_to_hangul
 
@@ -134,6 +135,110 @@ def search_case(dbs, q, ver, mode, expand):
     return {'in': {'q': q, 'version': ver, 'mode': mode, 'synonyms': expand}, 'out': out}
 
 
+# ---- 노트 · 형광펜 · 장바구니 (userdata stores) ----
+# The same op script runs here and in android/.../UserDataTest.kt; both record each
+# op's return value and the store's file afterwards. ts is pinned (NOW).
+NOW = '2026-10-31T12:00:00'
+
+NOTE_OPS = [
+    ['set', 500, 3, 16, '  첫 노트  '], ['get', 500, 3, 16], ['get', 500, 3, 99],
+    ['set', 500, 3, 17, '둘째'], ['set', 10, 1, 1, '창세기'], ['set', 500, 4, 1, '다음 장'],
+    ['for_chapter', 500, 3], ['all'],
+    ['set', 500, 3, 17, '   '], ['get', 500, 3, 17], ['delete', 10, 1, 1], ['delete', 1, 1, 1],
+    ['set', '500', '3', '18', '문자열 인자'], ['all'],
+]
+_MANY = [{'s': i * 2, 'e': i * 2 + 1} for i in range(70)]
+HL_OPS = [
+    ['set_verse', 500, 3, 16, 'KRV', [
+        {'s': 5, 'e': 2}, {'s': 0, 'e': 4, 'c': 'g', 't': '하나님이'},
+        {'s': 2, 'e': 6, 'c': 'x', 't': 'abc'}, {'s': -1, 'e': 3}, {'s': '7', 'e': 9.8},
+        {'s': 10, 'e': 12, 'ts': '2020-01-01T00:00:00', 't': 7}, 'junk', {'s': 3, 'e': 4},
+        {'e': 20}, {'s': 30, 'e': 31, 'c': 'p', 't': 'x' * 500},
+    ]],
+    ['get', 500, 3, 16, 'KRV'], ['get', 500, 3, 16, 'NONE'],
+    ['set_verse', 500, 3, 16, 'KJV+', [{'s': 0, 'e': 2, 'c': 'b'}]],
+    ['set_verse', 500, 3, 17, 'KRV', [{'s': 1, 'e': 2}]],
+    ['set_verse', 1, 1, 1, 'A:B', _MANY],
+    ['for_chapter', 500, 3, 'KRV'], ['for_chapter', 500, 3, 'KJV+'], ['for_chapter', 1, 1, 'A:B'],
+    ['all'],
+    ['set_verse', 500, 3, 17, 'KRV', []], ['clear_verse', 500, 3, 16, 'KJV+'], ['all'],
+]
+CART_OPS = [
+    ['replace', [
+        {'book_num': 500, 'chapter': 3, 'verses': [16, 17], 'short_name': '요'},
+        {'book': '10', 'chapter': '1', 'verses': ['1', 'x', 2.0]},
+        {'chapter': 1}, 'junk', {'book_num': None, 'book': 20, 'chapter': 2},
+        {'book_num': 230, 'chapter': 23, 'short_name': None},
+    ]],
+    ['all'], ['replace', []], ['all'],
+]
+LOADS = [   # (store, raw file text) → what the store holds after loading it
+    ('notes', '[1, 2]'), ('notes', '{"500:3:16": {"text": "a", "ts": "t"}}'), ('notes', 'not json'),
+    ('highlights', '{"500:3:16:KRV": [{"s": 0, "e": 1}], "bad": "x", "n": null}'),
+    ('cart', '{}'), ('cart', '[{"book_num": 1, "chapter": 2}, 5]'),
+]
+
+
+class _FixedNow:
+    @staticmethod
+    def now():
+        class _T:
+            def isoformat(self, timespec=None):
+                return NOW
+        return _T()
+
+
+def userdata_golden():
+    import tempfile
+    tmp = tempfile.mkdtemp(prefix='bibleclip_golden_')
+    files = {'notes': os.path.join(tmp, notes_mod.NOTES_FILE),
+             'highlights': os.path.join(tmp, hl_mod.HIGHLIGHTS_FILE),
+             'cart': os.path.join(tmp, cart_mod.CART_FILE)}
+    mods = {'notes': notes_mod, 'highlights': hl_mod, 'cart': cart_mod}
+    saved = {k: (m._path, getattr(m, 'datetime', None)) for k, m in mods.items()}
+    try:
+        for k, m in mods.items():
+            m._path = (lambda f: (lambda: f))(files[k])
+            if hasattr(m, 'datetime'):
+                m.datetime = _FixedNow
+
+        def run(store, ops):
+            results = []
+            for op in ops:
+                name, args = op[0], op[1:]
+                if name == 'for_chapter':          # route shape: int keys → JSON strings
+                    r = {str(k): v for k, v in getattr(store, name)(*args).items()}
+                else:
+                    r = getattr(store, name)(*args)
+                results.append(json.loads(json.dumps(r)))
+            return results
+
+        def final(k):
+            with open(files[k], encoding='utf-8') as f:
+                return json.load(f)
+
+        out = {'now': NOW}
+        out['notes'] = {'ops': NOTE_OPS, 'results': run(notes_mod.Notes(), NOTE_OPS), 'final': final('notes')}
+        out['highlights'] = {'ops': HL_OPS, 'results': run(hl_mod.Highlights(), HL_OPS),
+                             'final': final('highlights')}
+        out['cart'] = {'ops': CART_OPS, 'results': run(cart_mod.Cart(), CART_OPS), 'final': final('cart')}
+        loads = []
+        for k, raw in LOADS:
+            with open(files[k], 'w', encoding='utf-8') as f:
+                f.write(raw)
+            st = {'notes': notes_mod.Notes, 'highlights': hl_mod.Highlights, 'cart': cart_mod.Cart}[k]()
+            loads.append({'store': k, 'file': raw, 'loaded': st.items if k == 'cart' else st.data})
+        out['loads'] = loads
+        return out
+    finally:
+        for k, m in mods.items():
+            m._path = saved[k][0]
+            if saved[k][1] is not None:
+                m.datetime = saved[k][1]
+        import shutil
+        shutil.rmtree(tmp, ignore_errors=True)
+
+
 def load_dbs():
     return {v: BibleDB(os.path.join(ROOT, 'bible_versions', f'{v}.SQLite3')) for v in VERSIONS}
 
@@ -187,6 +292,7 @@ def build():
         golden('text.json'): {'clean_text': [{'in': t, 'out': clean_text(t)} for t in TEXTS],
                               'qwerty': [{'in': t, 'out': convert_qwerty_to_hangul(t)} for t in QWERTY]},
         golden('format.json'): {'cases': formats},
+        golden('userdata.json'): userdata_golden(),
         golden('search.json'): {
             'tokenize': [{'in': t, 'out': korean.tokenize(t)} for t in REFERENCES + TEXTS + [
                 '하나님의 사랑은', '「여호와는」, 나의 목자시니…', '그리고 또한 및', '으로서', '포도주를']],

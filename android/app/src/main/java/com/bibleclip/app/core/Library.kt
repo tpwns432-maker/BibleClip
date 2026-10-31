@@ -180,6 +180,26 @@ class Library(
         return Output.Reference(ref.book.num, ref.chapter, ref.verses, name, out, nParts)
     }
 
+    /**
+     * 장바구니 일괄 복사 (api.copy_references): each {book|book_num, chapter, verses}
+     * formatted like a single copy, blocks joined by a blank line, order kept.
+     * An item with a bad field is skipped whole. Returns (text, n_items).
+     */
+    fun copyReferences(items: JSONArray?, order: List<String>?): Pair<String, Int> {
+        val blocks = mutableListOf<String>()
+        for (i in 0 until (items?.length() ?: 0)) {
+            val it = items!!.opt(i) as? JSONObject ?: continue
+            val book = pyInt(if (it.has("book")) it.opt("book") else it.opt("book_num")) ?: continue
+            val chapter = pyInt(it.opt("chapter")) ?: continue
+            val raw = it.opt("verses") as? JSONArray
+            val verses = (0 until (raw?.length() ?: 0)).map { j -> pyInt(raw!!.opt(j)) }
+            if (verses.any { v -> v == null }) continue
+            val (text, _) = formatReference(book, chapter, verses.filterNotNull(), order)
+            if (text.isNotEmpty()) blocks += text
+        }
+        return blocks.joinToString("\n\n") to blocks.size
+    }
+
     /** Book label from the primary output version, honoring 정식/약칭. */
     fun displayBookName(bookNum: Int, order: List<String>? = null): String? {
         val o = order ?: settings.strings("output_order")
