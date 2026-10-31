@@ -112,7 +112,8 @@ class Bridge(private val app: BibleClipApp, private val web: WebView) {
             .put("search_synonyms", s.truthy("search_synonyms", true))
             .put("view_mode", if (s.str("view_mode", "") == "split") "split" else "interleave")
             .put("web_cards_layout", s["web_cards_layout"])
-            .put("tour_done", s.truthy("tour_done"))
+            // The first-run tour walks the desktop (monitoring, F-keys) — not on a phone yet.
+            .put("tour_done", true)
             .put("cart", JSONArray())
             .put("version", app.packageManager.getPackageInfo(app.packageName, 0).versionName)
     }

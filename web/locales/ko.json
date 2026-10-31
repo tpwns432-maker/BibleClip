@@ -180,6 +180,7 @@
   "card.linkNone": "연결 없음",
   "card.loading": "불러오는 중…",
   "card.empty": "카드가 없습니다.<br>우측 상단의 <b>＋ 본문 · ＋ 원어 · ＋ 사전</b> 버튼으로 카드를 추가하세요.",
+  "card.emptyPhone": "카드가 없습니다.<br>위의 <b>＋ 본문</b> 버튼으로 카드를 추가하세요.",
   "card.noLinkedBible": "연결된 성경 카드가 없습니다",
   "card.loadingCode": "[{code}] 불러오는 중…",
   "card.clickStrong": "원어 단어의 스트롱 번호를 클릭하세요",

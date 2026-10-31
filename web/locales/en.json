@@ -180,6 +180,7 @@
   "card.linkNone": "No link",
   "card.loading": "Loading…",
   "card.empty": "No cards.<br>Add one with the <b>＋ Text · ＋ Original · ＋ Lexicon</b> buttons at the top right.",
+  "card.emptyPhone": "No cards.<br>Add one with the <b>＋ Text</b> button above.",
   "card.noLinkedBible": "No linked scripture card",
   "card.loadingCode": "[{code}] Loading…",
   "card.clickStrong": "Click a Strong's number on an original-language word",
