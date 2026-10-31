@@ -1776,9 +1776,9 @@
           // 덮인다. 의도적 제스처인 드래그 복사와 우클릭 메뉴 복사는 그대로 남는다.
           if (document.fullscreenElement) return;
           const card = cardById(v.closest(".mcard").dataset.id);
-          // 폰: 길게 누르기는 글자 선택이 가져갔으므로 탭이 절 메뉴(복사·노트·장바구니)를 연다.
-          if (card && IS_ANDROID) showVerseMenu(card, +v.dataset.v, e.clientX, e.clientY);
-          else if (card) copyVersesFromCard(card, [+v.dataset.v]);
+          // 폰: 탭은 아무것도 하지 않는다 — 스크롤하다 닿는 탭마다 메뉴·복사가 튀면 거슬린다.
+          // 절 메뉴는 2초 길게 누르기(앱이 손가락을 지켜보다 BibleClipLongHold 를 부른다).
+          if (card && !IS_ANDROID) copyVersesFromCard(card, [+v.dataset.v]);
         }
       });
 
@@ -1831,6 +1831,22 @@
         });
       }
 
+      // 폰: 손가락을 2초 가만히 누르고 있으면 절 메뉴. 웹은 글자 선택이 시작되는 순간
+      // (~0.7초) 터치를 잃어 손을 뗐는지 모르므로, 손가락을 끝까지 보는 MainActivity 가
+      // 그 지점의 CSS 좌표로 부른다. 이미 시작된 글자 선택·팔레트는 접는다.
+      if (IS_ANDROID) {
+        window.BibleClipLongHold = (x, y) => {
+          const el = document.elementFromPoint(x, y);
+          const v = el && el.closest('.mcard[data-type="bible"] .v[data-v]');
+          const card = v && cardById(v.closest(".mcard").dataset.id);
+          if (!card) return false;
+          try { window.getSelection().removeAllRanges(); } catch (_) {}
+          closeHlPalette();
+          showVerseMenu(card, +v.dataset.v, x, y);
+          return true;
+        };
+      }
+
       // Right-click an original-language word / cross-ref → independent window.
       c.addEventListener("contextmenu", (e) => {
         const t = e.target.closest("[data-code]");
@@ -1850,7 +1866,7 @@
         // Right-click a bible verse → context menu (복사 / 묵상 노트 / 원어, Phase 3)
         const vEl = e.target.closest('.mcard[data-type="bible"] .v[data-v]');
         // 폰의 길게 누르기도 contextmenu 로 온다 — 그건 글자 선택(형광펜)에 양보한다.
-        // 절 메뉴는 폰에선 절 탭으로 연다(아래 click).
+        // 절 메뉴는 폰에선 2초 길게 누르기(BibleClipLongHold).
         if (vEl && !IS_ANDROID) {
           const card = cardById(vEl.closest(".mcard").dataset.id);
           if (card) { e.preventDefault(); showVerseMenu(card, +vEl.dataset.v, e.clientX, e.clientY); }

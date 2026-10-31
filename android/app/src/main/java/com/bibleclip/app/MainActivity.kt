@@ -7,6 +7,11 @@ import android.content.Intent
 import android.content.pm.ApplicationInfo
 import android.net.Uri
 import android.os.Bundle
+import android.os.Handler
+import android.os.Looper
+import android.view.HapticFeedbackConstants
+import android.view.MotionEvent
+import android.view.ViewConfiguration
 import android.webkit.WebResourceRequest
 import android.webkit.WebResourceResponse
 import android.webkit.WebView
@@ -77,6 +82,44 @@ class MainActivity : Activity() {
         return if (at >= 0) html.substring(0, at) + tag + html.substring(at) else html + tag
     }
 
+    // ---- 2초 길게 누르기 → 절 메뉴 ----
+    // The page loses the touch the moment text selection starts (~0.7s), so it can't
+    // tell a 2-second hold from a normal long-press. The activity sees every
+    // MotionEvent to the end: a finger held still for HOLD_MS asks the page
+    // (BibleClipLongHold, cards.js) to open that verse's menu.
+    private val holdHandler = Handler(Looper.getMainLooper())
+    private var downX = 0f
+    private var downY = 0f
+    private val slop by lazy { ViewConfiguration.get(this).scaledTouchSlop * 2f }
+    private val hold = Runnable {
+        val loc = IntArray(2)
+        web.getLocationOnScreen(loc)
+        val d = resources.displayMetrics.density
+        val x = (downX - loc[0]) / d
+        val y = (downY - loc[1]) / d
+        web.evaluateJavascript("window.BibleClipLongHold && window.BibleClipLongHold($x, $y)") { opened ->
+            if (opened == "true") web.performHapticFeedback(HapticFeedbackConstants.LONG_PRESS)
+        }
+    }
+
+    override fun dispatchTouchEvent(ev: MotionEvent): Boolean {
+        when (ev.actionMasked) {
+            MotionEvent.ACTION_DOWN -> {
+                downX = ev.rawX
+                downY = ev.rawY
+                holdHandler.removeCallbacks(hold)
+                holdHandler.postDelayed(hold, HOLD_MS)
+            }
+            MotionEvent.ACTION_MOVE ->
+                if (Math.hypot((ev.rawX - downX).toDouble(), (ev.rawY - downY).toDouble()) > slop) {
+                    holdHandler.removeCallbacks(hold)
+                }
+            MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL, MotionEvent.ACTION_POINTER_DOWN ->
+                holdHandler.removeCallbacks(hold)
+        }
+        return super.dispatchTouchEvent(ev)
+    }
+
     private var pickDone: ((List<Uri>) -> Unit)? = null
 
     /** System file picker for [＋ 성경 파일 추가…] — any type: .SQLite3 has no MIME
@@ -130,6 +173,7 @@ class MainActivity : Activity() {
     companion object {
         private const val INDEX = "web/index.html"
         private const val REQ_PICK_BIBLES = 41
+        private const val HOLD_MS = 2000L
         private val START_URL = Uri.Builder().scheme("https").authority(WebViewAssetLoader.DEFAULT_DOMAIN)
             .path("/assets/$INDEX").build().toString()
     }
