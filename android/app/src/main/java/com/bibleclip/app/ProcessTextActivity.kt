@@ -4,8 +4,10 @@ import android.app.Activity
 import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Intent
+import android.os.Build
 import android.os.Bundle
 import android.widget.Toast
+import com.bibleclip.app.core.Formatter
 import com.bibleclip.app.core.Output
 import java.util.concurrent.Executors
 
@@ -38,7 +40,13 @@ class ProcessTextActivity : Activity() {
                 if (readOnly) {
                     val cm = getSystemService(ClipboardManager::class.java)
                     cm.setPrimaryClip(ClipData.newPlainText("BibleClip", result.text))
-                    toast(getString(R.string.toast_copied, result.shortName, result.chapter))
+                    // Android 13+ shows its own "copied" confirmation — don't stack a second one.
+                    if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU) {
+                        val vs = Formatter.formatVerseList(result.verses)
+                        val label = if (vs.isEmpty()) "${result.shortName} ${result.chapter}"
+                                    else "${result.shortName} ${result.chapter}:$vs"
+                        toast(getString(R.string.toast_copied, label))
+                    }
                 } else {
                     setResult(RESULT_OK, Intent().putExtra(Intent.EXTRA_PROCESS_TEXT, result.text))
                 }
