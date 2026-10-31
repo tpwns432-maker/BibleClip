@@ -182,6 +182,17 @@ class Engine:
         return None
 
     @classmethod
+    def _lookup_english_book(cls, book_str, extra_books=None):
+        """English-path book lookup: the static English map first, then a
+        version's own abbreviation (e.g. ESV '1Ths'). Canonical tuple or None —
+        an unknown word ('Room 3:30') must come back None, not raise."""
+        key = cls._norm_book(book_str)
+        bn = ENGLISH_BOOK_MAP.get(key)
+        if bn is None and extra_books:
+            bn = extra_books.get(key)
+        return cls._canon(bn) if bn is not None else None
+
+    @classmethod
     def _lookup_alias_token(cls, token, extra_books=None):
         """Resolve a (possibly leading-numbered) book token — '1요', '1Jn' — via
         the alias map and the static English map ONLY. The bare Korean map is
