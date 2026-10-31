@@ -94,6 +94,7 @@
 .rail #log-toggle,                    /* 감시 기록 */
 .rail #tour-help,                     /* 데스크톱 안내 투어 */
 #cart-popout,                         /* 새 창 */
+.ctx-menu [data-a="orig"],            /* 절 메뉴의 원전 분해 보기 */
 #db-folder, #db-refresh { display: none !important; }   /* 앱 폴더는 사용자가 못 연다 — [＋ 성경 파일 추가…]만 */
 
 /* ---- Cards: up to two, stacked; drag the border between them ---- */

@@ -8,6 +8,7 @@ import android.util.Log
 import android.webkit.JavascriptInterface
 import android.webkit.WebView
 import com.bibleclip.app.core.ImportSource
+import com.bibleclip.app.core.pyInt
 import com.bibleclip.app.core.Library
 import com.bibleclip.app.core.Output
 import org.json.JSONArray
@@ -78,6 +79,25 @@ class Bridge(private val app: BibleClipApp, private val web: WebView, private va
         }
         "search" -> lib.searchReply(a.optString(0), if (a.isNull(1)) null else a.optString(1),
             if (a.isNull(2)) 200 else a.optInt(2, 200), if (a.isNull(3)) "and" else a.optString(3))
+        // 노트 · 형광펜 · 장바구니 (routes/notes.py · routes/highlights.py)
+        "get_chapter_notes" -> app.notes.forChapter(int(a, 0), int(a, 1))
+        "get_all_notes" -> app.notes.all()
+        "get_note" -> app.notes.get(int(a, 0), int(a, 1), int(a, 2))
+        "set_note" -> ok(true).put("note", app.notes.set(int(a, 0), int(a, 1), int(a, 2), a.optString(3, "")) ?: JSONObject.NULL)
+        "delete_note" -> { app.notes.delete(int(a, 0), int(a, 1), int(a, 2)); ok(true) }
+        "get_cart" -> app.cart.all()
+        "set_cart" -> ok(true).put("items", app.cart.replace(a.optJSONArray(0)))
+        "copy_references" -> copyReferences(a)
+        "get_chapter_highlights" -> JSONObject().also { o ->
+            val vs = a.opt(2)
+            val names = if (vs is String) listOf(vs) else names(vs as? JSONArray)
+            names.forEach { v -> o.put(v, app.highlights.forChapter(int(a, 0), int(a, 1), v)) }
+        }
+        "get_verse_highlights" -> app.highlights.get(int(a, 0), int(a, 1), int(a, 2), a.optString(3))
+        "set_verse_highlights" -> ok(true).put("ranges",
+            app.highlights.setVerse(int(a, 0), int(a, 1), int(a, 2), a.optString(3), a.optJSONArray(4)))
+        "clear_verse_highlights" -> { app.highlights.clearVerse(int(a, 0), int(a, 1), int(a, 2), a.optString(3)); ok(true) }
+        "get_all_highlights" -> app.highlights.all()
         "add_bible_files" -> addBibleFiles()
         "refresh_databases" -> JSONObject().put("added", JSONArray(app.scanBibles())).put("versions", versions())
         "note_position" -> {
@@ -127,7 +147,7 @@ class Bridge(private val app: BibleClipApp, private val web: WebView, private va
             .put("web_cards_layout", s["web_cards_layout"])
             // The first-run tour walks the desktop (monitoring, F-keys) — not on a phone yet.
             .put("tour_done", true)
-            .put("cart", JSONArray())
+            .put("cart", app.cart.all())
             .put("version", app.packageManager.getPackageInfo(app.packageName, 0).versionName)
     }
 
@@ -189,6 +209,19 @@ class Bridge(private val app: BibleClipApp, private val web: WebView, private va
         app.contentResolver.query(u, arrayOf(OpenableColumns.DISPLAY_NAME), null, null, null)?.use { c ->
             if (c.moveToFirst()) c.getString(0) else null
         } ?: u.lastPathSegment?.substringAfterLast('/') ?: "file"
+
+    /** 장바구니 일괄 추출 → clipboard. {ok, text, n_items} or {ok:false}. */
+    private fun copyReferences(a: JSONArray): JSONObject {
+        val order = a.optJSONArray(1)?.let { names(it).filter { n -> n in lib.dbs } }?.ifEmpty { null }
+        val (text, n) = lib.copyReferences(a.optJSONArray(0), order)
+        if (n == 0) return ok(false)
+        clip(text)
+        return ok(true).put("text", text).put("n_items", n)
+    }
+
+    /** A positional int argument, the way the desktop route's int(x) reads it. */
+    private fun int(a: JSONArray, i: Int): Int =
+        pyInt(a.opt(i)) ?: throw IllegalArgumentException("argument $i is not a number: ${a.opt(i)}")
 
     private fun locale(lang: String): JSONObject {
         if (!Regex("[a-z]{2,3}(?:-[A-Za-z]{2,4})?").matches(lang)) return JSONObject()

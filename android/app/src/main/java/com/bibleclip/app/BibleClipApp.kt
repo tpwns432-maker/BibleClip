@@ -3,6 +3,9 @@ package com.bibleclip.app
 import android.app.Application
 import android.util.Log
 import com.bibleclip.app.core.BibleDb
+import com.bibleclip.app.core.Cart
+import com.bibleclip.app.core.Highlights
+import com.bibleclip.app.core.Notes
 import com.bibleclip.app.core.BibleImporter
 import com.bibleclip.app.core.ImportError
 import com.bibleclip.app.core.ImportSource
@@ -25,6 +28,12 @@ class BibleClipApp : Application() {
     val bibleDir: File get() = File(filesDir, "bible_versions")
     private val settingsFile: File get() = File(filesDir, "bibleclip_settings.json")
     private val aliasFile: File get() = File(bibleDir, "aliases_override.json")
+
+    /** 노트 · 형광펜 · 장바구니 — userdata/ with the desktop's file names and format. */
+    private val userDir: File get() = File(filesDir, "userdata")
+    val notes: Notes by lazy { Notes(File(userDir, "user_notes.json")) }
+    val highlights: Highlights by lazy { Highlights(File(userDir, "user_highlights.json")) }
+    val cart: Cart by lazy { Cart(File(userDir, "sermon_cart.json")) }
 
     /** Built on first use (off the main thread where possible — it opens every bible). */
     val library: Library by lazy { load() }
