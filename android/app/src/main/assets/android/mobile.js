@@ -42,7 +42,17 @@
     document.addEventListener("focusout", () => setTimeout(update, 300));
   }
 
+  // Desktop-only wording on a phone: no clipboard watching (#키워드 copy), no
+  // 원어 codes. Point those elements at the phone strings (web/locales *Phone)
+  // before i18n first applies — the page's boot is still awaiting the bridge.
+  function phoneStrings() {
+    const retarget = (el, attr, key) => { if (el) el.setAttribute(attr, key); };
+    retarget(document.getElementById("search-input"), "data-i18n-placeholder", "search.placeholderPhone");
+    retarget(document.querySelector('[data-i18n-html="search.empty"]'), "data-i18n-html", "search.emptyPhone");
+  }
+
   function start() {
+    phoneStrings();
     chipFades();
     keyboardAware();
   }
