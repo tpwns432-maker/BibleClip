@@ -101,6 +101,44 @@ class GoldenTest {
         assertEquals(failures.joinToString("\n"), 0, failures.size)
     }
 
+    @Test
+    fun tokenizerMatches() {
+        val cases = golden("search.json").getJSONArray("tokenize")
+        for (i in 0 until cases.length()) {
+            val c = cases.getJSONObject(i)
+            assertEquals(c.getString("in"), c.getJSONArray("out").toString(),
+                JSONArray(Korean.tokenize(c.getString("in"))).toString())
+        }
+    }
+
+    @Test
+    fun searchMatches() {
+        val syn = Synonyms(File(root, "web/data/bible_synonyms.json").readText())
+        val cases = golden("search.json").getJSONArray("cases")
+        val failures = mutableListOf<String>()
+        for (i in 0 until cases.length()) {
+            val c = cases.getJSONObject(i)
+            val inp = c.getJSONObject("in")
+            val lib = library(JSONObject().put("search_synonyms", inp.getBoolean("synonyms"))
+                .put("viewer_versions", JSONArray(listOf("KRV"))))
+            lib.synonyms = syn
+            val r = lib.searchReply(inp.getString("q"), if (inp.isNull("version")) null else inp.getString("version"),
+                200, inp.getString("mode"))
+            val hits = r.getJSONArray("hits")
+            val got = JSONObject(r.toString()).apply {
+                remove("hits")
+                put("hit_count", hits.length())
+                put("hit_refs", JSONArray((0 until minOf(60, hits.length())).map { j ->
+                    hits.getJSONObject(j).let { h -> JSONArray(listOf(h.getInt("book"), h.getInt("chapter"), h.getInt("verse"))) }
+                }))
+                put("hit_heads", JSONArray((0 until minOf(3, hits.length())).map { hits.getJSONObject(it) }))
+            }
+            val want = c.getJSONObject("out")
+            if (!want.similar(got)) failures += "$inp:\n  want $want\n  got  $got"
+        }
+        assertEquals(failures.joinToString("\n"), 0, failures.size)
+    }
+
     /** The Python build_output dict, as JSON. */
     private fun outputJson(o: Output?): JSONObject? = when (o) {
         null -> null

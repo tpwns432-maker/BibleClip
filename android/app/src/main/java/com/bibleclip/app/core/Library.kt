@@ -25,6 +25,18 @@ class Library(
     val engine = Engine(tables, text)
     val dbs = LinkedHashMap<String, BibleDb>()
 
+    /** 유의어 사전 (web/data/bible_synonyms.json); null = no expansion. Set it
+     *  directly, or give [synonymsLoader] to parse it on first use (keeps the
+     *  325KB JSON off app start). */
+    @get:Synchronized @set:Synchronized
+    var synonyms: Synonyms? = null
+        get() {
+            if (field == null) synonymsLoader?.let { load -> synonymsLoader = null; field = load() }
+            return field
+        }
+    var synonymsLoader: (() -> Synonyms?)? = null
+    private val searches = HashMap<String, VerseSearch>()
+
     private var aliasKey: Set<String>? = null
     private var aliases: Map<String, Int> = emptyMap()
 
@@ -58,6 +70,49 @@ class Library(
         val size = (settings["viewer_font_size"] as? Number)?.toInt()
             ?: settings.str("viewer_font_size", "11").toIntOrNull() ?: 11
         settings["viewer_font_size"] = size.coerceIn(8, 400)
+    }
+
+    /** The (lazily indexed) search engine for one loaded version. */
+    @Synchronized
+    fun searcher(version: String): VerseSearch? =
+        dbs[version]?.let { db -> searches.getOrPut(version) { VerseSearch(db, text) } }
+
+    /** Default search version: the primary one, else a Korean one, else the first (routes._search_version). */
+    fun searchVersion(): String? =
+        primaryVersion()?.takeIf { it in dbs }
+            ?: listOf("KRV", "NRKV", "KNRSV").firstOrNull { it in dbs } ?: dbs.keys.firstOrNull()
+
+    /**
+     * The bridge's search reply — port of webui/routes/bible.py BibleRoutes.search:
+     * {keyword, version, display, mode, matched_tokens, highlight_tokens, expanded, hits}.
+     * matched_tokens = the 조사-stripped query (what highlighting looks for);
+     * highlight_tokens adds the synonym alternatives that were searched too.
+     */
+    fun searchReply(keyword: String?, version: String?, limit: Int = 200, mode: String? = "and"): JSONObject {
+        val kw = (keyword ?: "").trim().trimStart('#').trim()
+        val m = if (mode?.lowercase() == "or") "or" else "and"
+        val matched = Korean.tokenize(kw).ifEmpty { if (kw.isNotEmpty()) listOf(kw) else emptyList() }
+        val reply = JSONObject().put("keyword", kw).put("mode", m).put("matched_tokens", JSONArray(matched))
+        val ver = if (!version.isNullOrEmpty() && version in dbs) version else searchVersion()
+        val db = if (kw.isEmpty()) null else ver?.let { dbs[it] }
+        if (db == null) {
+            return reply.put("version", if (kw.isEmpty()) JSONObject.NULL else ver ?: JSONObject.NULL)
+                .put("display", "").put("highlight_tokens", JSONArray(matched))
+                .put("expanded", JSONObject()).put("hits", JSONArray())
+        }
+        val expand = settings.truthy("search_synonyms", true)
+        val syn = if (expand) synonyms else null
+        val rows = searcher(ver!!)!!.search(kw, m, limit, syn)
+        val expanded = syn?.expandAll(matched) ?: LinkedHashMap()
+        val hl = matched.toMutableList()
+        expanded.values.flatten().forEach { if (it !in hl) hl += it }
+        return reply.put("version", ver).put("display", db.displayName)
+            .put("highlight_tokens", JSONArray(hl))
+            .put("expanded", JSONObject().also { o -> expanded.forEach { (k, v) -> o.put(k, JSONArray(v)) } })
+            .put("hits", JSONArray(rows.map { h ->
+                JSONObject().put("book", h.book).put("chapter", h.chapter).put("verse", h.verse)
+                    .put("short", db.books[h.book]?.first ?: "?").put("text", h.text)
+            }))
     }
 
     fun primaryVersion(): String? =
