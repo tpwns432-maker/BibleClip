@@ -417,8 +417,9 @@
     if (!box) return;
     box.innerHTML = state.viewer.map((name, i) => {
       const isPrimary = i === 0;
+      // Phone: the short name only (KRV, KJV+) — full titles wrap and eat the screen.
       return `<span class="pill sel${isPrimary ? " primary" : ""}" data-ver="${esc(name)}" draggable="true">` +
-        `${esc(displayName(name))}<span class="x">✕</span></span>`;
+        `${esc(IS_ANDROID ? name : displayName(name))}<span class="x">✕</span></span>`;
     }).join("");
     box.querySelectorAll(".pill.sel .x").forEach((x) => {
       x.addEventListener("click", async (e) => {

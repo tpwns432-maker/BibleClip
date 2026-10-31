@@ -61,13 +61,18 @@ class MainActivity : Activity() {
         if (savedInstanceState == null) web.loadUrl(START_URL) else web.restoreState(savedInstanceState)
     }
 
-    /** web/index.html with bridge.js placed before its first script. */
+    /** web/index.html with the phone stylesheet after its own (so it wins) and
+     *  bridge.js before its first script. */
     private fun injectBridge(): WebResourceResponse {
-        val html = assets.open(INDEX).bufferedReader().use { it.readText() }
-        val tag = "<script src=\"../android/bridge.js\"></script>\n"
-        val at = html.indexOf("<script")
-        val out = if (at >= 0) html.substring(0, at) + tag + html.substring(at) else html + tag
-        return WebResourceResponse("text/html", "utf-8", ByteArrayInputStream(out.toByteArray()))
+        var html = assets.open(INDEX).bufferedReader().use { it.readText() }
+        html = insertBefore(html, "</head>", "<link rel=\"stylesheet\" href=\"../android/mobile.css\">\n")
+        html = insertBefore(html, "<script", "<script src=\"../android/bridge.js\"></script>\n")
+        return WebResourceResponse("text/html", "utf-8", ByteArrayInputStream(html.toByteArray()))
+    }
+
+    private fun insertBefore(html: String, marker: String, tag: String): String {
+        val at = html.indexOf(marker)
+        return if (at >= 0) html.substring(0, at) + tag + html.substring(at) else html + tag
     }
 
     override fun onSaveInstanceState(outState: Bundle) {
