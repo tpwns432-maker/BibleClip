@@ -1,0 +1,50 @@
+/* BibleClip Android — phone layout on top of web/css/styles.css.
+   MainActivity links this after the page's own stylesheets, so desktop is
+   untouched and these rules win on equal specificity. */
+
+:root { --bc-nav-h: 64px; }
+
+/* ---- Left rail → bottom menu bar, ~4 buttons visible, swipe for the rest ---- */
+.app { flex-direction: column; }
+.main { order: 0; flex: 1 1 auto; min-height: 0; }
+.rail {
+  order: 1;
+  width: 100%;
+  flex: 0 0 var(--bc-nav-h);
+  height: var(--bc-nav-h);
+  flex-direction: row;
+  align-items: center;
+  justify-content: flex-start;
+  padding: 0 6px;
+  gap: 0;
+  overflow-x: auto;
+  overflow-y: hidden;
+  scroll-snap-type: x proximity;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+}
+.rail::-webkit-scrollbar { display: none; }
+.rail .logo-tile,
+.rail .spacer { display: none; }
+.rail .nav-icon {
+  /* 4.4 per screen: the half-visible fifth button says "there's more, swipe". */
+  flex: 0 0 calc((100vw - 12px) / 4.4);
+  height: 52px;
+  border-radius: 12px;
+  scroll-snap-align: start;
+}
+.rail .nav-icon svg { width: 23px; height: 23px; }
+.rail .nav-dot { top: 9px; right: calc(50% - 17px); }
+/* 자막(PPT) 창은 데스크톱 전용 — 안드로이드에는 없다. */
+.rail #subtitle-toggle { display: none; }
+
+/* Drawers (클립보드 로그·장바구니·노트) stop above the menu bar. */
+.drawer { bottom: var(--bc-nav-h); max-width: 92vw; }
+
+/* ---- Card header: ✕ first, so it never slides off a narrow card ---- */
+.card-hd .card-x {
+  order: -1;
+  width: 32px; height: 32px;   /* finger-sized (desktop: 24px) */
+  margin: -4px 0 -4px -2px;
+  font-size: 15px;
+}

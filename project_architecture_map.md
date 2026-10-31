@@ -453,7 +453,8 @@ Kotlin 앱이 `web/` 을 WebView로 띄우고, pywebview `js_api` 와 **같은 �
   - `Settings.kt` — 데스크톱과 같은 설정 JSON + Python 식 truthiness
   - `Library.kt` — 별칭 맵·`validateSettings`(load_settings 검증)·`buildOutput`·`formatReference`
 - `BibleClipApp.kt` — Library 1개 보유. filesDir 에 `bible_versions/`(동봉 역본은 설치·업데이트 때 복사, 사용자 역본 보존)·`bibleclip_settings.json`
-- `MainActivity.kt` — WebView, `https://appassets.androidplatform.net/assets/web/index.html`. index.html 응답에 `assets/android/bridge.js` 를 첫 `<script>` 앞에 끼워 넣는다
+- `MainActivity.kt` — WebView, `https://appassets.androidplatform.net/assets/web/index.html`. index.html 응답에 `assets/android/mobile.css` 를 `</head>` 앞(페이지 CSS 뒤 → 같은 우선순위면 이김), `assets/android/bridge.js` 를 첫 `<script>` 앞에 끼워 넣는다
+- `assets/android/mobile.css` — **휴대폰 배치(안드로이드 전용, 데스크톱 무영향)**: 왼쪽 레일 → 하단 메뉴 바(한 화면 4.4개, 좌우 스크롤·스냅, 로고/자막 버튼 숨김), 드로어는 메뉴 바 위에서 멈춤, 카드 ✕ 를 헤더 맨 앞(`order:-1`, 32px)
 - `assets/android/bridge.js` — `window.pywebview.api` Proxy → `BibleClipNative.call(method, argsJson, id)` → `window.__bibleclipReply`
 - `Bridge.kt` — 0단계 구현: get_initial/get_books/get_chapters/get_chapter/resolve_reference/copy_reference/copy_text/get_locale/get_settings/get_preview/get_app_settings/set_setting/set_app_setting/save_cards_layout/set_dark_mode/set_font_size/set_viewer_versions/set_viewer_order/set_output_order/note_position. 나머지는 null(로그 1회)
 - `ProcessTextActivity.kt` — 글자 선택 메뉴(`ACTION_PROCESS_TEXT`) "BibleClip 구절": 편집 칸이면 선택한 참조를 본문으로 치환, 읽기 전용이면 클립보드 복사 + 토스트. 화면 없음(Translucent)
