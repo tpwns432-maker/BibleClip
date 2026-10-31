@@ -1,0 +1,7 @@
+.gradle/
+build/
+local.properties
+*.keystore
+*.jks
+# 앱 아이콘(루트 .gitignore 의 *.png 예외)
+!app/src/main/res/**/*.png

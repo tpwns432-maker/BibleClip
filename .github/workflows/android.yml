@@ -1,0 +1,82 @@
+name: Android
+
+# Push a tag like android-v0.1.0 to build a signed APK and attach it to a
+# GitHub Release (개인 APK 배포 — docs/ANDROID_PLAN.md). Or run manually
+# (workflow_dispatch) to get the APK as a downloadable artifact.
+# The desktop workflow (build.yml) listens on 'v*' tags, which 'android-v*' doesn't match.
+#
+# Signing: repository secrets
+#   ANDROID_KEYSTORE_B64       base64 of the release keystore (.jks)
+#   ANDROID_KEYSTORE_PASSWORD  ANDROID_KEY_ALIAS  ANDROID_KEY_PASSWORD
+# A tag build refuses to run without them — every release must carry the same
+# key, or installed copies can't update. A manual run without them is
+# debug-signed (fine for a quick look, not for testers).
+on:
+  push:
+    tags:
+      - 'android-v*'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+
+      # The Kotlin port is tested against tests/golden/*.json — make sure they
+      # still match the Python engine before trusting them.
+      - name: Golden vectors up to date
+        run: python -X utf8 tests/test_golden.py
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Release keystore
+        env:
+          KEYSTORE_B64: ${{ secrets.ANDROID_KEYSTORE_B64 }}
+        run: |
+          if [ -n "$KEYSTORE_B64" ]; then
+            echo "$KEYSTORE_B64" | base64 -d > "$RUNNER_TEMP/release.jks"
+            echo "BIBLECLIP_KEYSTORE=$RUNNER_TEMP/release.jks" >> "$GITHUB_ENV"
+          elif [[ "$GITHUB_REF" == refs/tags/* ]]; then
+            echo "::error::ANDROID_KEYSTORE_B64 secret is missing — a release APK must be signed with the release key"
+            exit 1
+          else
+            echo "::warning::no release keystore — APK is debug-signed"
+          fi
+
+      - name: Test and build
+        working-directory: android
+        env:
+          BIBLECLIP_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          BIBLECLIP_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          BIBLECLIP_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: ./gradlew --no-daemon testDebugUnitTest assembleRelease
+
+      - name: Name the APK
+        run: |
+          ver="${GITHUB_REF_NAME#android-v}"
+          [[ "$GITHUB_REF" == refs/tags/* ]] || ver="dev-${GITHUB_SHA::7}"
+          mkdir -p out
+          cp android/app/build/outputs/apk/release/app-release.apk "out/BibleClip-android-${ver}.apk"
+          ls -la out
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: android
+          path: out/*.apk
+
+      - name: Attach APK to the release
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: out/*.apk

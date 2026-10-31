@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">BibleClip</string>
+    <!-- 글자 선택 메뉴에 뜨는 이름 -->
+    <string name="process_text_label">BibleClip 구절</string>
+    <string name="toast_copied">%1$s — 복사했어요</string>
+    <string name="toast_no_reference">성경 구절을 찾지 못했어요</string>
+    <string name="toast_keyword">검색어는 앱에서 찾아 주세요</string>
+</resources>
