@@ -92,7 +92,7 @@
 .rail #log-toggle,                    /* 감시 기록 */
 .rail #tour-help,                     /* 데스크톱 안내 투어 */
 #cart-popout,                         /* 새 창 */
-#db-add, #db-folder { display: none !important; }   /* 성경 파일 추가는 1단계(저장소 선택 창) */
+#db-folder, #db-refresh { display: none !important; }   /* 앱 폴더는 사용자가 못 연다 — [＋ 성경 파일 추가…]만 */
 
 /* ---- Cards: up to two, stacked; drag the border between them ---- */
 /* Only the top/bottom edges resize (cards.js startSplitDrag). The browser must
@@ -129,6 +129,19 @@
    muted — enough to tell the two texts apart at a glance. */
 .split-panes .spane:nth-child(even) .spane-body { background: var(--app-bg); }
 .split-panes .spane:nth-child(even) .spane-head { color: var(--text-dim); }
+
+/* Landscape uses the desktop's side-by-side columns (split-cols) — same cues:
+   the version-name row as a band, every other version's column on the app tone
+   with a muted name. Cells follow version order in every row, so nth-child
+   picks the same version top to bottom. */
+.split-cols .shead {
+  background: var(--present-bar-bg);
+  border-bottom: 1px solid var(--present-bar-line);
+  box-shadow: var(--present-bar-shadow);
+}
+.split-cols .shead .scell { font-size: 11.5px; }
+.split-cols .srow .scell:nth-child(even) { background: var(--app-bg); }
+.split-cols .shead .scell:nth-child(even) { color: var(--text-dim); background: none; }
 .split-panes .spane-body { flex: 1 1 auto; min-height: 0; overflow-y: auto; padding: 2px 16px 12px; }
 
 /* ---- Card header: ✕ first, so it never slides off a narrow card ---- */

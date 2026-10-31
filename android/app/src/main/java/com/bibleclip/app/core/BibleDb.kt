@@ -47,6 +47,16 @@ abstract class BibleDb(val name: String, private val text: TextUtils) {
         query("SELECT text FROM verses WHERE book_number=? AND chapter=? AND verse=?", book, chapter, verse)
             .firstOrNull()?.let { text.cleanText(it[0]?.toString()) } ?: ""
 
+    /** Opens as a MyBible-style bible: info/books/verses tables, with verses
+     *  (Library._is_bible_db). False on any read error. */
+    fun looksLikeBible(): Boolean = try {
+        val tables = query("SELECT name FROM sqlite_master WHERE type='table'").map { it[0].toString() }.toSet()
+        tables.containsAll(listOf("info", "books", "verses")) &&
+            query("SELECT 1 FROM verses LIMIT 1").isNotEmpty()
+    } catch (e: Exception) {
+        false
+    }
+
     /** MyBible stores numbers as NUMERIC — a driver may hand back Long, Double or String. */
     private fun num(v: Any?): Int = when (v) {
         is Number -> v.toInt()
