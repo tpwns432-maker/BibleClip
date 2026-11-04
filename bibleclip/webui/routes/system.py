@@ -77,6 +77,7 @@ class SystemRoutes:
             'is_premium': bool(getattr(self.lib, 'is_premium', True)),
             'search_click_navigates': bool(s.get('search_click_navigates', False)),
             'auto_copy_top_result': bool(s.get('auto_copy_top_result', False)),
+            'search_sort': self._search_sort(),
             # v1.1.11 검색어 유의어 확장 (고어↔현대어). 프론트는 확장 발생 시 검색
             # 결과 메타 줄에 '유의어 확장: 이집트→애굽'을 덧붙여 이유를 밝힌다.
             'search_synonyms': bool(s.get('search_synonyms', True)),
@@ -261,6 +262,8 @@ class SystemRoutes:
         'search_click_navigates': None,
         'auto_copy_top_result': None,   # 검색 시 최고 점수 결과를 클립보드에 자동 복사
         'search_synonyms': None,        # v1.1.11 검색어 유의어 확장(고어↔현대어)
+        # 검색 결과 정렬(화면이 계산 — docs/SEARCH_SORT_PLAN.md). 고른 것을 기억한다.
+        'search_sort': {'rank', 'bible', 'freq', 'short', 'orig'},
         'lex_lang': {'ko', 'en'},
         # UI 표시 언어 (i18n). 프론트가 전환 시 기록 → Python-렌더 표면(킬스위치·사전
         # 팝업·미리보기)이 같은 언어로 출력. 새 언어 추가 시 프론트 SUPPORTED 와 동반 확장.
@@ -279,6 +282,10 @@ class SystemRoutes:
         'tour_done': None,       # v1.2.1 첫 실행 안내를 끝까지 보거나 건너뛰면 True
     }
 
+    def _search_sort(self):
+        v = self.lib.settings.get('search_sort')
+        return v if v in self._APP_KEYS['search_sort'] else 'rank'
+
     def get_app_settings(self):
         """Everything the ⚙ settings window shows."""
         s = self.lib.settings
@@ -291,6 +298,7 @@ class SystemRoutes:
             'subtitle_preset': s.get('subtitle_preset') or 'green',
             'poll_interval': float(s.get('poll_interval', 0.5) or 0.5),
             'auto_copy_top_result': bool(s.get('auto_copy_top_result', False)),
+            'search_sort': self._search_sort(),
             'search_synonyms': bool(s.get('search_synonyms', True)),
             'view_mode': 'split' if s.get('view_mode') == 'split' else 'interleave',
             'web_cards_layout': s.get('web_cards_layout'),

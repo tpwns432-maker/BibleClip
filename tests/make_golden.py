@@ -15,6 +15,7 @@ It also writes the tables the Kotlin port loads at runtime (book names, 두벌�
 자판 map, default settings) to android/app/src/main/assets/core/tables.json, so
 bibleclip/constants.py stays the one source instead of a hand-copied Kotlin table.
 """
+import hashlib
 import json
 import os
 import sys
@@ -118,21 +119,34 @@ SEARCHES = [
     ('zzqq', 'KRV', 'and', True),
     ('', 'KRV', 'and', True),
     ('그 또', 'KRV', 'and', True),              # 불용어만 → 토큰 없음
+    # 걸린 절 전부(검색 결과 정렬·필터 — docs/SEARCH_SORT_PLAN.md): 화면이 이 전체 목록을
+    # 정렬·필터하므로 건수와 순서 전체가 데스크톱과 같아야 한다(hit_digest).
+    ('여호와', 'KRV', 'and', True, 10000),       # 가장 흔한 단어 — 6천여 절
+    ('사랑 믿음 소망', 'KRV', 'or', True, 10000),
+    ('이집트', 'KRV', 'and', True, 10000),
+    ('love', 'KJV+', 'and', True, 10000),
 ]
 
 
-def search_case(dbs, q, ver, mode, expand):
-    """routes.bible.search over exactly ``dbs`` — the reply the Android bridge must give."""
+def search_case(dbs, q, ver, mode, expand, limit=200):
+    """routes.bible.search over exactly ``dbs`` — the reply the Android bridge must give.
+    A non-default ``limit`` also pins the whole hit order as a digest (sha256 of
+    'book:chapter:verse' lines) — the full list is what the sort/filter UI works on."""
     lib = make_library(dbs, {'search_synonyms': expand}, [])
     lib.settings['viewer_versions'] = ['KRV']
     r = object.__new__(BibleRoutes)
     r.lib = lib
-    out = r.search(q, ver, 200, mode)
+    out = r.search(q, ver, limit, mode)
     hits = out.pop('hits')
     out['hit_count'] = len(hits)
     out['hit_refs'] = [[h['book'], h['chapter'], h['verse']] for h in hits[:60]]
     out['hit_heads'] = hits[:3]
-    return {'in': {'q': q, 'version': ver, 'mode': mode, 'synonyms': expand}, 'out': out}
+    inp = {'q': q, 'version': ver, 'mode': mode, 'synonyms': expand}
+    if limit != 200:
+        inp['limit'] = limit
+        lines = ''.join(f"{h['book']}:{h['chapter']}:{h['verse']}\n" for h in hits)
+        out['hit_digest'] = hashlib.sha256(lines.encode('utf-8')).hexdigest()
+    return {'in': inp, 'out': out}
 
 
 # ---- 노트 · 형광펜 · 장바구니 (userdata stores) ----

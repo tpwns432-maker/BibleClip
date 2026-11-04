@@ -123,7 +123,7 @@ class GoldenTest {
                 .put("viewer_versions", JSONArray(listOf("KRV"))))
             lib.synonyms = syn
             val r = lib.searchReply(inp.getString("q"), if (inp.isNull("version")) null else inp.getString("version"),
-                200, inp.getString("mode"))
+                inp.optInt("limit", 200), inp.getString("mode"))
             val hits = r.getJSONArray("hits")
             val got = JSONObject(r.toString()).apply {
                 remove("hits")
@@ -132,12 +132,19 @@ class GoldenTest {
                     hits.getJSONObject(j).let { h -> JSONArray(listOf(h.getInt("book"), h.getInt("chapter"), h.getInt("verse"))) }
                 }))
                 put("hit_heads", JSONArray((0 until minOf(3, hits.length())).map { hits.getJSONObject(it) }))
+                // 걸린 절 전부의 순서(make_golden search_case 와 같은 줄 형식의 sha256).
+                if (inp.has("limit")) put("hit_digest", digest((0 until hits.length()).joinToString("") { j ->
+                    hits.getJSONObject(j).let { h -> "${h.getInt("book")}:${h.getInt("chapter")}:${h.getInt("verse")}\n" }
+                }))
             }
             val want = c.getJSONObject("out")
             if (!want.similar(got)) failures += "$inp:\n  want $want\n  got  $got"
         }
         assertEquals(failures.joinToString("\n"), 0, failures.size)
     }
+
+    private fun digest(s: String): String =
+        java.security.MessageDigest.getInstance("SHA-256").digest(s.toByteArray()).joinToString("") { "%02x".format(it) }
 
     /** The Python build_output dict, as JSON. */
     private fun outputJson(o: Output?): JSONObject? = when (o) {

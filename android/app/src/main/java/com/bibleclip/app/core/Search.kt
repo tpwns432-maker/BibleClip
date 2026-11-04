@@ -237,8 +237,10 @@ class VerseSearch(private val db: BibleDb, private val text: TextUtils) {
         }
         return scored.sortedWith(compareBy({ -it.first }, { it.second }))
             .take(limit).map { (_, k) ->
+                // v.clean = cleanText(같은 행) = db.getVerseText — 검색 결과를 전부 받아 가므로
+                // (정렬·필터, docs/SEARCH_SORT_PLAN.md) 절마다 SQL 을 다시 묻지 않는다.
                 val v = byKey.getValue(k)
-                Hit(v.book, v.chapter, v.verse, db.getVerseText(v.book, v.chapter, v.verse))
+                Hit(v.book, v.chapter, v.verse, v.clean)
             }
     }
 

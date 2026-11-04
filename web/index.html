@@ -164,6 +164,17 @@
       </div>
       <div class="search-suggest" id="search-suggest"></div>
       <div class="search-meta" id="search-meta"></div>
+      <!-- 결과 정렬 · 필터 (docs/SEARCH_SORT_PLAN.md). 키워드 결과가 있을 때만 보인다. -->
+      <div class="search-tools" id="search-tools" hidden>
+        <span class="pill dropdown" id="search-sort" title="결과 정렬" data-i18n-title="search.sortTitle"></span>
+        <span class="seg search-scope" id="search-scope">
+          <span class="opt on" data-scope="all"><span data-i18n="search.scopeAll">전체</span><b></b></span>
+          <span class="opt" data-scope="ot"><span data-i18n="search.scopeOt">구약</span><b></b></span>
+          <span class="opt" data-scope="nt"><span data-i18n="search.scopeNt">신약</span><b></b></span>
+        </span>
+        <span class="pill dropdown" id="search-books" title="묶음·책으로 좁히기" data-i18n-title="search.booksTitle"></span>
+      </div>
+      <div class="search-dist" id="search-dist" hidden></div>
       <div class="card search-card">
         <div class="card-body" id="search-results">
           <div class="panel-loading" data-i18n-html="search.empty">검색어를 입력하거나, 다른 앱에서 <b>#키워드</b>를 복사하세요.</div>
@@ -378,6 +389,7 @@
 <script src="js/core.js"></script>
 <script src="js/tour.js"></script>
 <script src="js/cards.js"></script>
+<script src="js/search-sort.js"></script>
 <script src="js/search-notes.js"></script>
 </body>
 </html>

@@ -1259,6 +1259,7 @@
   "subtitle_preset": "green",
   "auto_copy_top_result": false,
   "search_synonyms": true,
+  "search_sort": "rank",
   "poll_interval": 0.5,
   "search_click_navigates": false,
   "dark_mode": false,

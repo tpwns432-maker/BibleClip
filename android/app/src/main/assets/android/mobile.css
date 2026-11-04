@@ -65,16 +65,23 @@
   scrollbar-width: none;
 }
 .ver-chips::-webkit-scrollbar { display: none; }
+/* 검색 결과 정렬·필터 줄도 한 줄, 좌우로 밀어 본다(역본 칩 줄과 같은 방식). */
+.search-tools {
+  flex-wrap: nowrap; overflow-x: auto; overflow-y: hidden;
+  scrollbar-width: none;
+}
+.search-tools::-webkit-scrollbar { display: none; }
+.search-tools > * { flex: 0 0 auto; white-space: nowrap; }
 /* More chips past an edge → that edge fades out (mobile.js sets fade-l/fade-r). */
-.ver-chips.fade-r {
+.ver-chips.fade-r, .search-tools.fade-r {
   -webkit-mask-image: linear-gradient(to right, #000 calc(100% - 32px), transparent);
           mask-image: linear-gradient(to right, #000 calc(100% - 32px), transparent);
 }
-.ver-chips.fade-l {
+.ver-chips.fade-l, .search-tools.fade-l {
   -webkit-mask-image: linear-gradient(to right, transparent, #000 32px);
           mask-image: linear-gradient(to right, transparent, #000 32px);
 }
-.ver-chips.fade-l.fade-r {
+.ver-chips.fade-l.fade-r, .search-tools.fade-l.fade-r {
   -webkit-mask-image: linear-gradient(to right, transparent, #000 32px, #000 calc(100% - 32px), transparent);
           mask-image: linear-gradient(to right, transparent, #000 32px, #000 calc(100% - 32px), transparent);
 }

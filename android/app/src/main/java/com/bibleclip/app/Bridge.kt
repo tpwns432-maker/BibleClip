@@ -5,6 +5,7 @@ import android.content.ClipboardManager
 import android.net.Uri
 import android.provider.OpenableColumns
 import android.util.Log
+import android.view.HapticFeedbackConstants
 import android.webkit.JavascriptInterface
 import android.webkit.WebView
 import com.bibleclip.app.core.ImportSource
@@ -36,6 +37,14 @@ class Bridge(private val app: BibleClipApp, private val web: WebView, private va
 
     @JavascriptInterface
     fun call(method: String, argsJson: String, id: Int) {
+        if (method == "haptic") {
+            // 검색 분포 막대를 문지를 때 칸마다 — 검색 같은 느린 일 뒤에 줄 세우지 않는다.
+            web.post {
+                web.performHapticFeedback(HapticFeedbackConstants.CLOCK_TICK)
+                web.evaluateJavascript("window.__bibleclipReply($id, true, true)", null)
+            }
+            return
+        }
         worker.execute {
             val reply = try {
                 "true, " + literal(dispatch(method, JSONArray(argsJson)))
@@ -142,6 +151,7 @@ class Bridge(private val app: BibleClipApp, private val web: WebView, private va
             .put("is_premium", true)
             .put("search_click_navigates", s.truthy("search_click_navigates"))
             .put("auto_copy_top_result", s.truthy("auto_copy_top_result"))
+            .put("search_sort", s.str("search_sort", "rank").takeIf { it in SEARCH_SORTS } ?: "rank")
             .put("search_synonyms", s.truthy("search_synonyms", true))
             .put("view_mode", if (s.str("view_mode", "") == "split") "split" else "interleave")
             .put("web_cards_layout", s["web_cards_layout"])
@@ -305,11 +315,15 @@ class Bridge(private val app: BibleClipApp, private val web: WebView, private va
             "custom_format_template" to emptySet(),
         )
 
+        /** 검색 결과 정렬(화면이 계산 — docs/SEARCH_SORT_PLAN.md). */
+        private val SEARCH_SORTS = setOf("rank", "bible", "freq", "short", "orig")
+
         /** The desktop's _APP_KEYS that mean something on Android. */
         private val APP_KEYS: Map<String, Set<String>?> = mapOf(
             "search_click_navigates" to null,
             "auto_copy_top_result" to null,
             "search_synonyms" to null,
+            "search_sort" to SEARCH_SORTS,
             "tour_done" to null,
             "lex_lang" to setOf("ko", "en"),
             "ui_lang" to setOf("ko", "en"),
