@@ -846,6 +846,8 @@ html[data-theme="dark"] .note-modal-back { background: rgba(0,0,0,.55); }
 .search-dist i.has:hover::before { opacity: .8; }
 .search-dist i.on::before { opacity: 1; }
 .search-dist i.nt { margin-left: 5px; }   /* 구약 | 신약 경계 */
+.search-dist i.zoom { z-index: 2; }         /* 커진 칸이 이웃 위로 */
+.search-dist i.zoom::before { opacity: 1; }
 .dist-chip {
   position: absolute; left: 0; bottom: calc(100% + 24px); z-index: 5;
   pointer-events: none; white-space: nowrap;
