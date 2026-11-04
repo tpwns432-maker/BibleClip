@@ -1879,47 +1879,61 @@
     }).join("") + `<span class="dist-chip"></span>`;
   }
 
-  // 분포 막대 돋보기: 가리킨 칸이 왼쪽을 기준으로 살짝 커지고 양옆 두 칸도 조금 커지며
-  // 이웃을 덮는다(역본 칩 순서 바꾸기와 같은 transform .18s ease). 칸 위에 책 칩(이름 · 건수)이 따라온다. PC 는 마우스를 올리면, 폰은 누른 채 문지르면(칸이 바뀔 때마다 짧은 진동).
-  // 떼면 그 책만(다시 고르면 전체) — 막대에서 멀리 벗어나 떼면 취소.
+  // 분포 막대 돋보기: 가리킨 칸이 가장 크게, 양옆 두 칸은 그보다 작게 함께 커지고, 나머지
+  // 칸이 그만큼 조금씩 좁아져 자리를 내준다 — 칸 폭을 flex-grow 로 나누므로 막대 전체 폭은
+  // 그대로라 밖으로 삐져나가지 않고, 겹치지도 않는다. 커지는 움직임은 CSS 전환(빠르게 시작해
+  // 부드럽게 멈춤). 칸 위에 책 칩(이름 · 건수)이 따라온다. PC 는 마우스를 올리면, 폰은 누른 채
+  // 문지르면(칸이 바뀔 때마다 짧은 진동). 떼면 그 책만(다시 고르면 전체) — 막대에서 멀리
+  // 벗어나 떼면 취소.
   function wireDistScrub() {
     const bar = $("search-dist");
+    const LENS = [1, 0.45, 0.18];   // 가리킨 칸 · 바로 옆 · 그 옆
     let cells = [], at = -1, down = null;
-    const measure = () => {
-      // offsetLeft 는 transform 의 영향을 받지 않는다 — 커진 상태에서도 원래 자리로 잰다.
-      cells = [...bar.querySelectorAll("i")].map((el) => ({ el, c: el.offsetLeft + el.offsetWidth / 2, w: el.offsetWidth }));
+    const fresh = () => {
+      if (!cells.length || !cells[0].isConnected) { cells = [...bar.querySelectorAll("i")]; at = -1; }
     };
-    const fresh = () => { if (!cells.length || !cells[0].el.isConnected) { measure(); at = -1; } };
-    const nearest = (x) => {
-      let best = -1, bd = Infinity;
-      cells.forEach((k, i) => { const d = Math.abs(k.c - x); if (d < bd) { bd = d; best = i; } });
-      return best;
-    };
-    // 돋보기 배율: 가리킨 칸이 가장 크고, 양옆 두 칸은 그보다 작게. 칸 자리는 그대로이고
-    // 왼쪽 아래를 기준으로 오른쪽·위로 커져 이웃을 덮는다(큰 칸이 위).
-    const LENS = [1, 0.45, 0.18];
-    const magnify = (c) => {
-      const top = Math.max(1.5, 14 / Math.max(cells[c].w, 1)) - 1;   // 폰은 칸이 좁아 적어도 14px 폭
-      cells.forEach((o, i) => {
-        const f = LENS[Math.abs(i - c)] || 0;
-        o.el.classList.toggle("zoom", i === c);
-        o.el.classList.toggle("near", f > 0 && i !== c);
-        if (!f) { o.el.style.transform = ""; return; }
-        const s = 1 + top * f;
-        // 오른쪽 끝 칸은 커진 폭이 막대 밖으로 나가지 않게 왼쪽으로 당긴다.
-        const tx = Math.min(0, bar.clientWidth - (o.c - o.w / 2) - o.w * s);
-        o.vc = o.c - o.w / 2 + tx + o.w * s / 2;   // 커진 칸의 가운데 — 책 칩 자리
-        o.el.style.transform = `translateX(${tx.toFixed(1)}px) scale(${s.toFixed(3)}, ${(1 + 0.45 * f).toFixed(3)})`;
+    // 칸 가운데 위치를 계산으로 — 커지는 중의 실제 자리를 재면 손가락 밑 칸이 흔들린다.
+    // 막대 CSS 와 같은 값: 좌우 여백 2px, 칸 사이 1px, 신약 앞 5px.
+    const centers = (grow) => {
+      const nt = cells.findIndex((el) => el.classList.contains("nt"));
+      const avail = bar.clientWidth - 4 - (cells.length - 1) - (nt > 0 ? 5 : 0);
+      const sum = grow.reduce((a, b) => a + b, 0);
+      let x = 2;
+      return grow.map((g, i) => {
+        if (i === nt) x += 5;
+        const w = avail * g / sum, c = x + w / 2;
+        x += w + 1;
+        return c;
       });
     };
-    const placeChip = (i) => {
-      const k = cells[i], chip = bar.querySelector(".dist-chip");
+    const nearest = (x) => {
+      const cs = centers(cells.map(() => 1));
+      let best = -1, bd = Infinity;
+      cs.forEach((c, i) => { const d = Math.abs(c - x); if (d < bd) { bd = d; best = i; } });
+      return best;
+    };
+    // 커진 뒤 가리킨 칸의 가운데(책 칩 자리)를 돌려준다.
+    const magnify = (c) => {
+      const base = centers(cells.map(() => 1));
+      const w = cells.length > 1 ? base[1] - base[0] - 1 : bar.clientWidth;
+      const top = Math.max(0.6, 16 / Math.max(w, 1) - 1);   // 폰은 칸이 좁아 적어도 16px 폭
+      const grow = cells.map((_, i) => 1 + top * (LENS[Math.abs(i - c)] || 0));
+      cells.forEach((el, i) => {
+        const f = LENS[Math.abs(i - c)] || 0;
+        el.classList.toggle("zoom", i === c);
+        el.style.flexGrow = f ? grow[i].toFixed(3) : "";
+        el.style.transform = f ? `scaleY(${(1 + 0.45 * f).toFixed(3)})` : "";
+      });
+      return centers(grow)[c];
+    };
+    const placeChip = (i, x0) => {
+      const el = cells[i], chip = bar.querySelector(".dist-chip");
       if (!chip) return;
-      const n = Number(k.el.dataset.n) || 0;
-      chip.textContent = `${bookLabel(Number(k.el.dataset.b))} · ${n.toLocaleString()}`;
+      const n = Number(el.dataset.n) || 0;
+      chip.textContent = `${bookLabel(Number(el.dataset.b))} · ${n.toLocaleString()}`;
       chip.classList.toggle("zero", !n);
       const half = chip.offsetWidth / 2;
-      const x = Math.min(Math.max(k.vc != null ? k.vc : k.c, half), bar.clientWidth - half) - half;
+      const x = Math.min(Math.max(x0, half), bar.clientWidth - half) - half;
       if (!chip.classList.contains("on")) {   // 처음 나타날 땐 미끄러져 오지 않고 그 자리에
         chip.style.transition = "none";
         chip.style.transform = `translateX(${x}px)`;
@@ -1933,20 +1947,19 @@
     const point = (i) => {
       if (i < 0 || i === at) return;
       at = i;
-      magnify(i);
-      placeChip(i);
+      placeChip(i, magnify(i));
       if (down && down.touch && IS_ANDROID) api().haptic();
     };
     const reset = () => {
       at = -1;
-      cells.forEach((k) => { k.el.style.transform = ""; k.el.classList.remove("zoom", "near"); });
+      cells.forEach((el) => { el.style.flexGrow = ""; el.style.transform = ""; el.classList.remove("zoom"); });
       const chip = bar.querySelector(".dist-chip");
       if (chip) chip.classList.remove("on");
     };
     const xOf = (e) => e.clientX - bar.getBoundingClientRect().left;
 
     bar.addEventListener("pointerdown", (e) => {
-      measure();
+      fresh();
       at = -1;
       down = { touch: e.pointerType !== "mouse" };
       bar.setPointerCapture(e.pointerId);
@@ -1965,8 +1978,8 @@
       const r = bar.getBoundingClientRect();
       const near = e.clientX >= r.left && e.clientX <= r.right && e.clientY >= r.top - 60 && e.clientY <= r.bottom + 60;
       if (touch) reset();
-      if (near && k && Number(k.el.dataset.n)) {
-        const scope = "b:" + k.el.dataset.b;
+      if (near && k && Number(k.dataset.n)) {
+        const scope = "b:" + k.dataset.b;
         setSearchScope(searchScope === scope ? "all" : scope);   // 막대를 다시 그린다 → 다음 움직임에 다시 잼
       }
     });
