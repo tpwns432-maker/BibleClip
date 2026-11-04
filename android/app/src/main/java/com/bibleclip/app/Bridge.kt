@@ -5,6 +5,7 @@ import android.content.ClipboardManager
 import android.net.Uri
 import android.provider.OpenableColumns
 import android.util.Log
+import android.view.HapticFeedbackConstants
 import android.webkit.JavascriptInterface
 import android.webkit.WebView
 import com.bibleclip.app.core.ImportSource
@@ -36,6 +37,14 @@ class Bridge(private val app: BibleClipApp, private val web: WebView, private va
 
     @JavascriptInterface
     fun call(method: String, argsJson: String, id: Int) {
+        if (method == "haptic") {
+            // 검색 분포 막대를 문지를 때 칸마다 — 검색 같은 느린 일 뒤에 줄 세우지 않는다.
+            web.post {
+                web.performHapticFeedback(HapticFeedbackConstants.CLOCK_TICK)
+                web.evaluateJavascript("window.__bibleclipReply($id, true, true)", null)
+            }
+            return
+        }
         worker.execute {
             val reply = try {
                 "true, " + literal(dispatch(method, JSONArray(argsJson)))

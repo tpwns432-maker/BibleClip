@@ -1864,6 +1864,7 @@
   }
 
   // 분포 막대: 66권 한 칸씩, 높이 = 건수(제곱근 — 적은 책도 보이게). 누르면 그 책만.
+  // 가리키면 커지는 돋보기와 책 칩은 wireDistScrub.
   function renderSearchDist(sum) {
     const max = Math.max(1, ...sum.byBook.values());
     const sel = searchScope.startsWith("b:") ? Number(searchScope.slice(2)) : null;
@@ -1874,8 +1875,105 @@
       const cls = [n ? "has" : "", b === sel ? "on" : "", b === 470 ? "nt" : ""].filter(Boolean).join(" ");
       const h = n ? Math.max(14, Math.round(100 * Math.sqrt(n / max))) : 0;
       const tip = n ? I18N.t("search.distTitle", { book: bookLabel(b, shortOf.get(b)), n: n.toLocaleString() }) : "";
-      return `<i class="${cls}" data-b="${b}" style="--h:${h}%"${tip ? ` title="${esc(tip)}"` : ""}></i>`;
-    }).join("");
+      return `<i class="${cls}" data-b="${b}" data-n="${n}" style="--h:${h}%"${tip ? ` aria-label="${esc(tip)}"` : ""}></i>`;
+    }).join("") + `<span class="dist-chip"></span>`;
+  }
+
+  // 분포 막대 돋보기: 가리킨 칸이 커지고 양옆 칸이 비켜난다 — 역본 칩을 끌어 순서를
+  // 바꿀 때 칩들이 비켜나는 것과 같은 움직임(transform .18s ease). 칸 위에 책 칩(이름 · 건수)이
+  // 따라온다. PC 는 마우스를 올리면, 폰은 누른 채 문지르면(칸이 바뀔 때마다 짧은 진동).
+  // 떼면 그 책만(다시 고르면 전체) — 막대에서 멀리 벗어나 떼면 취소.
+  function wireDistScrub() {
+    const bar = $("search-dist");
+    let cells = [], at = -1, down = null;
+    const measure = () => {
+      // offsetLeft 는 transform 의 영향을 받지 않는다 — 커진 상태에서도 원래 자리로 잰다.
+      cells = [...bar.querySelectorAll("i")].map((el) => ({ el, c: el.offsetLeft + el.offsetWidth / 2, w: el.offsetWidth }));
+    };
+    const fresh = () => { if (!cells.length || !cells[0].el.isConnected) { measure(); at = -1; } };
+    const nearest = (x) => {
+      let best = -1, bd = Infinity;
+      cells.forEach((k, i) => { const d = Math.abs(k.c - x); if (d < bd) { bd = d; best = i; } });
+      return best;
+    };
+    const magnify = (c) => {
+      const w = cells[c].w;
+      const A = Math.max(0.8, 18 / Math.max(w, 1) - 1);   // 가리킨 칸은 적어도 18px 폭
+      const R = 3.5;                                     // 양옆 몇 칸까지 함께 커지나
+      const s = cells.map((_, i) => 1 + A * Math.max(0, 1 - ((i - c) / R) ** 2));
+      cells.forEach((k, i) => {
+        // 커진 폭만큼 바깥 칸이 밀려난다: 가운데 칸 절반 + 사이 칸들 + 자기 절반.
+        let tx = 0;
+        if (i !== c) {
+          const dir = i > c ? 1 : -1;
+          tx = (s[c] - 1) * w / 2 + (s[i] - 1) * w / 2;
+          for (let j = c + dir; j !== i; j += dir) tx += (s[j] - 1) * w;
+          tx *= dir;
+        }
+        const f = (s[i] - 1) / A;
+        k.el.style.transform = `translateX(${tx.toFixed(1)}px) scale(${s[i].toFixed(3)}, ${(1 + 0.9 * f).toFixed(3)})`;
+      });
+    };
+    const placeChip = (i) => {
+      const k = cells[i], chip = bar.querySelector(".dist-chip");
+      if (!chip) return;
+      const n = Number(k.el.dataset.n) || 0;
+      chip.textContent = `${bookLabel(Number(k.el.dataset.b))} · ${n.toLocaleString()}`;
+      chip.classList.toggle("zero", !n);
+      const half = chip.offsetWidth / 2;
+      const x = Math.min(Math.max(k.c, half), bar.clientWidth - half) - half;
+      if (!chip.classList.contains("on")) {   // 처음 나타날 땐 미끄러져 오지 않고 그 자리에
+        chip.style.transition = "none";
+        chip.style.transform = `translateX(${x}px)`;
+        void chip.offsetWidth;
+        chip.style.transition = "";
+        chip.classList.add("on");
+      } else {
+        chip.style.transform = `translateX(${x}px)`;
+      }
+    };
+    const point = (i) => {
+      if (i < 0 || i === at) return;
+      at = i;
+      magnify(i);
+      placeChip(i);
+      if (down && down.touch && IS_ANDROID) api().haptic();
+    };
+    const reset = () => {
+      at = -1;
+      cells.forEach((k) => { k.el.style.transform = ""; });
+      const chip = bar.querySelector(".dist-chip");
+      if (chip) chip.classList.remove("on");
+    };
+    const xOf = (e) => e.clientX - bar.getBoundingClientRect().left;
+
+    bar.addEventListener("pointerdown", (e) => {
+      measure();
+      at = -1;
+      down = { touch: e.pointerType !== "mouse" };
+      bar.setPointerCapture(e.pointerId);
+      point(nearest(xOf(e)));
+    });
+    bar.addEventListener("pointermove", (e) => {
+      if (!down && e.pointerType !== "mouse") return;
+      fresh();
+      point(nearest(xOf(e)));
+    });
+    bar.addEventListener("pointerup", (e) => {
+      if (!down) return;
+      const touch = down.touch;
+      down = null;
+      const k = at >= 0 && cells[at];
+      const r = bar.getBoundingClientRect();
+      const near = e.clientX >= r.left && e.clientX <= r.right && e.clientY >= r.top - 60 && e.clientY <= r.bottom + 60;
+      if (touch) reset();
+      if (near && k && Number(k.el.dataset.n)) {
+        const scope = "b:" + k.el.dataset.b;
+        setSearchScope(searchScope === scope ? "all" : scope);   // 막대를 다시 그린다 → 다음 움직임에 다시 잼
+      }
+    });
+    bar.addEventListener("pointercancel", () => { down = null; reset(); });
+    bar.addEventListener("pointerleave", () => { if (!down) reset(); });
   }
 
   function setSearchScope(scope) {
@@ -1916,12 +2014,7 @@
       });
       openMenu(books, items, setSearchScope);
     });
-    $("search-dist").addEventListener("click", (e) => {
-      const cell = e.target.closest("i.has");
-      if (!cell) return;
-      const scope = "b:" + cell.dataset.b;
-      setSearchScope(searchScope === scope ? "all" : scope);
-    });
+    wireDistScrub();
   }
 
   async function renderSearch(res) {
