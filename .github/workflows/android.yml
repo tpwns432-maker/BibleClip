@@ -76,11 +76,13 @@ jobs:
         run: ./gradlew --no-daemon testDebugUnitTest assembleRelease
 
       - name: Name the APK
+        id: apk
         run: |
           ver="${GITHUB_REF_NAME#android-v}"
           [[ "$GITHUB_REF" == refs/tags/* ]] || ver="dev-${GITHUB_SHA::7}"
           mkdir -p out
           cp android/app/build/outputs/apk/release/app-release.apk "out/BibleClip-android-${ver}.apk"
+          echo "ver=${ver}" >> "$GITHUB_OUTPUT"
           ls -la out
 
       - uses: actions/upload-artifact@v4
@@ -92,7 +94,7 @@ jobs:
         if: startsWith(github.ref, 'refs/tags/')
         uses: softprops/action-gh-release@v2
         with:
-          name: BibleClip 안드로이드 ${{ github.ref_name }}
+          name: BibleClip 안드로이드 ${{ steps.apk.outputs.ver }}
           make_latest: false
           files: out/*.apk
           body: |
