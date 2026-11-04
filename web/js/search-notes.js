@@ -1879,8 +1879,8 @@
     }).join("") + `<span class="dist-chip"></span>`;
   }
 
-  // 분포 막대 돋보기: 가리킨 칸이 살짝 커지며 이웃을 덮는다(역본 칩 순서 바꾸기와 같은
-  // transform .18s ease). 칸 위에 책 칩(이름 · 건수)이 따라온다. PC 는 마우스를 올리면, 폰은 누른 채 문지르면(칸이 바뀔 때마다 짧은 진동).
+  // 분포 막대 돋보기: 가리킨 칸이 왼쪽을 기준으로 살짝 커지고 양옆 두 칸도 조금 커지며
+  // 이웃을 덮는다(역본 칩 순서 바꾸기와 같은 transform .18s ease). 칸 위에 책 칩(이름 · 건수)이 따라온다. PC 는 마우스를 올리면, 폰은 누른 채 문지르면(칸이 바뀔 때마다 짧은 진동).
   // 떼면 그 책만(다시 고르면 전체) — 막대에서 멀리 벗어나 떼면 취소.
   function wireDistScrub() {
     const bar = $("search-dist");
@@ -1895,16 +1895,21 @@
       cells.forEach((k, i) => { const d = Math.abs(k.c - x); if (d < bd) { bd = d; best = i; } });
       return best;
     };
+    // 돋보기 배율: 가리킨 칸이 가장 크고, 양옆 두 칸은 그보다 작게. 칸 자리는 그대로이고
+    // 왼쪽 아래를 기준으로 오른쪽·위로 커져 이웃을 덮는다(큰 칸이 위).
+    const LENS = [1, 0.45, 0.18];
     const magnify = (c) => {
-      // 가리킨 칸만 살짝 커져 이웃을 덮는다(이웃은 그대로). 막대 양 끝에서는 커진 칸이
-      // 막대 밖으로 삐져나가지 않게 안쪽으로 당긴다.
-      const k = cells[c];
-      const s = Math.max(1.5, 14 / Math.max(k.w, 1));   // 폰은 칸이 좁아 적어도 14px 폭
-      const half = k.w * s / 2;
-      const tx = Math.min(Math.max(0, half - k.c), bar.clientWidth - k.c - half);
+      const top = Math.max(1.5, 14 / Math.max(cells[c].w, 1)) - 1;   // 폰은 칸이 좁아 적어도 14px 폭
       cells.forEach((o, i) => {
+        const f = LENS[Math.abs(i - c)] || 0;
         o.el.classList.toggle("zoom", i === c);
-        o.el.style.transform = i === c ? `translateX(${tx.toFixed(1)}px) scale(${s.toFixed(2)}, 1.45)` : "";
+        o.el.classList.toggle("near", f > 0 && i !== c);
+        if (!f) { o.el.style.transform = ""; return; }
+        const s = 1 + top * f;
+        // 오른쪽 끝 칸은 커진 폭이 막대 밖으로 나가지 않게 왼쪽으로 당긴다.
+        const tx = Math.min(0, bar.clientWidth - (o.c - o.w / 2) - o.w * s);
+        o.vc = o.c - o.w / 2 + tx + o.w * s / 2;   // 커진 칸의 가운데 — 책 칩 자리
+        o.el.style.transform = `translateX(${tx.toFixed(1)}px) scale(${s.toFixed(3)}, ${(1 + 0.45 * f).toFixed(3)})`;
       });
     };
     const placeChip = (i) => {
@@ -1914,7 +1919,7 @@
       chip.textContent = `${bookLabel(Number(k.el.dataset.b))} · ${n.toLocaleString()}`;
       chip.classList.toggle("zero", !n);
       const half = chip.offsetWidth / 2;
-      const x = Math.min(Math.max(k.c, half), bar.clientWidth - half) - half;
+      const x = Math.min(Math.max(k.vc != null ? k.vc : k.c, half), bar.clientWidth - half) - half;
       if (!chip.classList.contains("on")) {   // 처음 나타날 땐 미끄러져 오지 않고 그 자리에
         chip.style.transition = "none";
         chip.style.transform = `translateX(${x}px)`;
@@ -1934,7 +1939,7 @@
     };
     const reset = () => {
       at = -1;
-      cells.forEach((k) => { k.el.style.transform = ""; k.el.classList.remove("zoom"); });
+      cells.forEach((k) => { k.el.style.transform = ""; k.el.classList.remove("zoom", "near"); });
       const chip = bar.querySelector(".dist-chip");
       if (chip) chip.classList.remove("on");
     };
