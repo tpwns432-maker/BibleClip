@@ -1689,7 +1689,8 @@
 
   // ---- Keyword search ----
 
-  let searchHits = [];
+  let searchHits = [];   // 화면에 보이는 순서의 결과 — .sr 의 data-i 가 이 배열의 위치
+  const SEARCH_CAP = 10000, SEARCH_PAGE = 200;
 
   // Unified search bar (통합 검색바, Phase 2): one input handles three intents.
   //   1) Strong's code (H7225 / G26) → reverse cross-query over 개역한글S tags
@@ -1727,7 +1728,9 @@
     // 3) Keyword search (default). v1.0.5: 띄어쓰기 다중 키워드면 AND/OR 모드 적용.
     $("search-meta").textContent = "";
     $("search-results").innerHTML = `<div class="panel-loading">${I18N.t("search.searching")}</div>`;
-    renderSearch(await api().search(q, state.searchVersion || undefined, 200, searchMode()));
+    // 걸린 절 전부를 받아 온다 — 정렬·필터는 화면에서(SearchSort). 상위 200개만 받으면
+    // "성경순"·"신약만"이 그 200개 안에서만의 결과가 된다.
+    renderSearch(await api().search(q, state.searchVersion || undefined, SEARCH_CAP, searchMode()));
   }
 
   // 검색바의 AND/OR 세그먼트 현재 값 ('and'|'or'). 기본 'and'.
@@ -1748,44 +1751,298 @@
     return r;
   }
 
-  // Click handler shared by keyword + strong-code results.
-  function wireSearchHitClicks() {
-    const host = $("search-results");
-    host.querySelectorAll(".sr").forEach((el) => {
-      el.addEventListener("click", async (ev) => {
-        if (ev.target.closest("[data-cart-add]")) return;  // ＋ 는 장바구니 담기 전용
-        const h = searchHits[Number(el.dataset.i)];
-        if (!h) return;
-        const r = await copyHit(h);
-        if (r && r.ok) {
-          el.classList.add("copied");
-          setTimeout(() => el.classList.remove("copied"), 700);
-        }
-        if (state.searchClickNav) {
-          showView("viewer");
-          CardManager.goToRef(h.book, h.chapter, [h.verse]);
-        }
-      });
-    });
-    host.querySelectorAll("[data-cart-add]").forEach((btn) => {
-      btn.addEventListener("click", (ev) => {
-        ev.stopPropagation();
-        const h = searchHits[Number(btn.dataset.cartAdd)];
-        if (h) addToCart({ book_num: h.book, chapter: h.chapter, verses: [h.verse], short_name: h.short });
-      });
-    });
+  // Clicks on keyword + strong-code results — one delegated handler (wired once in
+  // wireSearch), so rows added later by 더 보기 work too. data-i indexes searchHits.
+  async function onSearchResultsClick(ev) {
+    if (ev.target.closest("[data-more]")) { appendSearchPage(); return; }
+    const add = ev.target.closest("[data-cart-add]");   // ＋ 는 장바구니 담기 전용
+    if (add) {
+      ev.stopPropagation();
+      const h = searchHits[Number(add.dataset.cartAdd)];
+      if (h) addToCart({ book_num: h.book, chapter: h.chapter, verses: [h.verse], short_name: h.short });
+      return;
+    }
+    const el = ev.target.closest(".sr");
+    const h = el && searchHits[Number(el.dataset.i)];
+    if (!h) return;
+    const r = await copyHit(h);
+    if (r && r.ok) flashHit(el, 700);
+    if (state.searchClickNav) {
+      showView("viewer");
+      CardManager.goToRef(h.book, h.chapter, [h.verse]);
+    }
   }
 
-  function renderSearch(res) {
+  function flashHit(el, ms) {
+    el.classList.add("copied");
+    setTimeout(() => el.classList.remove("copied"), ms);
+  }
+
+  function srRow(i, ref, textHtml) {
+    return `<div class="sr" data-i="${i}"><span class="sr-ref">${esc(ref)}</span><span class="sr-text">${textHtml}</span><span class="cart-add-btn" data-cart-add="${i}" title="${esc(I18N.t("cart.add"))}">＋</span></div>`;
+  }
+
+  // ---- 검색 결과 정렬 · 필터 (docs/SEARCH_SORT_PLAN.md) ----
+  // 결과는 정확도순 전부(searchItems)를 들고 있고, 정렬·범위를 바꾸면 searchHits(화면에 보일
+  // 순서)만 다시 만든다. 그리기는 SEARCH_PAGE 개씩 — 나머지는 [더 보기].
+  let searchRes = null;     // 마지막 키워드 검색 응답
+  let searchItems = [];     // SearchSort.analyze(searchRes) — 정확도순
+  let searchScope = "all";  // 새 검색마다 전체로
+  let searchShown = 0;
+  let searchSeq = 0;
+  const bookNames = {};     // 역본 → {책 번호: 정식 이름}
+
+  async function loadBookNames(version) {
+    if (!version || bookNames[version]) return;
+    try {
+      const books = await api().get_books(version);
+      bookNames[version] = Object.fromEntries((books || []).map((b) => [b.num, b.long]));
+    } catch (_) {}
+  }
+
+  function bookLabel(book, short) {
+    const names = (searchRes && bookNames[searchRes.version]) || {};
+    return names[book] || short || String(book);
+  }
+
+  function showSearchTools(on) {
+    $("search-tools").hidden = !on;
+    $("search-dist").hidden = !on;
+  }
+
+  function applySearchView() {
+    searchHits = SearchSort.sort(SearchSort.filter(searchItems, searchScope), state.searchSort);
+    searchShown = 0;
     const host = $("search-results");
-    searchHits = (res.hits || []).map((h) => ({
-      book: h.book, chapter: h.chapter, verse: h.verse, short: h.short,
-    }));
-    if (!searchHits.length) {
+    host.innerHTML = "";
+    host.scrollTop = 0;
+    appendSearchPage();
+    updateSearchTools();
+  }
+
+  function appendSearchPage() {
+    const host = $("search-results");
+    const more = host.querySelector(".sr-more");
+    if (more) more.remove();
+    // 강조 토큰 = 질의어 + 유의어 확장어(highlight_tokens). 구버전 응답 호환으로
+    // matched_tokens 로 폴백한다.
+    const toks = (searchRes && (searchRes.highlight_tokens || searchRes.matched_tokens)) || [];
+    const end = Math.min(searchHits.length, searchShown + SEARCH_PAGE);
+    let html = "";
+    for (let i = searchShown; i < end; i++) {
+      const h = searchHits[i];
+      html += srRow(i, `${h.short} ${h.chapter}:${h.verse}`, highlightHtml(esc(h.text), toks));
+    }
+    searchShown = end;
+    const left = searchHits.length - end;
+    if (left > 0) {
+      html += `<button class="btn sr-more" data-more>${I18N.t("search.more", { n: left.toLocaleString() })}</button>`;
+    }
+    host.insertAdjacentHTML("beforeend", html);
+  }
+
+  function updateSearchTools() {
+    const sum = SearchSort.summary(searchItems);
+    $("search-sort").textContent = I18N.t("search.sort." + state.searchSort);
+    const counts = { all: sum.total, ot: sum.ot, nt: sum.nt };
+    $("search-scope").querySelectorAll(".opt").forEach((o) => {
+      const n = counts[o.dataset.scope];
+      o.querySelector("b").textContent = n.toLocaleString();
+      o.classList.toggle("on", o.dataset.scope === searchScope);
+      o.classList.toggle("off", !n);
+    });
+    const books = $("search-books");
+    let label = I18N.t("search.booksBtn");
+    if (searchScope.startsWith("g:")) label = I18N.t("search.group." + searchScope.slice(2));
+    else if (searchScope.startsWith("b:")) {
+      const b = Number(searchScope.slice(2));
+      label = bookLabel(b, (searchItems.find((it) => it.book === b) || {}).short);
+    }
+    books.textContent = label;
+    books.classList.toggle("sel", /^[gb]:/.test(searchScope));
+    renderSearchDist(sum);
+  }
+
+  // 분포 막대: 66권 한 칸씩, 높이 = 건수(제곱근 — 적은 책도 보이게). 누르면 그 책만.
+  // 가리키면 커지는 돋보기와 책 칩은 wireDistScrub.
+  function renderSearchDist(sum) {
+    const max = Math.max(1, ...sum.byBook.values());
+    const sel = searchScope.startsWith("b:") ? Number(searchScope.slice(2)) : null;
+    const shortOf = new Map();
+    sum.groups.forEach((g) => g.books.forEach((b) => shortOf.set(b.book, b.short)));
+    $("search-dist").innerHTML = SearchSort.CANON.map((b) => {
+      const n = sum.byBook.get(b) || 0;
+      const cls = [n ? "has" : "", b === sel ? "on" : "", b === 470 ? "nt" : ""].filter(Boolean).join(" ");
+      const h = n ? Math.max(14, Math.round(100 * Math.sqrt(n / max))) : 0;
+      const tip = n ? I18N.t("search.distTitle", { book: bookLabel(b, shortOf.get(b)), n: n.toLocaleString() }) : "";
+      return `<i class="${cls}" data-b="${b}" data-n="${n}" style="--h:${h}%"${tip ? ` aria-label="${esc(tip)}"` : ""}></i>`;
+    }).join("") + `<span class="dist-chip"></span>`;
+  }
+
+  // 분포 막대 돋보기: 가리킨 칸이 가장 크게, 양옆 두 칸은 그보다 작게 함께 커지고, 나머지
+  // 칸이 그만큼 조금씩 좁아져 자리를 내준다 — 칸 폭을 flex-grow 로 나누므로 막대 전체 폭은
+  // 그대로라 밖으로 삐져나가지 않고, 겹치지도 않는다. 커지는 움직임은 CSS 전환(빠르게 시작해
+  // 부드럽게 멈춤). 칸 위에 책 칩(이름 · 건수)이 따라온다. PC 는 마우스를 올리면, 폰은 누른 채
+  // 문지르면(칸이 바뀔 때마다 짧은 진동). 떼면 그 책만(다시 고르면 전체) — 막대에서 멀리
+  // 벗어나 떼면 취소.
+  function wireDistScrub() {
+    const bar = $("search-dist");
+    const LENS = [1, 0.45, 0.18];   // 가리킨 칸 · 바로 옆 · 그 옆
+    let cells = [], at = -1, down = null;
+    const fresh = () => {
+      if (!cells.length || !cells[0].isConnected) { cells = [...bar.querySelectorAll("i")]; at = -1; }
+    };
+    // 칸 가운데 위치를 계산으로 — 커지는 중의 실제 자리를 재면 손가락 밑 칸이 흔들린다.
+    // 막대 CSS 와 같은 값: 좌우 여백 2px, 칸 사이 1px, 신약 앞 5px.
+    const centers = (grow) => {
+      const nt = cells.findIndex((el) => el.classList.contains("nt"));
+      const avail = bar.clientWidth - 4 - (cells.length - 1) - (nt > 0 ? 5 : 0);
+      const sum = grow.reduce((a, b) => a + b, 0);
+      let x = 2;
+      return grow.map((g, i) => {
+        if (i === nt) x += 5;
+        const w = avail * g / sum, c = x + w / 2;
+        x += w + 1;
+        return c;
+      });
+    };
+    const nearest = (x) => {
+      const cs = centers(cells.map(() => 1));
+      let best = -1, bd = Infinity;
+      cs.forEach((c, i) => { const d = Math.abs(c - x); if (d < bd) { bd = d; best = i; } });
+      return best;
+    };
+    // 커진 뒤 가리킨 칸의 가운데(책 칩 자리)를 돌려준다.
+    const magnify = (c) => {
+      const base = centers(cells.map(() => 1));
+      const w = cells.length > 1 ? base[1] - base[0] - 1 : bar.clientWidth;
+      const top = Math.max(0.6, 16 / Math.max(w, 1) - 1);   // 폰은 칸이 좁아 적어도 16px 폭
+      const grow = cells.map((_, i) => 1 + top * (LENS[Math.abs(i - c)] || 0));
+      cells.forEach((el, i) => {
+        const f = LENS[Math.abs(i - c)] || 0;
+        el.classList.toggle("zoom", i === c);
+        el.style.flexGrow = f ? grow[i].toFixed(3) : "";
+        el.style.transform = f ? `scaleY(${(1 + 0.45 * f).toFixed(3)})` : "";
+      });
+      return centers(grow)[c];
+    };
+    const placeChip = (i, x0) => {
+      const el = cells[i], chip = bar.querySelector(".dist-chip");
+      if (!chip) return;
+      const n = Number(el.dataset.n) || 0;
+      chip.textContent = `${bookLabel(Number(el.dataset.b))} · ${n.toLocaleString()}`;
+      chip.classList.toggle("zero", !n);
+      const half = chip.offsetWidth / 2;
+      const x = Math.min(Math.max(x0, half), bar.clientWidth - half) - half;
+      if (!chip.classList.contains("on")) {   // 처음 나타날 땐 미끄러져 오지 않고 그 자리에
+        chip.style.transition = "none";
+        chip.style.transform = `translateX(${x}px)`;
+        void chip.offsetWidth;
+        chip.style.transition = "";
+        chip.classList.add("on");
+      } else {
+        chip.style.transform = `translateX(${x}px)`;
+      }
+    };
+    const point = (i) => {
+      if (i < 0 || i === at) return;
+      at = i;
+      placeChip(i, magnify(i));
+      if (down && down.touch && IS_ANDROID) api().haptic();
+    };
+    const reset = () => {
+      at = -1;
+      cells.forEach((el) => { el.style.flexGrow = ""; el.style.transform = ""; el.classList.remove("zoom"); });
+      const chip = bar.querySelector(".dist-chip");
+      if (chip) chip.classList.remove("on");
+    };
+    const xOf = (e) => e.clientX - bar.getBoundingClientRect().left;
+
+    bar.addEventListener("pointerdown", (e) => {
+      fresh();
+      at = -1;
+      down = { touch: e.pointerType !== "mouse" };
+      bar.setPointerCapture(e.pointerId);
+      point(nearest(xOf(e)));
+    });
+    bar.addEventListener("pointermove", (e) => {
+      if (!down && e.pointerType !== "mouse") return;
+      fresh();
+      point(nearest(xOf(e)));
+    });
+    bar.addEventListener("pointerup", (e) => {
+      if (!down) return;
+      const touch = down.touch;
+      down = null;
+      const k = at >= 0 && cells[at];
+      const r = bar.getBoundingClientRect();
+      const near = e.clientX >= r.left && e.clientX <= r.right && e.clientY >= r.top - 60 && e.clientY <= r.bottom + 60;
+      if (touch) reset();
+      if (near && k && Number(k.dataset.n)) {
+        const scope = "b:" + k.dataset.b;
+        setSearchScope(searchScope === scope ? "all" : scope);   // 막대를 다시 그린다 → 다음 움직임에 다시 잼
+      }
+    });
+    bar.addEventListener("pointercancel", () => { down = null; reset(); });
+    bar.addEventListener("pointerleave", () => { if (!down) reset(); });
+  }
+
+  function setSearchScope(scope) {
+    searchScope = scope;
+    applySearchView();
+  }
+
+  function wireSearchTools() {
+    const sort = $("search-sort");
+    sort.addEventListener("click", () => {
+      openMenu(sort, SearchSort.SORTS.map((k) => ({
+        label: I18N.t("search.sort." + k), value: k, on: k === state.searchSort,
+      })), (k) => {
+        state.searchSort = k;
+        api().set_app_setting("search_sort", k);
+        applySearchView();
+      });
+    });
+    // 공용 .seg 핸들러가 먼저 .on 을 옮기지만, 건수 0 인 쪽을 눌렀을 때를 위해
+    // updateSearchTools 가 실제 범위로 다시 맞춘다.
+    $("search-scope").addEventListener("click", (e) => {
+      const o = e.target.closest(".opt");
+      if (!o) return;
+      if (o.classList.contains("off")) updateSearchTools();
+      else setSearchScope(o.dataset.scope);
+    });
+    const books = $("search-books");
+    books.addEventListener("click", () => {
+      const sum = SearchSort.summary(searchItems);
+      const items = [{ label: `${I18N.t("search.scopeAll")} · ${sum.total.toLocaleString()}`, value: "all", on: searchScope === "all" }];
+      sum.groups.forEach((g) => {
+        items.push({ label: `${I18N.t("search.group." + g.key)} · ${g.count.toLocaleString()}`,
+                     value: "g:" + g.key, on: searchScope === "g:" + g.key, cls: "grp" });
+        g.books.forEach((b) => items.push({
+          label: `${bookLabel(b.book, b.short)} · ${b.count.toLocaleString()}`,
+          value: "b:" + b.book, on: searchScope === "b:" + b.book, cls: "sub",
+        }));
+      });
+      openMenu(books, items, setSearchScope);
+    });
+    wireDistScrub();
+  }
+
+  async function renderSearch(res) {
+    const host = $("search-results");
+    const seq = ++searchSeq;
+    searchRes = res;
+    searchItems = SearchSort.analyze(res);
+    searchScope = "all";
+    if (!searchItems.length) {
+      searchHits = [];
+      showSearchTools(false);
       $("search-meta").textContent = I18N.t("search.noResultMeta", { keyword: res.keyword });
       host.innerHTML = `<div class="panel-loading">${I18N.t("search.noResults")}</div>`;
       return;
     }
+    await loadBookNames(res.version);
+    if (seq !== searchSeq) return;   // 그사이 다른 검색이 시작됨
     // 띄어쓰기 다중 키워드일 때만 AND/OR 모드 표기(단일어는 모드 무관 폴백).
     const multi = res.keyword.trim().includes(" ");
     const modeTag = multi && res.mode ? ` · ${res.mode.toUpperCase()}` : "";
@@ -1798,25 +2055,21 @@
           pairs: expKeys.map((k) => `${k}→${exp[k].join("/")}`).join(", "),
         })
       : "";
+    const total = searchItems.length.toLocaleString();
+    const capped = searchItems.length >= SEARCH_CAP ? I18N.t("search.capped", { n: total }) : "";
     $("search-meta").textContent =
-      I18N.t("search.resultMeta", { keyword: res.keyword, count: searchHits.length, display: res.display, mode: modeTag }) +
-      (state.searchClickNav ? I18N.t("search.actionCopyNav") : I18N.t("search.actionCopy")) + expTag;
-    // 강조 토큰 = 질의어 + 유의어 확장어(highlight_tokens). 구버전 응답 호환으로
-    // matched_tokens 로 폴백한다.
-    const toks = res.highlight_tokens || res.matched_tokens || [];
-    host.innerHTML = (res.hits || [])
-      .map(
-        (h, i) =>
-          `<div class="sr" data-i="${i}"><span class="sr-ref">${esc(h.short)} ${h.chapter}:${h.verse}</span><span class="sr-text">${highlightHtml(esc(h.text), toks)}</span><span class="cart-add-btn" data-cart-add="${i}" title="${esc(I18N.t("cart.add"))}">＋</span></div>`
-      )
-      .join("");
-    wireSearchHitClicks();
-    // 옵션: 최고 점수 결과(1위) 자동 복사 + 활동 로그 기록. 결과는 점수 내림차순이라
-    // searchHits[0] 이 최고점. 로그 행 클릭 시 재복사는 기존 동작이 처리.
-    if (state.autoCopyTop && searchHits.length) {
-      copyHit(searchHits[0]);
-      const top = host.querySelector('.sr[data-i="0"]');
-      if (top) { top.classList.add("copied"); setTimeout(() => top.classList.remove("copied"), 900); }
+      I18N.t("search.resultMeta", { keyword: res.keyword, count: total, display: res.display, mode: modeTag }) +
+      (state.searchClickNav ? I18N.t("search.actionCopyNav") : I18N.t("search.actionCopy")) + expTag + capped;
+    showSearchTools(true);
+    applySearchView();
+    // 옵션(⚙, 기본 꺼짐): 정확도 1위 자동 복사 + 활동 로그 기록. 정렬을 무엇으로 골랐든
+    // 1위는 엔진 순서의 첫 번째(searchItems[0]). 로그 행 클릭 시 재복사는 기존 동작이 처리.
+    if (state.autoCopyTop) {
+      const top = searchItems[0];
+      copyHit(top);
+      const i = searchHits.indexOf(top);
+      const el = i >= 0 && host.querySelector(`.sr[data-i="${i}"]`);
+      if (el) flashHit(el, 900);
     }
   }
 
@@ -1839,6 +2092,10 @@
   function renderStrongSearch(res) {
     const host = $("search-results");
     const hits = (res && res.hits) || [];
+    searchSeq++;
+    searchRes = null;
+    searchItems = [];
+    showSearchTools(false);   // 원어 역검색은 정렬·필터 없이 그대로
     searchHits = hits.map((h) => ({
       book: h.book_num, chapter: h.chapter, verse: h.verse,
       short: (h.ref || "").split(" ")[0],
@@ -1851,13 +2108,7 @@
     $("search-meta").textContent =
       I18N.t("search.strongResultMeta", { code: res.code, count: res.count }) +
       (state.searchClickNav ? I18N.t("search.strongNavSuffix") : "");
-    host.innerHTML = hits
-      .map(
-        (h, i) =>
-          `<div class="sr" data-i="${i}"><span class="sr-ref">${esc(h.ref)}</span><span class="sr-text">${esc(h.text)}</span><span class="cart-add-btn" data-cart-add="${i}" title="${esc(I18N.t("cart.add"))}">＋</span></div>`
-      )
-      .join("");
-    wireSearchHitClicks();
+    host.innerHTML = hits.map((h, i) => srRow(i, h.ref, esc(h.text))).join("");
   }
 
   // ---- search-bar autocomplete (book names + intent hints) ----
@@ -1900,6 +2151,8 @@
 
   function wireSearch() {
     const go = $("search-go"), input = $("search-input");
+    $("search-results").addEventListener("click", onSearchResultsClick);
+    wireSearchTools();
     if (go) go.addEventListener("click", () => runSearch());
     if (input) {
       input.addEventListener("keydown", (e) => {

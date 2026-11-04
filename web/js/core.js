@@ -93,7 +93,7 @@ window.BC = window.BC || {};
         menu.appendChild(el);
         return;
       }
-      el.className = "menu-item" + (it.on ? " on" : "");
+      el.className = "menu-item" + (it.on ? " on" : "") + (it.cls ? " " + it.cls : "");
       el.textContent = it.label;
       el.addEventListener("click", () => {
         if (opts.multi) {
@@ -373,6 +373,7 @@ window.BC = window.BC || {};
     state.isPremium = init.is_premium !== false;  // default premium unless backend says false
     state.searchClickNav = !!init.search_click_navigates;
     state.autoCopyTop = !!init.auto_copy_top_result;
+    state.searchSort = init.search_sort || "rank";   // 검색 결과 정렬(기억함)
     state.searchSyn = init.search_synonyms !== false;   // 기본 켜짐
     state.viewMode = init.view_mode === "split" ? "split" : "interleave";
     state.subtitlePreset = init.subtitle_preset || "green";

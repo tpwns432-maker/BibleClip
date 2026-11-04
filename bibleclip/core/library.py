@@ -69,6 +69,7 @@ class Library:
         # '애굽'이 걸린다(끄면 0건). 사전은 web/data/bible_synonyms.json — 앱이 가진
         # 한국어 역본들의 절 단위 병렬 대응에서 추출. 검색 전용(표시/복사와 무관).
         'search_synonyms': True,
+        'search_sort': 'rank',            # 검색 결과 정렬 rank|bible|freq|short|orig (docs/SEARCH_SORT_PLAN.md)
         'poll_interval': 0.5,             # clipboard polling interval (seconds)
         'search_click_navigates': False,  # search hit click also jumps the viewer
         'dark_mode': False,

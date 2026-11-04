@@ -347,7 +347,7 @@ BibleClip Project/
 
 ## 8. 프론트엔드 SPA (`web/` — vanilla JS, 프레임워크 없음)
 
-**스크립트 로드 순서(필수)**: `i18n.js` → `core.js` → `tour.js` → `cards.js` → `search-notes.js`(끝에서 boot()). ※ **`versebreak.js` 는 이 순서에 들어가지 않는다** — 메인 SPA 가 쓰지 않고 자막 창(`subtitle.html`)만 직접 로드한다(자체완결). 전역 네임스페이스 `window.BC`, `window.I18N`, `CardManager`. 백→프론트 푸시: `window.bibleclip.{onReference, onKeyword, onUpdateProgress, onUpdateReady, onUpdateError}`.
+**스크립트 로드 순서(필수)**: `i18n.js` → `core.js` → `tour.js` → `cards.js` → `search-sort.js` → `search-notes.js`(끝에서 boot()). ※ **`versebreak.js` 는 이 순서에 들어가지 않는다** — 메인 SPA 가 쓰지 않고 자막 창(`subtitle.html`)만 직접 로드한다(자체완결). 전역 네임스페이스 `window.BC`, `window.I18N`, `CardManager`. 백→프론트 푸시: `window.bibleclip.{onReference, onKeyword, onUpdateProgress, onUpdateReady, onUpdateError}`.
 
 **index.html DOM 셸**: `.rail`(좌측 아이콘 네비, `#notes-toggle` 포함) + `.main`(`.topbar`/`.controls`/`.viewer-view>.panels-container`/`.settings-view`/`.search-view`) + 드로어(`#log-drawer`/`#cart-drawer`/**`#notes-drawer`**(FEAT-03 묵상 노트 레일 패널: `#notes-list`+`#notes-foot`)) + 모달(`#settings-modal`/`#alias-modal`) + `.toast-wrap`.
 
@@ -378,6 +378,12 @@ BibleClip Project/
 - **형광펜(v1.1.12)**: `decorateHighlights(card)`(장 단위 fetch→캐시→칠하기, `loadBibleCard`에서 `decorateNotes` **앞**에 호출)/`paintHighlights(card)`(캐시→DOM, 통신 없음·멱등)/`vtxHTML(version, text)`(**`.vtx[data-ver]` 텍스트 래퍼** — 오프셋 기준점)/`hlTextHTML(raw, ranges)`(오프셋→HTML, `t` 검증·재탐색·폐기)/`hlMark`/`hlColor`/`vtxOffset(tx, node, off)`(Range 실측)/`selectionRanges(sec, range)`(드래그→(역본,절)별 구간, 다중 절·다중 컬럼·공백 트림)/`normRanges(list, raw)`/`mergeRange(list, add, raw)`/`subtractRange(list, del, raw)`/`openHlPalette`/`closeHlPalette`/`applyHl(card, targets, color)`/`vtxFor(body, n, ver)`. 상태 `HL_COLORS`/`hlCache`(cardId→{version:{verse:[ranges]}})/`hlPop`. 팔레트는 `document.fullscreenElement || document.body`에 append(F11 필수)
 - 이벤트 위임: `wireContainer()` (클릭/스크롤/드래그/contextmenu/hover 단일 핸들러). **드래그 mouseup = 걸친 절 복사(기존) + 형광펜 팔레트(v1.1.12) 동시**, **`.hl-mark` 클릭 = 절 복사 대신 팔레트**(색 변경/지우기)
 - public: `{init, addCard, addCardWithLink, goToRef, primaryVersion, primaryBible, bibleCards, lexiconCards, bodyEl, linkedBibleFor, chapStepPrimary, chapStepActive, reloadAllBible, relabel, presentToggle, ensureInterlinearFor, decorateNotesFor:decorateNotes, snapshotAnchors, realignAnchors, **jumpContext**}` — `jumpContext()`(v1.1.14)는 `jumpTarget()`(goToRef 의 대상 선정 로직 분리)이 고른 카드의 `{book, chapter}`
+
+### search-sort.js — 검색 결과 정렬 · 필터 (IIFE `window.SearchSort`, docs/SEARCH_SORT_PLAN.md)
+- 검색은 걸린 절 **전부**(`SEARCH_CAP` 10,000 — '여호와' 6,192절·0.35초·515KB)를 정확도순으로 받고, 정렬·필터는 이 모듈이 화면에서 계산(다시 검색 안 함). 상위 200개만 받으면 '성경순'·'신약만'이 그 200개 안에서만의 결과가 되기 때문. DOM 무관 → node 테스트 `tests/test_search_sort.js`.
+- `analyze(res)` → 항목 `{rank, book, chapter, verse, short, text, len, terms, count, orig}`. 검색어 하나 = `matched_tokens[i]` + `expanded[그 토큰]` 묶음, 세는 규칙은 화면 강조(`highlightHtml`)와 같다(대소문자 무시·긴 단어 우선·비겹침). 강조할 단어가 없는 결과(붙여 친 구절 완전일치 폴백)는 전부 0 → 정확도 순서 유지.
+- `sort(items, key)`: `rank`(엔진 순서) · `bible`(책·장·절) · `freq`(포함 검색어 수↓ → 횟수↓ → rank, 한 단어면 곧 '많이 나온 절') · `short`(글자 수↑) · `orig`(원래 단어로 나온 검색어 수↓ — 유의어로만 걸린 절은 뒤로). `filter(items, scope)`: `all`/`ot`/`nt`/`g:<묶음>`/`b:<책>`(범위는 하나만). `summary` = 구약·신약·묶음·책 건수(결과 있는 것만). 책 번호 MyBible(신약 ≥470), 묶음 10개 + `other`(외경), 히브리서(650)=일반서신.
+- search-notes.js: `searchItems`(정확도순 전부) → `applySearchView` 가 `searchHits`(보이는 순서) 재계산 → `appendSearchPage` 200개씩 + `[더 보기]`. 결과 클릭·＋·더 보기는 `#search-results` **위임 핸들러 하나**(`onSearchResultsClick`, 나중에 붙는 행도 동작). 줄 `#search-tools`(정렬 pill `#search-sort` · `#search-scope` seg · 묶음·책 pill `#search-books` — openMenu 항목 `cls: grp/sub`)와 분포 막대 `#search-dist`(66칸, 제곱근 높이, 누르면 그 책·다시 누르면 전체). 정렬은 앱 설정 **`search_sort`**(⚠️ `DEFAULT_SETTINGS`+`_APP_KEYS`+`get_initial`+`get_app_settings`, 안드로이드 Bridge `APP_KEYS`/initial 동반), 범위는 새 검색마다 전체. '1위 자동 복사'(⚙)는 정렬과 무관하게 `searchItems[0]`. 원어 코드 검색은 줄 숨김. 폰은 한 줄 가로 스크롤 + 끝 흐림(mobile.js `chipFades("search-tools")`).
 
 ### versebreak.js — ★ 성경 구절 자동 줄바꿈 엔진 (v1.2.0, IIFE `window.VerseBreak`)
 자막 창만 로드한다(메인 SPA 무관). **`measure` 를 주입받는 순수 계산 모듈**이라 브라우저 없이 node 로 테스트된다.
@@ -432,6 +438,7 @@ BibleClip Project/
 - `test_installer.py` — installer 다운/스테이징/스크립트
 - `test_killswitch.py` — 킬스위치 fail-open/min_version 로직
 - `test_highlights.py` — 형광펜 store(`_norm` 정렬·비겹침·캡, CRUD, **역본 격리**, 장/책 경계, `:` 포함 역본명, 손상 파일·쓰기불가 fail-soft)
+- `test_search_sort.js` — 검색 결과 정렬·필터(**node**: 세는 법·정렬 5종·범위·묶음 경계·건수)
 - `test_versebreak.js` — 자동 줄바꿈 엔진(**node**, 12개 절: 등급 판정/절 경계/기준 사례(마 18:19-20 = 사람이 만든 슬라이드와 줄 단위 일치)/나열문 구제/**문장 경계 강제 + 오탐 목록**/자동 분할(절 누락·중복 없음, 무한 재귀 방지))
 - `test_quickjump_parse.js` — F2 상대 참조 파서(**node**, 33건: 절/범위/장:절/장, 전각 문자, 역순 입력, **건드리면 안 되는 입력 14종이 `null` 로 빠지는지**)
 - `test_highlight_ranges.js` — 형광펜 구간 대수(**node**, `node tests/test_highlight_ranges.js`). cards.js 소스에서 `hlColor`/`hlMark`/`hlTextHTML`/`normRanges`/`mergeRange`/`subtractRange` 정의를 **이름으로 잘라 eval** — 로직 복사본을 만들지 않아 갈라지지 않는다. 함수명을 바꾸면 이 테스트가 먼저 실패한다
@@ -452,7 +459,7 @@ Kotlin 앱이 `web/` 을 WebView로 띄우고, pywebview `js_api` 와 **같은 �
   - `BibleDb.kt` — MyBible 읽기 API. SQL은 여기, 하위 클래스는 쿼리 실행만(안드로이드 `AndroidBibleDb` / 테스트 JDBC)
   - `Settings.kt` — 데스크톱과 같은 설정 JSON + Python 식 truthiness
   - `Library.kt` — 별칭 맵·`validateSettings`(load_settings 검증)·`buildOutput`·`formatReference`
-- `core/Search.kt` — **검색**(골든 `tests/golden/search.json`): `Korean.tokenize`(korean.py), `Synonyms`(synonyms.py, 사전은 첫 검색 때 지연 로드), `VerseSearch`(bible_db.search: BM25+유의어 신뢰도 가중 → 띄어쓰기 무시 완전일치 → trigram ≥0.7. smart_search 는 BM25 후보가 상위집합이라 도달 불가 → 생략, Kiwi 는 배포판처럼 끔). `Library.searchReply` = routes.bible.search 와 같은 응답. 앱 시작 후 기본 검색 역본 색인을 저우선 스레드로 미리 만든다(S20 FE 약 4초, 첫 화면엔 영향 없음)
+- `core/Search.kt` — **검색**(골든 `tests/golden/search.json`): `Korean.tokenize`(korean.py), `Synonyms`(synonyms.py, 사전은 첫 검색 때 지연 로드), `VerseSearch`(bible_db.search: BM25+유의어 신뢰도 가중 → 띄어쓰기 무시 완전일치 → trigram ≥0.7. smart_search 는 BM25 후보가 상위집합이라 도달 불가 → 생략, Kiwi 는 배포판처럼 끔). `Library.searchReply` = routes.bible.search 와 같은 응답. 앱 시작 후 기본 검색 역본 색인을 저우선 스레드로 미리 만든다(S20 FE 약 4초, 첫 화면엔 영향 없음). 결과 본문은 색인의 `v.clean`(= getVerseText, 절마다 SQL 안 함 — 결과 전부를 받아 가는 정렬·필터 때문). 골든에 `limit` 10000 케이스 4개 — 전체 순서를 `hit_digest`(sha256)로 데스크톱과 대조
 - `core/UserData.kt` — **노트·형광펜·장바구니**(notes.py·highlights.py·cart.py 이식, 골든 `tests/golden/userdata.json` = 같은 조작 스크립트의 반환값·최종 파일·손상 파일 로드). 파일 = filesDir/userdata/ 의 user_notes.json·user_highlights.json·sermon_cart.json(**데스크톱과 같은 이름·형식**). `pyInt` = Python int() 흉내. 브리지: get/set/delete_note·get_chapter_notes·get_all_notes·get/set_cart·copy_references(`Library.copyReferences`)·get_chapter/verse_highlights·set/clear_verse_highlights·get_all_highlights, get_initial.cart
 - `core/BibleImporter.kt` — **[＋ 성경 파일 추가…]**(Library.import_bible_files 이식): 이름 충돌(대소문자 무시)·info/books/verses+절 존재(`BibleDb.looksLikeBible`)·zip 은 맨 이름만(zip-slip 차단)·UTF-8 플래그 없는 zip 은 cp949·512MB 상한. 오류 코드 exists/invalid/empty_zip/read_error/copy_error 데스크톱과 동일. JVM 테스트 `BibleImporterTest`
 - `Bridge.add_bible_files` — 시스템 파일 선택 창(SAF `ACTION_OPEN_DOCUMENT`, 여러 개, `*/*` — .SQLite3 는 MIME 이 없어 거르면 안 보임) → `BibleClipApp.importBibles` → `scanBibles`. 반환 모양이 데스크톱과 같아 web/ 무수정. 브리지 워커는 선택 창이 닫힐 때까지 대기(MainActivity `pickBibleFiles`/`onActivityResult`, onDestroy 에서 빈 결과로 풀어줌). `refresh_databases` 도 구현(폰에선 버튼 숨김)
