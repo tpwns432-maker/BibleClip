@@ -6,8 +6,8 @@
   // The version chips scroll sideways in a fixed one-line row (mobile.css).
   // Fade the edge that hides more chips — only when something is actually
   // hidden there, so a row that fits stays crisp.
-  function chipFades() {
-    const box = document.getElementById("ver-chips");
+  function chipFades(id) {
+    const box = document.getElementById(id);
     if (!box) return;
     const update = () => {
       const hidden = box.scrollWidth - box.clientWidth;
@@ -53,7 +53,8 @@
 
   function start() {
     phoneStrings();
-    chipFades();
+    chipFades("ver-chips");
+    chipFades("search-tools");   // 검색 결과 정렬·필터 줄
     keyboardAware();
   }
 

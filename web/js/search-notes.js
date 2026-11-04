@@ -1689,7 +1689,8 @@
 
   // ---- Keyword search ----
 
-  let searchHits = [];
+  let searchHits = [];   // 화면에 보이는 순서의 결과 — .sr 의 data-i 가 이 배열의 위치
+  const SEARCH_CAP = 10000, SEARCH_PAGE = 200;
 
   // Unified search bar (통합 검색바, Phase 2): one input handles three intents.
   //   1) Strong's code (H7225 / G26) → reverse cross-query over 개역한글S tags
@@ -1727,7 +1728,9 @@
     // 3) Keyword search (default). v1.0.5: 띄어쓰기 다중 키워드면 AND/OR 모드 적용.
     $("search-meta").textContent = "";
     $("search-results").innerHTML = `<div class="panel-loading">${I18N.t("search.searching")}</div>`;
-    renderSearch(await api().search(q, state.searchVersion || undefined, 200, searchMode()));
+    // 걸린 절 전부를 받아 온다 — 정렬·필터는 화면에서(SearchSort). 상위 200개만 받으면
+    // "성경순"·"신약만"이 그 200개 안에서만의 결과가 된다.
+    renderSearch(await api().search(q, state.searchVersion || undefined, SEARCH_CAP, searchMode()));
   }
 
   // 검색바의 AND/OR 세그먼트 현재 값 ('and'|'or'). 기본 'and'.
@@ -1748,44 +1751,194 @@
     return r;
   }
 
-  // Click handler shared by keyword + strong-code results.
-  function wireSearchHitClicks() {
+  // Clicks on keyword + strong-code results — one delegated handler (wired once in
+  // wireSearch), so rows added later by 더 보기 work too. data-i indexes searchHits.
+  async function onSearchResultsClick(ev) {
+    if (ev.target.closest("[data-more]")) { appendSearchPage(); return; }
+    const add = ev.target.closest("[data-cart-add]");   // ＋ 는 장바구니 담기 전용
+    if (add) {
+      ev.stopPropagation();
+      const h = searchHits[Number(add.dataset.cartAdd)];
+      if (h) addToCart({ book_num: h.book, chapter: h.chapter, verses: [h.verse], short_name: h.short });
+      return;
+    }
+    const el = ev.target.closest(".sr");
+    const h = el && searchHits[Number(el.dataset.i)];
+    if (!h) return;
+    const r = await copyHit(h);
+    if (r && r.ok) flashHit(el, 700);
+    if (state.searchClickNav) {
+      showView("viewer");
+      CardManager.goToRef(h.book, h.chapter, [h.verse]);
+    }
+  }
+
+  function flashHit(el, ms) {
+    el.classList.add("copied");
+    setTimeout(() => el.classList.remove("copied"), ms);
+  }
+
+  function srRow(i, ref, textHtml) {
+    return `<div class="sr" data-i="${i}"><span class="sr-ref">${esc(ref)}</span><span class="sr-text">${textHtml}</span><span class="cart-add-btn" data-cart-add="${i}" title="${esc(I18N.t("cart.add"))}">＋</span></div>`;
+  }
+
+  // ---- 검색 결과 정렬 · 필터 (docs/SEARCH_SORT_PLAN.md) ----
+  // 결과는 정확도순 전부(searchItems)를 들고 있고, 정렬·범위를 바꾸면 searchHits(화면에 보일
+  // 순서)만 다시 만든다. 그리기는 SEARCH_PAGE 개씩 — 나머지는 [더 보기].
+  let searchRes = null;     // 마지막 키워드 검색 응답
+  let searchItems = [];     // SearchSort.analyze(searchRes) — 정확도순
+  let searchScope = "all";  // 새 검색마다 전체로
+  let searchShown = 0;
+  let searchSeq = 0;
+  const bookNames = {};     // 역본 → {책 번호: 정식 이름}
+
+  async function loadBookNames(version) {
+    if (!version || bookNames[version]) return;
+    try {
+      const books = await api().get_books(version);
+      bookNames[version] = Object.fromEntries((books || []).map((b) => [b.num, b.long]));
+    } catch (_) {}
+  }
+
+  function bookLabel(book, short) {
+    const names = (searchRes && bookNames[searchRes.version]) || {};
+    return names[book] || short || String(book);
+  }
+
+  function showSearchTools(on) {
+    $("search-tools").hidden = !on;
+    $("search-dist").hidden = !on;
+  }
+
+  function applySearchView() {
+    searchHits = SearchSort.sort(SearchSort.filter(searchItems, searchScope), state.searchSort);
+    searchShown = 0;
     const host = $("search-results");
-    host.querySelectorAll(".sr").forEach((el) => {
-      el.addEventListener("click", async (ev) => {
-        if (ev.target.closest("[data-cart-add]")) return;  // ＋ 는 장바구니 담기 전용
-        const h = searchHits[Number(el.dataset.i)];
-        if (!h) return;
-        const r = await copyHit(h);
-        if (r && r.ok) {
-          el.classList.add("copied");
-          setTimeout(() => el.classList.remove("copied"), 700);
-        }
-        if (state.searchClickNav) {
-          showView("viewer");
-          CardManager.goToRef(h.book, h.chapter, [h.verse]);
-        }
+    host.innerHTML = "";
+    host.scrollTop = 0;
+    appendSearchPage();
+    updateSearchTools();
+  }
+
+  function appendSearchPage() {
+    const host = $("search-results");
+    const more = host.querySelector(".sr-more");
+    if (more) more.remove();
+    // 강조 토큰 = 질의어 + 유의어 확장어(highlight_tokens). 구버전 응답 호환으로
+    // matched_tokens 로 폴백한다.
+    const toks = (searchRes && (searchRes.highlight_tokens || searchRes.matched_tokens)) || [];
+    const end = Math.min(searchHits.length, searchShown + SEARCH_PAGE);
+    let html = "";
+    for (let i = searchShown; i < end; i++) {
+      const h = searchHits[i];
+      html += srRow(i, `${h.short} ${h.chapter}:${h.verse}`, highlightHtml(esc(h.text), toks));
+    }
+    searchShown = end;
+    const left = searchHits.length - end;
+    if (left > 0) {
+      html += `<button class="btn sr-more" data-more>${I18N.t("search.more", { n: left.toLocaleString() })}</button>`;
+    }
+    host.insertAdjacentHTML("beforeend", html);
+  }
+
+  function updateSearchTools() {
+    const sum = SearchSort.summary(searchItems);
+    $("search-sort").textContent = I18N.t("search.sort." + state.searchSort);
+    const counts = { all: sum.total, ot: sum.ot, nt: sum.nt };
+    $("search-scope").querySelectorAll(".opt").forEach((o) => {
+      const n = counts[o.dataset.scope];
+      o.querySelector("b").textContent = n.toLocaleString();
+      o.classList.toggle("on", o.dataset.scope === searchScope);
+      o.classList.toggle("off", !n);
+    });
+    const books = $("search-books");
+    let label = I18N.t("search.booksBtn");
+    if (searchScope.startsWith("g:")) label = I18N.t("search.group." + searchScope.slice(2));
+    else if (searchScope.startsWith("b:")) {
+      const b = Number(searchScope.slice(2));
+      label = bookLabel(b, (searchItems.find((it) => it.book === b) || {}).short);
+    }
+    books.textContent = label;
+    books.classList.toggle("sel", /^[gb]:/.test(searchScope));
+    renderSearchDist(sum);
+  }
+
+  // 분포 막대: 66권 한 칸씩, 높이 = 건수(제곱근 — 적은 책도 보이게). 누르면 그 책만.
+  function renderSearchDist(sum) {
+    const max = Math.max(1, ...sum.byBook.values());
+    const sel = searchScope.startsWith("b:") ? Number(searchScope.slice(2)) : null;
+    const shortOf = new Map();
+    sum.groups.forEach((g) => g.books.forEach((b) => shortOf.set(b.book, b.short)));
+    $("search-dist").innerHTML = SearchSort.CANON.map((b) => {
+      const n = sum.byBook.get(b) || 0;
+      const cls = [n ? "has" : "", b === sel ? "on" : "", b === 470 ? "nt" : ""].filter(Boolean).join(" ");
+      const h = n ? Math.max(14, Math.round(100 * Math.sqrt(n / max))) : 0;
+      const tip = n ? I18N.t("search.distTitle", { book: bookLabel(b, shortOf.get(b)), n: n.toLocaleString() }) : "";
+      return `<i class="${cls}" data-b="${b}" style="--h:${h}%"${tip ? ` title="${esc(tip)}"` : ""}></i>`;
+    }).join("");
+  }
+
+  function setSearchScope(scope) {
+    searchScope = scope;
+    applySearchView();
+  }
+
+  function wireSearchTools() {
+    const sort = $("search-sort");
+    sort.addEventListener("click", () => {
+      openMenu(sort, SearchSort.SORTS.map((k) => ({
+        label: I18N.t("search.sort." + k), value: k, on: k === state.searchSort,
+      })), (k) => {
+        state.searchSort = k;
+        api().set_app_setting("search_sort", k);
+        applySearchView();
       });
     });
-    host.querySelectorAll("[data-cart-add]").forEach((btn) => {
-      btn.addEventListener("click", (ev) => {
-        ev.stopPropagation();
-        const h = searchHits[Number(btn.dataset.cartAdd)];
-        if (h) addToCart({ book_num: h.book, chapter: h.chapter, verses: [h.verse], short_name: h.short });
+    // 공용 .seg 핸들러가 먼저 .on 을 옮기지만, 건수 0 인 쪽을 눌렀을 때를 위해
+    // updateSearchTools 가 실제 범위로 다시 맞춘다.
+    $("search-scope").addEventListener("click", (e) => {
+      const o = e.target.closest(".opt");
+      if (!o) return;
+      if (o.classList.contains("off")) updateSearchTools();
+      else setSearchScope(o.dataset.scope);
+    });
+    const books = $("search-books");
+    books.addEventListener("click", () => {
+      const sum = SearchSort.summary(searchItems);
+      const items = [{ label: `${I18N.t("search.scopeAll")} · ${sum.total.toLocaleString()}`, value: "all", on: searchScope === "all" }];
+      sum.groups.forEach((g) => {
+        items.push({ label: `${I18N.t("search.group." + g.key)} · ${g.count.toLocaleString()}`,
+                     value: "g:" + g.key, on: searchScope === "g:" + g.key, cls: "grp" });
+        g.books.forEach((b) => items.push({
+          label: `${bookLabel(b.book, b.short)} · ${b.count.toLocaleString()}`,
+          value: "b:" + b.book, on: searchScope === "b:" + b.book, cls: "sub",
+        }));
       });
+      openMenu(books, items, setSearchScope);
+    });
+    $("search-dist").addEventListener("click", (e) => {
+      const cell = e.target.closest("i.has");
+      if (!cell) return;
+      const scope = "b:" + cell.dataset.b;
+      setSearchScope(searchScope === scope ? "all" : scope);
     });
   }
 
-  function renderSearch(res) {
+  async function renderSearch(res) {
     const host = $("search-results");
-    searchHits = (res.hits || []).map((h) => ({
-      book: h.book, chapter: h.chapter, verse: h.verse, short: h.short,
-    }));
-    if (!searchHits.length) {
+    const seq = ++searchSeq;
+    searchRes = res;
+    searchItems = SearchSort.analyze(res);
+    searchScope = "all";
+    if (!searchItems.length) {
+      searchHits = [];
+      showSearchTools(false);
       $("search-meta").textContent = I18N.t("search.noResultMeta", { keyword: res.keyword });
       host.innerHTML = `<div class="panel-loading">${I18N.t("search.noResults")}</div>`;
       return;
     }
+    await loadBookNames(res.version);
+    if (seq !== searchSeq) return;   // 그사이 다른 검색이 시작됨
     // 띄어쓰기 다중 키워드일 때만 AND/OR 모드 표기(단일어는 모드 무관 폴백).
     const multi = res.keyword.trim().includes(" ");
     const modeTag = multi && res.mode ? ` · ${res.mode.toUpperCase()}` : "";
@@ -1798,25 +1951,21 @@
           pairs: expKeys.map((k) => `${k}→${exp[k].join("/")}`).join(", "),
         })
       : "";
+    const total = searchItems.length.toLocaleString();
+    const capped = searchItems.length >= SEARCH_CAP ? I18N.t("search.capped", { n: total }) : "";
     $("search-meta").textContent =
-      I18N.t("search.resultMeta", { keyword: res.keyword, count: searchHits.length, display: res.display, mode: modeTag }) +
-      (state.searchClickNav ? I18N.t("search.actionCopyNav") : I18N.t("search.actionCopy")) + expTag;
-    // 강조 토큰 = 질의어 + 유의어 확장어(highlight_tokens). 구버전 응답 호환으로
-    // matched_tokens 로 폴백한다.
-    const toks = res.highlight_tokens || res.matched_tokens || [];
-    host.innerHTML = (res.hits || [])
-      .map(
-        (h, i) =>
-          `<div class="sr" data-i="${i}"><span class="sr-ref">${esc(h.short)} ${h.chapter}:${h.verse}</span><span class="sr-text">${highlightHtml(esc(h.text), toks)}</span><span class="cart-add-btn" data-cart-add="${i}" title="${esc(I18N.t("cart.add"))}">＋</span></div>`
-      )
-      .join("");
-    wireSearchHitClicks();
-    // 옵션: 최고 점수 결과(1위) 자동 복사 + 활동 로그 기록. 결과는 점수 내림차순이라
-    // searchHits[0] 이 최고점. 로그 행 클릭 시 재복사는 기존 동작이 처리.
-    if (state.autoCopyTop && searchHits.length) {
-      copyHit(searchHits[0]);
-      const top = host.querySelector('.sr[data-i="0"]');
-      if (top) { top.classList.add("copied"); setTimeout(() => top.classList.remove("copied"), 900); }
+      I18N.t("search.resultMeta", { keyword: res.keyword, count: total, display: res.display, mode: modeTag }) +
+      (state.searchClickNav ? I18N.t("search.actionCopyNav") : I18N.t("search.actionCopy")) + expTag + capped;
+    showSearchTools(true);
+    applySearchView();
+    // 옵션(⚙, 기본 꺼짐): 정확도 1위 자동 복사 + 활동 로그 기록. 정렬을 무엇으로 골랐든
+    // 1위는 엔진 순서의 첫 번째(searchItems[0]). 로그 행 클릭 시 재복사는 기존 동작이 처리.
+    if (state.autoCopyTop) {
+      const top = searchItems[0];
+      copyHit(top);
+      const i = searchHits.indexOf(top);
+      const el = i >= 0 && host.querySelector(`.sr[data-i="${i}"]`);
+      if (el) flashHit(el, 900);
     }
   }
 
@@ -1839,6 +1988,10 @@
   function renderStrongSearch(res) {
     const host = $("search-results");
     const hits = (res && res.hits) || [];
+    searchSeq++;
+    searchRes = null;
+    searchItems = [];
+    showSearchTools(false);   // 원어 역검색은 정렬·필터 없이 그대로
     searchHits = hits.map((h) => ({
       book: h.book_num, chapter: h.chapter, verse: h.verse,
       short: (h.ref || "").split(" ")[0],
@@ -1851,13 +2004,7 @@
     $("search-meta").textContent =
       I18N.t("search.strongResultMeta", { code: res.code, count: res.count }) +
       (state.searchClickNav ? I18N.t("search.strongNavSuffix") : "");
-    host.innerHTML = hits
-      .map(
-        (h, i) =>
-          `<div class="sr" data-i="${i}"><span class="sr-ref">${esc(h.ref)}</span><span class="sr-text">${esc(h.text)}</span><span class="cart-add-btn" data-cart-add="${i}" title="${esc(I18N.t("cart.add"))}">＋</span></div>`
-      )
-      .join("");
-    wireSearchHitClicks();
+    host.innerHTML = hits.map((h, i) => srRow(i, h.ref, esc(h.text))).join("");
   }
 
   // ---- search-bar autocomplete (book names + intent hints) ----
@@ -1900,6 +2047,8 @@
 
   function wireSearch() {
     const go = $("search-go"), input = $("search-input");
+    $("search-results").addEventListener("click", onSearchResultsClick);
+    wireSearchTools();
     if (go) go.addEventListener("click", () => runSearch());
     if (input) {
       input.addEventListener("keydown", (e) => {

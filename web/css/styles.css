@@ -826,6 +826,24 @@ html[data-theme="dark"] .note-modal-back { background: rgba(0,0,0,.55); }
 .sr.copied { background: var(--badge-ok-bg); border-color: var(--badge-ok-dot); }
 .sr-ref { font-size: 12px; font-weight: 700; color: var(--accent-text); margin-right: 8px; }
 .sr-text { font-size: 13px; color: var(--text); line-height: 1.7; }
+.sr-more { display: block; margin: 4px auto 8px; }
+/* 검색 결과 정렬 · 필터 (docs/SEARCH_SORT_PLAN.md) */
+.search-tools { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.search-scope .opt b { font-weight: 600; font-size: 11px; color: var(--text-dim); margin-left: 4px; }
+.search-scope .opt.off { opacity: .4; cursor: default; }
+.search-dist { display: flex; align-items: stretch; gap: 1px; height: 22px; padding: 0 2px; }
+.search-dist i { flex: 1; position: relative; }
+.search-dist i::before {
+  content: ""; position: absolute; left: 0; right: 0; bottom: 0;
+  height: max(2px, var(--h)); border-radius: 2px 2px 0 0; background: var(--card-border);
+}
+.search-dist i.has { cursor: pointer; }
+.search-dist i.has::before { background: var(--accent); opacity: .5; }
+.search-dist i.has:hover::before { opacity: .8; }
+.search-dist i.on::before { opacity: 1; }
+.search-dist i.nt { margin-left: 5px; }   /* 구약 | 신약 경계 */
+.menu .menu-item.grp { font-weight: 700; }
+.menu .menu-item.sub { font-weight: 500; padding-left: 22px; }
 
 /* ---- Version chip drag-reorder (live gap while dragging) ---- */
 .pill.sel[draggable="true"] { cursor: grab; }
