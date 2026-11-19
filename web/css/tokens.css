@@ -190,6 +190,7 @@
 
   /* 레일은 두 바탕 모두 어둡게 두되, 보라 고정 대신 강조색을 조금 섞는다. */
   --rail-bg:       color-mix(in oklab, var(--pal-accent) 16%, #0B0912);
+  --rail-icon:     color-mix(in oklab, var(--pal-accent) 30%, #B4B0C0);
 
   --app-bg:        var(--pal-bg);
   --card-bg:       color-mix(in oklab, var(--pal-bg), white 60%);
