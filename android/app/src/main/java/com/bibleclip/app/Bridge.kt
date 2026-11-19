@@ -77,9 +77,14 @@ class Bridge(private val app: BibleClipApp, private val web: WebView, private va
         "get_preview" -> (lib.buildOutput("요 1:1-3") as? Output.Reference)?.text ?: ""
         "get_app_settings" -> JSONObject().also { o -> APP_KEYS.keys.forEach { o.put(it, lib.settings[it]) } }
         "set_setting" -> setChecked(a.optString(0), a.opt(1), FORMAT_KEYS)
-        "set_app_setting" -> setChecked(a.optString(0), a.opt(1), APP_KEYS)
+        "set_app_setting" -> when (a.optString(0)) {
+            "custom_theme" -> cleanCustomTheme(a.opt(1))?.let { save("custom_theme", it); syncDarkMode(); ok(true).put("value", it) }
+                ?: ok(false).put("error", "invalid value for custom_theme")
+            "theme" -> setChecked("theme", a.opt(1), APP_KEYS).also { if (it.optBoolean("ok")) syncDarkMode() }
+            else -> setChecked(a.optString(0), a.opt(1), APP_KEYS)
+        }
         "save_cards_layout" -> save("web_cards_layout", a.opt(0))
-        "set_dark_mode" -> save("dark_mode", a.optBoolean(0))
+        "set_dark_mode" -> a.optBoolean(0).let { save("theme", if (it) "dark" else "light"); save("dark_mode", it) }
         "set_font_size" -> (a.optInt(0, 11)).coerceIn(8, 400).also { save("viewer_font_size", it) }
         "set_viewer_versions" -> setViewer(names(a.optJSONArray(0)), keepOrder = false)
         "set_viewer_order" -> setViewer(names(a.optJSONArray(0)), keepOrder = true)
@@ -140,6 +145,8 @@ class Bridge(private val app: BibleClipApp, private val web: WebView, private va
             .put("books", primary?.let { books(it) } ?: JSONArray())
             .put("last", JSONObject().put("version", primary).put("book", lastBook).put("chapter", lastChapter))
             .put("dark_mode", s.truthy("dark_mode"))
+            .put("theme", s.str("theme", "").takeIf { it in THEMES } ?: "")
+            .put("custom_theme", cleanCustomTheme(s["custom_theme"]) ?: JSONObject.NULL)
             .put("font_size", (s["viewer_font_size"] as? Number)?.toInt() ?: 11)
             .put("auto_update_check", false)
             .put("lex_lang", if (s.str("lex_lang", "ko") == "en") "en" else "ko")
@@ -277,6 +284,31 @@ class Bridge(private val app: BibleClipApp, private val web: WebView, private va
         return ok(true).put("value", v)
     }
 
+    /** 색 테마 "직접 만들기" 값 검사(system.py _clean_custom_theme 과 같이). 틀리면 null. */
+    private fun cleanCustomTheme(v: Any?): JSONObject? {
+        val o = v as? JSONObject ?: return null
+        val base = o.optString("base")
+        if (base != "light" && base != "dark") return null
+        val out = JSONObject().put("base", base)
+        for (k in listOf("bg", "text", "accent")) {
+            val c = o.opt(k) as? String ?: return null
+            if (!HEX.matches(c)) return null
+            out.put(k, c.lowercase())
+        }
+        return out
+    }
+
+    /** theme 의 바탕을 dark_mode 에도 — 데스크톱 설정 파일과 같은 뜻. */
+    private fun syncDarkMode() {
+        val t = lib.settings.str("theme", "")
+        val dark = when {
+            t == "custom" -> cleanCustomTheme(lib.settings["custom_theme"])?.optString("base")?.let { it == "dark" }
+            t in THEMES -> t in DARK_THEMES
+            else -> null
+        } ?: return
+        save("dark_mode", dark)
+    }
+
     private fun save(key: String, value: Any?): JSONObject {
         lib.settings[key] = value
         app.saveSettings()
@@ -318,6 +350,11 @@ class Bridge(private val app: BibleClipApp, private val web: WebView, private va
         /** 검색 결과 정렬(화면이 계산 — docs/SEARCH_SORT_PLAN.md). */
         private val SEARCH_SORTS = setOf("rank", "bible", "freq", "short", "orig")
 
+        /** 색 테마(docs/CUSTOM_THEME_PLAN.md) — web/js/theme.js · system.py 와 같은 이름. */
+        private val THEMES = setOf("light", "dark", "paper", "sage", "navy", "black", "custom")
+        private val DARK_THEMES = setOf("dark", "navy", "black")
+        private val HEX = Regex("^#[0-9a-fA-F]{6}$")
+
         /** The desktop's _APP_KEYS that mean something on Android. */
         private val APP_KEYS: Map<String, Set<String>?> = mapOf(
             "search_click_navigates" to null,
@@ -330,6 +367,7 @@ class Bridge(private val app: BibleClipApp, private val web: WebView, private va
             "view_mode" to setOf("interleave", "split"),
             "reading_font" to emptySet(),
             "web_cards_layout" to emptySet(),
+            "theme" to THEMES,
         )
 
         /** Stored as given (the desktop's 'str' / 'any' specs). */

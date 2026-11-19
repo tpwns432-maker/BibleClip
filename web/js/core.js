@@ -12,11 +12,8 @@ window.BC = window.BC || {};
 
   const themeBtn = $("theme-toggle");
   if (themeBtn) {
-    themeBtn.addEventListener("click", () => {
-      const dark = root.dataset.theme !== "dark";
-      root.dataset.theme = dark ? "dark" : "light";
-      if (window.pywebview && window.pywebview.api) window.pywebview.api.set_dark_mode(dark);
-    });
+    // 라이트↔다크. 다른 테마(종이·직접 만들기 등)에서는 그 테마의 반대 바탕으로 간다.
+    themeBtn.addEventListener("click", () => setTheme(Theme.toggled(state.theme, state.customTheme)));
   }
 
   document.querySelectorAll(".seg").forEach((seg) => {
@@ -262,6 +259,8 @@ window.BC = window.BC || {};
     searchSyn: true,        // v1.1.11 검색어 유의어 확장(고어↔현대어)
     viewMode: "interleave", // v1.1.6 본문 보기 모드: 'interleave'(절별 대조) | 'split'(병렬 독서)
     subtitlePreset: "green", // v1.2.0 자막 창 배색: green|navy|black|white|theme
+    theme: "light",         // 색 테마: light|dark|paper|sage|navy|black|custom (web/js/theme.js)
+    customTheme: null,      // "직접 만들기" 기준 색 {base, bg, text, accent}
     booksCache: {},         // version -> [{num,short,long}]
     chapCache: {},          // "version:book" -> [chapters]
     primaryBooks: [],       // primary version's book list (for search autocomplete)
@@ -269,6 +268,13 @@ window.BC = window.BC || {};
     lexSources: [],         // 원전 분해 소스 후보 [{name, display, lang}] (name=''=개역한글S)
     isPremium: true,        // business guard (Phase 1): false → free-tier limits
   };
+
+  /** 색 테마를 바꾸고 저장한다(백엔드가 dark_mode 도 바탕에 맞춰 같이 쓴다). */
+  function setTheme(name) {
+    state.theme = name;
+    Theme.apply(name, state.customTheme);
+    if (hasBridge()) api().set_app_setting("theme", name);
+  }
 
   function applyFontScale() {
     root.style.setProperty("--reading-scale", (state.fontSize / 11).toFixed(3));
@@ -362,7 +368,10 @@ window.BC = window.BC || {};
     state.primaryBooks = init.books || [];
     state.lexSources = init.interlin_sources || [];  // 원전 분해 소스 후보(개역한글S + KJV+ 등)
     // Restore persisted UI prefs (shared with the desktop app).
-    root.dataset.theme = init.dark_mode ? "dark" : "light";
+    state.customTheme = init.custom_theme ? Theme.cleanCustom(init.custom_theme) : null;
+    state.theme = Theme.fromSettings(init.theme, init.dark_mode);
+    if (state.theme === "custom" && !state.customTheme) state.theme = init.dark_mode ? "dark" : "light";
+    Theme.apply(state.theme, state.customTheme);
     state.fontSize = init.font_size || 11;
     applyFontScale();
     bootReadingFont(init.reading_font || "");   // inject+apply saved custom reading font
