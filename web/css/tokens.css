@@ -172,3 +172,80 @@
   --hl-b:      rgba(110, 180, 255, .26);
   --hl-p:      rgba(255, 138, 194, .26);
 }
+
+/* ---- 사용자 색 테마 (docs/CUSTOM_THEME_PLAN.md) ----
+   라이트·다크가 아닌 테마는 <html data-palette="…"> 와 기준 색 4개를 인라인 변수로 둔다
+   (web/js/theme.js): --pal-bg 배경 · --pal-text 글자 · --pal-accent 강조 · --pal-on-accent
+   강조 위 글자. 나머지는 여기서 섞어 만든다. data-theme 는 여전히 바탕(light|dark)이라
+   [data-theme="dark"] 규칙과 그림자·토스트 대비는 그대로 따라온다.
+   ⚠️ 섞는 비율을 바꾸면 미리 만든 테마 4개(종이·숲·남색·검정)를 모두 눈으로 확인할 것. */
+:root[data-palette] {
+  --accent:        var(--pal-accent);
+  --accent-2:      color-mix(in oklab, var(--pal-accent) 78%, white);
+  --accent-hover:  color-mix(in oklab, var(--pal-accent) 88%, black);
+  --accent-grad:   linear-gradient(135deg, var(--accent), var(--accent-2));
+  --accent-blur:   color-mix(in srgb, var(--pal-accent) 45%, transparent);
+  --on-accent:     var(--pal-on-accent);
+  --accent-text:   var(--pal-accent);
+
+  /* 레일은 두 바탕 모두 어둡게 두되, 보라 고정 대신 강조색을 조금 섞는다. */
+  --rail-bg:       color-mix(in oklab, var(--pal-accent) 16%, #0B0912);
+  --rail-icon:     color-mix(in oklab, var(--pal-accent) 30%, #B4B0C0);
+
+  --app-bg:        var(--pal-bg);
+  --card-bg:       color-mix(in oklab, var(--pal-bg), white 60%);
+  --card-border:   color-mix(in oklab, var(--pal-text) 9%, var(--pal-bg));
+  --text:          var(--pal-text);
+  --text-muted:    color-mix(in oklab, var(--pal-text) 68%, var(--pal-bg));
+  --text-dim:      color-mix(in oklab, var(--pal-text) 42%, var(--pal-bg));
+  --hairline:      color-mix(in oklab, var(--pal-text) 7%, var(--pal-bg));
+
+  --pill-bg:       var(--card-bg);
+  --pill-border:   color-mix(in oklab, var(--pal-text) 13%, var(--pal-bg));
+  --pill-text:     color-mix(in oklab, var(--pal-text) 85%, var(--pal-bg));
+  --pill-sel-bg:   color-mix(in oklab, var(--pal-accent) 11%, var(--card-bg));
+  --seg-bg:        color-mix(in oklab, var(--pal-text) 6%, var(--pal-bg));
+  --seg-sel-bg:    var(--card-bg);
+  --seg-text:      var(--text-muted);
+  --seg-sel-text:  var(--pal-text);
+
+  --strong-bg:     color-mix(in oklab, var(--pal-accent) 7%, var(--card-bg));
+  --strong-fg:     color-mix(in oklab, var(--pal-accent) 45%, var(--text-muted));
+  --chip-bg:       var(--pill-sel-bg);
+  --heb:           var(--pal-text);
+
+  --present-bar-bg:   color-mix(in oklab, var(--pal-text) 4%, var(--pal-bg));
+  --present-bar-line: color-mix(in oklab, var(--pal-text) 11%, var(--pal-bg));
+
+  --badge-off-bg:  var(--seg-bg);
+  --badge-off-fg:  var(--text-muted);
+  --badge-off-dot: var(--text-dim);
+  --ver-pill-bg:   var(--seg-bg);
+  --ver-pill-fg:   var(--text-dim);
+
+  --toast-bg:      var(--pal-text);   /* 토스트는 늘 반대 색 */
+  --toast-fg:      var(--pal-bg);
+}
+
+/* 어두운 바탕: 면은 배경보다 아주 조금씩만 밝히고, 강조 글자색은 밝게 섞는다
+   (어두운 면 위 진한 강조색은 글자로 읽기 어렵다 — 기본 다크 테마와 같은 이유). */
+:root[data-theme="dark"][data-palette] {
+  --accent-text:   color-mix(in oklab, var(--pal-accent) 72%, white);
+  --card-bg:       color-mix(in oklab, var(--pal-bg), white 5%);
+  --card-border:   color-mix(in oklab, var(--pal-text) 14%, var(--pal-bg));
+  --text-muted:    color-mix(in oklab, var(--pal-text) 70%, var(--pal-bg));
+  --text-dim:      color-mix(in oklab, var(--pal-text) 48%, var(--pal-bg));
+  --hairline:      color-mix(in oklab, var(--pal-text) 10%, var(--pal-bg));
+
+  --pill-bg:       color-mix(in oklab, var(--pal-bg), white 8%);
+  --pill-border:   color-mix(in oklab, var(--pal-text) 16%, var(--pal-bg));
+  --pill-sel-bg:   color-mix(in oklab, var(--pal-accent) 22%, var(--pal-bg));
+  --seg-bg:        color-mix(in oklab, var(--pal-bg), white 8%);
+  --seg-sel-bg:    color-mix(in oklab, var(--pal-bg), white 15%);
+
+  --strong-bg:     color-mix(in oklab, var(--pal-accent) 16%, var(--pal-bg));
+  --strong-fg:     color-mix(in oklab, var(--pal-accent) 55%, var(--pal-text));
+
+  --present-bar-bg:   color-mix(in oklab, var(--pal-bg), white 8%);
+  --present-bar-line: color-mix(in oklab, var(--pal-text) 18%, var(--pal-bg));
+}
