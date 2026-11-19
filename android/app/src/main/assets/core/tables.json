@@ -1263,6 +1263,8 @@
   "poll_interval": 0.5,
   "search_click_navigates": false,
   "dark_mode": false,
+  "theme": "",
+  "custom_theme": null,
   "geometry": "1100x780",
   "last_book_num": null,
   "last_chapter": null,

@@ -358,6 +358,32 @@ def main():
     assert not api.set_app_setting('no_such_app_key', 1)['ok']
     print("app settings get/set (poll clamp, lex enum, bool) OK")
 
+    # 색 테마 (docs/CUSTOM_THEME_PLAN.md): 이름 검사, 바탕을 dark_mode 에도, 직접 만든 색 검사.
+    assert api.get_initial()['theme'] in ('', 'light', 'dark')
+    assert api.set_app_setting('theme', 'navy')['ok']
+    assert api.lib.settings['dark_mode'] is True
+    assert api.set_app_setting('theme', 'paper')['ok']
+    assert api.lib.settings['dark_mode'] is False
+    assert not api.set_app_setting('theme', 'rainbow')['ok']
+    assert api.lib.settings['theme'] == 'paper'
+    custom = {'base': 'dark', 'bg': '#0E1729', 'text': '#e3e9f4', 'accent': '#5b9bff'}
+    r = api.set_app_setting('custom_theme', custom)
+    assert r['ok'] and r['value']['bg'] == '#0e1729', r
+    assert api.lib.settings['dark_mode'] is False      # 아직 paper — 직접 만든 색은 쓰지 않는 중
+    assert api.set_app_setting('theme', 'custom')['ok']
+    assert api.lib.settings['dark_mode'] is True       # 직접 만든 색의 바탕
+    for bad in ({'base': 'dim', 'bg': '#000000', 'text': '#ffffff', 'accent': '#ff0000'},
+                {'base': 'light', 'bg': 'red', 'text': '#ffffff', 'accent': '#ff0000'},
+                {'base': 'light', 'bg': '#000000', 'text': '#ffffff'},
+                '#000000', None):
+        assert not api.set_app_setting('custom_theme', bad)['ok'], bad
+    assert api.lib.settings['custom_theme']['bg'] == '#0e1729'
+    init = api.get_initial()
+    assert init['theme'] == 'custom' and init['custom_theme'] == r['value'], init['custom_theme']
+    api.set_dark_mode(False)                            # 예전 경로도 theme 을 맞춘다
+    assert api.lib.settings['theme'] == 'light'
+    print("color theme (names, dark_mode sync, custom colors) OK")
+
     # web_cards_layout: 'any' spec — stored verbatim, exposed by get_initial /
     # get_app_settings, and clearable back to None. Non-serializable rejected.
     assert 'web_cards_layout' in api.get_initial()
