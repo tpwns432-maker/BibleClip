@@ -268,6 +268,38 @@
         </div>
       </div>
 
+      <!-- 색 테마 (docs/CUSTOM_THEME_PLAN.md). 견본은 JS(theme.js 기준 색)가 그린다. -->
+      <div class="set-group">
+        <div class="set-group-h" data-i18n="modal.grpLook">화면</div>
+        <div class="set-row">
+          <span class="set-label" data-i18n="modal.themeLabel">테마</span>
+          <div class="theme-swatches" id="opt-theme"></div>
+        </div>
+        <div class="theme-edit" id="theme-edit" hidden>
+          <div class="set-row">
+            <span class="set-label" data-i18n="modal.themeBase">바탕</span>
+            <div class="seg" id="opt-theme-base">
+              <div class="opt" data-val="light" data-i18n="modal.themeBaseLight">밝게</div>
+              <div class="opt" data-val="dark" data-i18n="modal.themeBaseDark">어둡게</div>
+            </div>
+          </div>
+          <div class="set-row">
+            <span class="set-label" data-i18n="modal.themeColors">색</span>
+            <div class="theme-colors">
+              <label class="theme-color"><input type="color" data-key="bg"><span data-i18n="modal.themeBg">배경</span></label>
+              <label class="theme-color"><input type="color" data-key="text"><span data-i18n="modal.themeText">글자</span></label>
+              <label class="theme-color"><input type="color" data-key="accent"><span data-i18n="modal.themeAccent">강조</span></label>
+            </div>
+          </div>
+          <div class="set-row">
+            <span class="set-label" data-i18n="modal.themeFrom">가져오기</span>
+            <div class="theme-swatches theme-from" id="opt-theme-from"></div>
+          </div>
+          <p class="set-note theme-warn" id="theme-warn" hidden></p>
+        </div>
+        <p class="set-note" id="theme-note" data-i18n="modal.themeNote">☀/🌙 버튼은 라이트와 다크만 오갑니다. 직접 만든 색은 지워지지 않습니다.</p>
+      </div>
+
       <div class="set-group">
         <div class="set-group-h" data-i18n="modal.grpReading">읽기</div>
         <div class="set-row">
@@ -386,6 +418,7 @@
      전역 스코프 공유). file:// 에서 ESM CORS 차단을 피하려 type=module 미사용.
      v1.0.6: i18n.js 를 가장 먼저 로드 → window.I18N 이 이후 모듈에 준비됨. -->
 <script src="js/i18n.js"></script>
+<script src="js/theme.js"></script>
 <script src="js/core.js"></script>
 <script src="js/tour.js"></script>
 <script src="js/cards.js"></script>

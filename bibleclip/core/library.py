@@ -73,6 +73,10 @@ class Library:
         'poll_interval': 0.5,             # clipboard polling interval (seconds)
         'search_click_navigates': False,  # search hit click also jumps the viewer
         'dark_mode': False,
+        # 색 테마(docs/CUSTOM_THEME_PLAN.md). ''=예전 설정 — dark_mode 로 라이트/다크.
+        # 저장할 때 dark_mode 도 바탕에 맞춰 같이 쓴다(이전 버전으로 돌아가도 밝음/어두움 유지).
+        'theme': '',                      # light|dark|paper|sage|navy|black|custom
+        'custom_theme': None,             # {'base','bg','text','accent'} "직접 만들기"
         'geometry': '1100x780',
         'last_book_num': None,            # remember last viewed book/chapter
         'last_chapter': None,

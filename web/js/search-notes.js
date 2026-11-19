@@ -323,8 +323,10 @@
         if (val === I18N.getLang()) return;   // 무변경 클릭 무시(불필요 디스크 쓰기 방지)
         I18N.setLang(val);
         _uiLangDirty = true;
+        renderThemeSettings();   // 견본 이름은 JS 가 그리므로 다시
       });
     }
+    renderThemeSettings();
     const fontPill = $("opt-reading-font");
     if (fontPill) fontPill.textContent = state.readingFont || I18N.t("font.default");
 
@@ -371,6 +373,82 @@
 
     wireSettingsActions();
     m.hidden = false;
+  }
+
+  // ---- 색 테마 (docs/CUSTOM_THEME_PLAN.md) ----
+  // 견본을 누르면 바로 바뀌고 저장된다. "직접"이면 아래 편집 줄이 열리고, 색을 고르는
+  // 동안(input) 앱 전체가 따라 바뀐다 — 저장은 잠깐 멈췄을 때 한 번(색 고르기 창을 끌면
+  // input 이 초당 수십 번 온다).
+  let _customSaveTimer = null;
+
+  function themeSwatch(name, seeds, on, tip) {
+    const label = I18N.t("theme." + name);
+    return `<button type="button" class="theme-sw${on ? " on" : ""}" data-val="${name}" title="${tip || label}"`
+      + ` style="--sw-bg:${seeds.bg};--sw-text:${seeds.text};--sw-accent:${seeds.accent}">`
+      + `<span class="theme-dot">가</span><span class="theme-name">${label}</span></button>`;
+  }
+
+  function renderThemeSettings() {
+    const box = $("opt-theme"), edit = $("theme-edit");
+    if (!box || !edit || !window.Theme) return;
+    // 색 섞기(color-mix)를 못 하는 WebView 면 라이트·다크만.
+    const names = Theme.ORDER.filter((n) => Theme.supported() || n === "light" || n === "dark");
+    box.innerHTML = names.map((n) => themeSwatch(n, Theme.seedsOf(n, state.customTheme), n === state.theme)).join("");
+    box.onclick = (e) => {
+      const b = e.target.closest(".theme-sw");
+      if (!b || b.dataset.val === state.theme) return;
+      // 처음 "직접"을 고르면 지금 보고 있는 테마의 색에서 시작한다.
+      if (b.dataset.val === "custom" && !state.customTheme) {
+        state.customTheme = Object.assign({}, Theme.seedsOf(state.theme, null));
+        api().set_app_setting("custom_theme", state.customTheme);
+      }
+      setTheme(b.dataset.val);
+      renderThemeSettings();
+    };
+    edit.hidden = state.theme !== "custom";
+    if (edit.hidden) return;
+    const c = Theme.cleanCustom(state.customTheme);
+    setSeg($("opt-theme-base"), c.base, (v) => updateCustomTheme({ base: v }));
+    edit.querySelectorAll('input[type="color"]').forEach((inp) => {
+      inp.value = c[inp.dataset.key];
+      inp.oninput = () => updateCustomTheme({ [inp.dataset.key]: inp.value });
+    });
+    const from = $("opt-theme-from");
+    if (from) {
+      from.innerHTML = names.filter((n) => n !== "custom").map((n) => themeSwatch(n, Theme.PRESETS[n], false,
+        I18N.t("modal.themeFromTip", { name: I18N.t("theme." + n) }))).join("");
+      from.onclick = (e) => {
+        const b = e.target.closest(".theme-sw");
+        if (!b) return;
+        updateCustomTheme(Theme.PRESETS[b.dataset.val]);
+        renderThemeSettings();   // 바탕·색 칸도 새 값으로
+      };
+    }
+    showThemeWarnings(c);
+  }
+
+  function updateCustomTheme(patch) {
+    state.customTheme = Theme.cleanCustom(Object.assign({}, Theme.cleanCustom(state.customTheme), patch));
+    Theme.apply("custom", state.customTheme);
+    const sw = document.querySelector('#opt-theme .theme-sw[data-val="custom"]');
+    if (sw) {
+      sw.style.setProperty("--sw-bg", state.customTheme.bg);
+      sw.style.setProperty("--sw-text", state.customTheme.text);
+      sw.style.setProperty("--sw-accent", state.customTheme.accent);
+    }
+    showThemeWarnings(state.customTheme);
+    clearTimeout(_customSaveTimer);
+    const saved = state.customTheme;
+    _customSaveTimer = setTimeout(() => api().set_app_setting("custom_theme", saved), 300);
+  }
+
+  function showThemeWarnings(seeds) {
+    const el = $("theme-warn");
+    if (!el) return;
+    const ws = Theme.warnings(seeds);
+    el.hidden = !ws.length;
+    el.textContent = ws.map((w) => I18N.t(w.kind === "text" ? "theme.warnText" : "theme.warnAccent",
+      { ratio: w.ratio.toFixed(1) })).join(" ");
   }
 
   function wireSettingsActions() {

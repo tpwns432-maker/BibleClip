@@ -6,6 +6,7 @@ Mixed into webui.api.Api. Uses ``self.lib``, ``self._push``, ``self._update``,
 and ``self._window``. Clipboard monitoring stays on the base Api.
 """
 import os
+import re
 import sys
 import json
 import threading
@@ -56,6 +57,8 @@ class SystemRoutes:
             'books': books,
             'last': {'version': primary, 'book': last_book, 'chapter': last_chapter},
             'dark_mode': bool(s.get('dark_mode')),
+            'theme': s.get('theme') if s.get('theme') in self._THEMES else '',
+            'custom_theme': self._clean_custom_theme(s.get('custom_theme')),
             'font_size': int(s.get('viewer_font_size', 11)),
             'auto_update_check': bool(s.get('auto_update_check', True)),
             'lex_lang': 'en' if s.get('lex_lang') == 'en' else 'ko',
@@ -200,8 +203,38 @@ class SystemRoutes:
 
     def set_dark_mode(self, on):
         self.lib.settings['dark_mode'] = bool(on)
+        self.lib.settings['theme'] = 'dark' if on else 'light'
         self.lib.save_settings()
         return {'ok': True}
+
+    # 색 테마 (docs/CUSTOM_THEME_PLAN.md). 이름·바탕은 web/js/theme.js 의 ORDER·PRESETS 와 같이.
+    _THEMES = {'light', 'dark', 'paper', 'sage', 'navy', 'black', 'custom'}
+    _DARK_THEMES = {'dark', 'navy', 'black'}
+    _HEX = re.compile(r'^#[0-9a-fA-F]{6}$')
+
+    @classmethod
+    def _clean_custom_theme(cls, v):
+        """{'base','bg','text','accent'} 를 검사해 소문자로. 틀리면 None."""
+        if not isinstance(v, dict) or v.get('base') not in ('light', 'dark'):
+            return None
+        out = {'base': v['base']}
+        for k in ('bg', 'text', 'accent'):
+            c = v.get(k)
+            if not isinstance(c, str) or not cls._HEX.match(c):
+                return None
+            out[k] = c.lower()
+        return out
+
+    def _sync_dark_mode(self):
+        """theme 의 바탕을 dark_mode 에도 — 이전 버전·사전 창이 이 값만 본다."""
+        s = self.lib.settings
+        t = s.get('theme')
+        if t == 'custom':
+            c = self._clean_custom_theme(s.get('custom_theme'))
+            if c:
+                s['dark_mode'] = c['base'] == 'dark'
+        elif t in self._THEMES:
+            s['dark_mode'] = t in self._DARK_THEMES
 
     def set_font_size(self, size):
         try:
@@ -280,6 +313,8 @@ class SystemRoutes:
         # no server-side validation. None clears it back to the default.
         'web_cards_layout': 'any',
         'tour_done': None,       # v1.2.1 첫 실행 안내를 끝까지 보거나 건너뛰면 True
+        'theme': _THEMES,        # 색 테마 — 저장하면 dark_mode 도 바탕에 맞춘다
+        'custom_theme': 'theme_colors',
     }
 
     def _search_sort(self):
@@ -325,11 +360,17 @@ class SystemRoutes:
                 json.dumps(value)
             except (TypeError, ValueError):
                 return {'ok': False, 'error': f'value for {key} is not JSON-serializable'}
+        elif spec == 'theme_colors':
+            value = self._clean_custom_theme(value)
+            if value is None:
+                return {'ok': False, 'error': 'invalid value for custom_theme'}
         elif spec is None:
             value = bool(value)
         elif value not in spec:
             return {'ok': False, 'error': f'invalid value for {key}: {value!r}'}
         self.lib.settings[key] = value
+        if key in ('theme', 'custom_theme'):
+            self._sync_dark_mode()
         self.lib.save_settings()
         if key == 'poll_interval':
             self.lib.set_poll_interval(value)
