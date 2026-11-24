@@ -86,7 +86,7 @@ BibleClip Project/
 │  └─ server/                      # ★ 웹판 서버(브라우저용, 2인 비공개 — docs/WEB_PLAN.md)
 │     ├─ __main__.py               #   python -m bibleclip.server --data <폴더> (127.0.0.1 전용, 계정 없으면 안 켜짐)
 │     ├─ accounts.py               #   계정(users.json, scrypt 해시 · sv=비번 바꾸면 로그인 무효) · Throttle(15분 5회) · secret_key · 관리 명령
-│     ├─ app.py                    #   Flask: /login·/logout·/auth/me(+테마), 그 외 전부 로그인 필요. / = 홈, /bible = index.html(+bridge.js·web.css 주입), /community, POST /api/<기능>·/capi/<동작>
+│     ├─ app.py                    #   Flask: /login·/logout·/account/password·/auth/me(+테마), ProxyFix(--behind-proxy)·extra_hosts, 그 외 전부 로그인 필요. / = 홈, /bible = index.html(+bridge.js·web.css 주입), /community, POST /api/<기능>·/capi/<동작>
 │     ├─ community.py              #   커뮤니티(SQLite community.db): 주제·글·댓글(parent 나무)·공감·읽음(seen.last_cid — 시간 아닌 번호)·글에 단 구절(clean_verse·verse_posts·verse_preview) + find_refs(글 속 구절 → JS 위치) — docs/WEB_PLAN.md
 │     ├─ webapi.py                 #   WebApi(Api) + 허용 목록 ALLOWED(밖은 null — Bridge.kt 와 같은 약속) · WebHub(엔진 한 벌, 사람별 Library(user_dir=users/<id>, engine), verse_text·partner_highlights)
 │     └─ static/                   #   bridge.js(fetch 연결·클립보드·내려받기·사전 새 창·로그아웃·B 로고→홈·#go= 구절 열기·**DOM 위에만 얹기**: 절 메뉴 '함께 쓰기'·💬 절 표시·상대 형광펜=CSS Custom Highlight 밑줄·설정 '함께' 묶음) · web.css · login.html · home.html · community.html/js · site.js/css(공용: capi·테마 단추 themeMenu·renderText — HTML 해석 안 함)
@@ -108,6 +108,7 @@ BibleClip Project/
 ├─ bible_versions/                 # 성경 SQLite DB 드롭 폴더(KRV.SQLite3 등)
 ├─ original_lang/                  # 원어 데이터(HebGrkEn.dct, 개역한글S.sdb)
 ├─ tests/                          # test_core / test_webui_api / test_installer / test_killswitch
+├─ deploy/                         # ★ 웹판 리눅스 설치(docs/WEB_SETUP.md): install.sh(사용자 bibleclip·/var/lib/bibleclip·.venv·systemd·계정) · tailscale.sh(serve + --allow-host/--behind-proxy/--secure-cookie) · update.sh · backup.sh · bibleclip-web.service(틀)
 ├─ android/                        # ★ 안드로이드 앱(Kotlin + WebView로 web/ 재사용) — §11, docs/ANDROID_PLAN.md
 ├─ killswitch.json                 # 킬스위치 매니페스트(recommend_version 등)
 ├─ version_changes.json            # 버전별 패치노트 데이터

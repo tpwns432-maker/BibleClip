@@ -1,0 +1,47 @@
+# BibleClip 웹판 — systemd 서비스 틀. deploy/install.sh 가 @…@ 를 채워
+# /etc/systemd/system/bibleclip-web.service 로 둔다(이 파일을 직접 복사하지 말 것).
+[Unit]
+Description=BibleClip web (2-person Bible reading & community)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=@USER@
+Group=@USER@
+WorkingDirectory=@APP_DIR@
+EnvironmentFile=-/etc/bibleclip/web.env
+Environment=PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1
+ExecStart=@VENV@/bin/python -m bibleclip.server --data @DATA_DIR@ --port ${BIBLECLIP_PORT} $BIBLECLIP_ARGS
+Restart=on-failure
+RestartSec=3
+
+# 안전장치: 데이터 폴더 말고는 아무 데도 쓸 수 없고, 다른 사람의 집 폴더는 못 본다.
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+PrivateDevices=true
+ReadWritePaths=@DATA_DIR@
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+RestrictSUIDSGID=true
+RestrictNamespaces=true
+RestrictRealtime=true
+LockPersonality=true
+ProtectClock=true
+ProtectHostname=true
+ProtectKernelLogs=true
+ProtectProc=invisible
+ProcSubset=pid
+CapabilityBoundingSet=
+AmbientCapabilities=
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
+SystemCallArchitectures=native
+SystemCallFilter=@system-service
+SystemCallFilter=~@privileged @resources
+UMask=0027
+
+[Install]
+WantedBy=multi-user.target

@@ -46,6 +46,19 @@
     <h2>최근 글</h2>
     <div class="recent-list" id="recent-list"></div>
   </section>
+
+  <section class="account">
+    <button class="link-btn" id="pw-open" type="button">비밀번호 바꾸기</button>
+    <form class="form pw-form" id="pw-form" hidden>
+      <label>지금 비밀번호<input type="password" name="current" autocomplete="current-password" required></label>
+      <label>새 비밀번호(8자 이상)<input type="password" name="new" autocomplete="new-password" minlength="8" required></label>
+      <label>새 비밀번호 한 번 더<input type="password" name="again" autocomplete="new-password" minlength="8" required></label>
+      <p class="hint">바꾸면 다른 기기의 로그인은 풀립니다. 이 기기는 그대로입니다.</p>
+      <p class="pw-msg" id="pw-msg" role="status"></p>
+      <div class="form-acts"><button class="btn" type="button" id="pw-cancel">취소</button>
+        <button class="btn primary" type="submit">바꾸기</button></div>
+    </form>
+  </section>
 </main>
 
 <script>
@@ -53,6 +66,25 @@
   "use strict";
   const $ = (id) => document.getElementById(id);
   $("logout").addEventListener("click", Site.logout);
+
+  // 비밀번호 바꾸기(계정은 서버 주인이 만들고, 비밀번호는 각자 바꾼다).
+  const pf = $("pw-form"), msg = $("pw-msg");
+  $("pw-open").addEventListener("click", () => { pf.hidden = false; $("pw-open").hidden = true; pf.current.focus(); });
+  $("pw-cancel").addEventListener("click", () => { pf.reset(); msg.textContent = ""; pf.hidden = true; $("pw-open").hidden = false; });
+  pf.addEventListener("submit", async (e) => {
+    e.preventDefault();
+    if (pf.new.value !== pf.again.value) { msg.textContent = "새 비밀번호 두 칸이 다릅니다."; return; }
+    const r = await fetch("account/password", {
+      method: "POST", credentials: "same-origin",
+      headers: { "Content-Type": "application/json", "X-BibleClip": "1" },
+      body: JSON.stringify({ current: pf.current.value, new: pf.new.value }),
+    });
+    const b = await r.json().catch(() => ({}));
+    msg.textContent = r.ok ? "바꿨습니다."
+      : { wrong: "지금 비밀번호가 맞지 않습니다.", blocked: "여러 번 틀려서 잠시 막혔습니다. 15분 뒤에 해 주세요.",
+          invalid: "새 비밀번호는 8자 이상이어야 합니다." }[b.error] || "바꾸지 못했습니다.";
+    if (r.ok) { pf.reset(); setTimeout(() => $("pw-cancel").click(), 1500); }
+  });
   Site.me().then((m) => {
     $("who").textContent = m.name;
     $("hello").textContent = "안녕하세요, " + m.name + "님";

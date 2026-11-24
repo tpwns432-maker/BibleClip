@@ -7,7 +7,8 @@
     users.json         계정(비밀번호는 해시만)          secret_key   로그인 쿠키 서명 열쇠
     users/<아이디>/     그 사람의 설정 · 노트 · 형광펜     bible_versions/  서버 주인이 넣는 역본
     community.db       커뮤니티(주제 · 글 · 댓글 · 공감 · 읽음)
-지금은 이 컴퓨터(127.0.0.1)에서만 열린다. 다른 기기에서 들어오는 길은 5단계(설치)에서 연다.
+앱은 이 컴퓨터(127.0.0.1)에만 열린다. 다른 기기는 Tailscale serve 가 https 로 받아 넘겨준다:
+    --allow-host <주소> --behind-proxy --secure-cookie   (deploy/tailscale.sh 가 정해 준다)
 """
 import argparse
 import os
@@ -25,9 +26,14 @@ def main(argv=None):
     p.add_argument('--port', type=int, default=8765)
     p.add_argument('--secure-cookie', action='store_true',
                    help='로그인 쿠키를 https 로만 보낸다(https 로 접속할 때 켠다)')
+    p.add_argument('--allow-host', action='append', default=[], metavar='NAME',
+                   help='이 컴퓨터 말고 들어올 주소 이름(예: bibleclip.xxx.ts.net). 여러 번 쓸 수 있다.')
+    p.add_argument('--behind-proxy', action='store_true',
+                   help='Tailscale serve 같은 앞 프로그램이 넘겨준 접속 정보를 믿는다')
     a = p.parse_args(argv)
     if a.host not in ('127.0.0.1', 'localhost', '::1'):
-        p.error('지금은 이 컴퓨터(127.0.0.1)에서만 연다 — 다른 기기의 접속은 5단계(설치)에서.')
+        p.error('앱은 이 컴퓨터(127.0.0.1)에서만 연다. 다른 기기는 Tailscale serve 로 들어온다'
+                '(docs/WEB_SETUP.md).')
 
     os.environ[DATA_DIR_ENV] = a.data
     # config 는 가져올 때 데이터 폴더(BASE_DIR)를 정한다 — 그래서 환경 변수를 정한 뒤 다시 읽는다.
@@ -73,7 +79,8 @@ def main(argv=None):
                           verse_text=hub.verse_text)
 
     app = create_app(hub, accounts, secret_key(data), Throttle(), community,
-                     secure_cookie=a.secure_cookie)
+                     secure_cookie=a.secure_cookie, extra_hosts=a.allow_host,
+                     behind_proxy=a.behind_proxy)
     print(f'BibleClip 웹판: http://127.0.0.1:{a.port}/   (데이터: {data})', flush=True)
     serve(app, host=a.host, port=a.port, threads=8)   # 첫 화면이 파일을 한꺼번에 받는다
 

@@ -238,6 +238,41 @@ def run():
     c3.post('/login', data={'id': 'alice', 'password': PW['alice']})
     assert c3.get_cookie('bibleclip_session').secure
 
+    # ---- 5단계: Tailscale 뒤에서 ----
+    ts = 'bc.tail1234.ts.net'
+    app4 = create_app(hub, accounts, 'k' * 64, Throttle(), extra_hosts=[ts.upper()], behind_proxy=True,
+                      secure_cookie=True)
+    c4 = app4.test_client()
+    assert c4.get('/login', headers={'Host': ts}).status_code == 200
+    assert c4.get('/login', headers={'Host': 'evil.example'}).status_code == 403
+    # 앞 프로그램이 호스트를 127.0.0.1 로 바꿔 넘겨도 정해 둔 주소에서 온 로그인은 받고, 남의 사이트는 거절.
+    assert c4.post('/login', data={'id': 'alice', 'password': PW['alice']},
+                   headers={'Origin': 'https://' + ts}).status_code == 303
+    assert c4.post('/login', data={'id': 'alice', 'password': PW['alice']},
+                   headers={'Origin': 'https://evil.example'}).status_code == 403
+    # 접속한 사람 주소는 앞 프로그램이 알려 준 것으로 센다 — 한 사람이 틀려도 다른 사람은 안 막힌다.
+    c5 = app4.test_client()
+    for _ in range(5):
+        c5.post('/login', data={'id': 'nobody', 'password': 'x'}, headers={'X-Forwarded-For': '100.64.0.9'})
+    assert c5.post('/login', data={'id': 'alice', 'password': PW['alice']},
+                   headers={'X-Forwarded-For': '100.64.0.9'}).status_code == 429
+    assert c5.post('/login', data={'id': 'alice', 'password': PW['alice']},
+                   headers={'X-Forwarded-For': '100.64.0.10'}).status_code == 303
+
+    # ---- 내 비밀번호 바꾸기 ----
+    me1 = login(app, 'alice')
+    me2 = login(app, 'alice')                                   # 다른 기기
+    PWC = lambda c, cur, new, h=H: c.post('/account/password', json={'current': cur, 'new': new}, headers=h)  # noqa: E731
+    assert PWC(me1, PW['alice'], 'new-alice-pass', {}).status_code == 403   # 머리글 없음
+    assert PWC(me1, 'wrong-pass', 'new-alice-pass').get_json()['error'] == 'wrong'
+    assert PWC(me1, PW['alice'], 'short').status_code == 400
+    assert PWC(me1, PW['alice'], 'new-alice-pass').get_json() == {'ok': True}
+    assert post(me1, 'get_initial').status_code == 200            # 이 기기는 그대로
+    assert post(me2, 'get_initial').status_code == 401            # 다른 기기는 풀림
+    login(app, 'alice', 'new-alice-pass')
+    assert anon.post('/account/password', json={}, headers=H).status_code == 401
+    accounts.set_password('alice', PW['alice'])
+
     # ---- 명령 ----
     try:
         server_main(['--data', DATA, '--host', '0.0.0.0'])   # 아직 이 컴퓨터에서만 연다

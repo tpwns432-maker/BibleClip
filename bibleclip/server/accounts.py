@@ -218,6 +218,14 @@ def main(argv=None):
     os.makedirs(args.data, exist_ok=True)
     acc = Accounts(args.data)
     try:
+        return _run(args, acc)
+    except (EOFError, KeyboardInterrupt):
+        print('\n입력이 끊겨 그만둡니다.', file=sys.stderr)
+        return 1
+
+
+def _run(args, acc):
+    try:
         if args.cmd == 'add':
             acc.add(args.id, args.name or args.id, _ask_password())
             print(f'만들었습니다: {args.id}')

@@ -266,3 +266,8 @@ textarea:focus, input:focus, select:focus { outline: 2px solid var(--accent); ou
 .vb-range { font-size: 13px; color: var(--text-muted); display: inline-flex; align-items: center; gap: 4px; }
 .vb-range input { width: 64px; padding: 4px 6px; }
 .vb-head .link-btn { margin-left: auto; }
+
+/* ---- 홈: 비밀번호 바꾸기 ---- */
+.account { margin-top: 28px; text-align: center; }
+.pw-form { max-width: 380px; margin: 8px auto 0; text-align: left; }
+.pw-msg { margin: 0; font-size: 13px; color: var(--accent-text); min-height: 1em; }

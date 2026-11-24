@@ -65,3 +65,6 @@ sample video/
 
 # 홍보용 카드뉴스 작업물 — 앱 배포물이 아니라 추적 안 함
 cardnews/
+
+# 웹판 서버 가상환경(deploy/install.sh)
+.venv/
