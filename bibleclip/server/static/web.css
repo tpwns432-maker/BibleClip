@@ -1,0 +1,24 @@
+/* BibleClip 웹판 — 데스크톱 전용 기능을 숨긴다(docs/WEB_PLAN.md "기능 구성").
+   서버가 index.html 의 </head> 앞에 끼운다. web/ 의 CSS 는 고치지 않는다. */
+
+/* 왼쪽 레일: 활동 로그(클립보드) · 장바구니 · 자막 · 안내 · 감시 단추 · 업데이트 */
+#log-toggle, #log-drawer,
+#cart-toggle, #cart-drawer,
+#subtitle-toggle,
+#tour-help,
+#monitor-btn, #status-badge,
+#update-btn, #update-banner { display: none !important; }
+
+/* 장바구니에 담기(절 메뉴 · 검색 결과의 ＋) */
+.ctx-item[data-a="cart"], .cart-add-btn { display: none !important; }
+
+/* 출력 설정: 성경 파일 추가 · 폴더 열기 · 다시 읽기(역본은 서버 주인이 넣는다) */
+#db-add, #db-folder, #db-refresh { display: none !important; }
+
+/* ⚙ 설정: 자막 배색 · 클립보드 · 자동 업데이트 · 데이터 폴더 · GitHub */
+.set-row:has(#opt-subtitle-preset),
+.set-row:has(#opt-subtitle-preset) + .set-note,
+.set-row:has(#opt-reading-font) + .set-note,
+.set-group:has(#opt-poll),
+#opt-auto-update,
+#act-data-folder, #act-github { display: none !important; }
