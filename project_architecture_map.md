@@ -86,9 +86,9 @@ BibleClip Project/
 │  └─ server/                      # ★ 웹판 서버(브라우저용, 2인 비공개 — docs/WEB_PLAN.md)
 │     ├─ __main__.py               #   python -m bibleclip.server --data <폴더> (127.0.0.1 전용, 계정 없으면 안 켜짐)
 │     ├─ accounts.py               #   계정(users.json, scrypt 해시 · sv=비번 바꾸면 로그인 무효) · Throttle(15분 5회) · secret_key · 관리 명령
-│     ├─ app.py                    #   Flask: /login·/logout·/account/password·/auth/me(+테마), ProxyFix(--behind-proxy)·extra_hosts, 그 외 전부 로그인 필요. / = 홈, /bible = index.html(+bridge.js·web.css 주입), /community, POST /api/<기능>·/capi/<동작>
+│     ├─ app.py                    #   Flask: /login·/logout·/account/password·/auth/me(+테마), ProxyFix(--behind-proxy)·extra_hosts, /_android/mobile.css·mobile.js(안드로이드 폰 화면 재사용, media=휴대폰일 때만), 그 외 전부 로그인 필요. / = 홈, /bible = index.html(+bridge.js·web.css 주입), /community, POST /api/<기능>·/capi/<동작>
 │     ├─ community.py              #   커뮤니티(SQLite community.db): 주제·글·댓글(parent 나무)·공감·읽음(seen.last_cid — 시간 아닌 번호)·글에 단 구절(clean_verse·verse_posts·verse_preview) + find_refs(글 속 구절 → JS 위치) — docs/WEB_PLAN.md
-│     ├─ webapi.py                 #   WebApi(Api) + 허용 목록 ALLOWED(밖은 null — Bridge.kt 와 같은 약속) · WebHub(엔진 한 벌, 사람별 Library(user_dir=users/<id>, engine), verse_text·partner_highlights)
+│     ├─ webapi.py                 #   WebApi(Api) + 허용 목록 ALLOWED(밖은 null — Bridge.kt 와 같은 약속) · WebHub(엔진 한 벌, 사람별 Library(user_dir=users/<id>, engine), verse_text·partner_highlights) · get/save_phone_prefs(폰 카드 배치·글자 크기, PC 와 따로)
 │     └─ static/                   #   bridge.js(fetch 연결·클립보드·내려받기·사전 새 창·로그아웃·B 로고→홈·#go= 구절 열기·**DOM 위에만 얹기**: 절 메뉴 '함께 쓰기'·💬 절 표시·상대 형광펜=CSS Custom Highlight 밑줄·설정 '함께' 묶음) · web.css · login.html · home.html · community.html/js · site.js/css(공용: capi·테마 단추 themeMenu·renderText — HTML 해석 안 함)
 ├─ web/                            # ★ 프론트엔드 SPA (vanilla JS, 프레임워크 없음)
 │  ├─ index.html                   #   DOM 셸(.rail/.main/뷰/드로어/모달)

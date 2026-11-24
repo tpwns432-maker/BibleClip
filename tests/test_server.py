@@ -153,6 +153,25 @@ def run():
     assert alice.post('/api/get_books', json={'args': 'KRV'}, headers=H).status_code == 400
     assert post(alice, 'get_note', 1).status_code == 400
 
+    # 휴대폰 화면: 안드로이드 앱의 mobile.css 를 휴대폰일 때만 켜지게(media) 끼우고, 그 두 파일만 내준다.
+    assert 'id="bc-phone-css"' in html and 'media="(pointer: coarse)' in html
+    assert html.index('_android/mobile.css') < html.index('_web/web.css')
+    assert alice.get('/_android/mobile.css').status_code == 200
+    assert alice.get('/_android/mobile.js').status_code == 200
+    assert alice.get('/_android/../java/com/bibleclip/app/Bridge.kt').status_code == 404
+    assert alice.get('/_android/AndroidManifest.xml').status_code == 404
+    assert anon.get('/_android/mobile.css').status_code == 401
+    # 폰의 카드 배치 · 글자 크기는 PC 설정과 따로.
+    assert value(alice, 'get_phone_prefs') == {}
+    lay = [{'id': 'bible-1', 'type': 'bible', 'x': 0, 'y': 0, 'w': 100, 'h': 100}]
+    assert value(alice, 'save_phone_prefs', {'layout': lay})['ok']
+    assert value(alice, 'save_phone_prefs', {'font_size': 999})['ok']
+    assert value(alice, 'get_phone_prefs') == {'layout': lay, 'font_size': 400}
+    assert value(alice, 'get_initial')['web_cards_layout'] != lay        # PC 배치는 그대로
+    assert value(bob, 'get_phone_prefs') == {}                           # 사람마다 따로
+    assert value(alice, 'save_phone_prefs', {'layout': 'x' * 70000})['ok'] is False
+    assert value(alice, 'save_phone_prefs', 'nope')['ok'] is False
+
     # 첫 화면 값: 웹은 업데이트 확인 · 첫 실행 안내 · 장바구니가 없고, 누가 들어왔는지 안다.
     init = value(alice, 'get_initial')
     assert init['primary'] == 'KRV', init['primary']
