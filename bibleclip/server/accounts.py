@@ -23,6 +23,7 @@ USERS_FILE = 'users.json'
 SECRET_FILE = 'secret_key'
 ID_RE = re.compile(r'^[a-z0-9][a-z0-9_-]{1,31}$')
 MIN_PASSWORD = 8
+NAME_MAX = 30
 _N, _R, _P = 2 ** 14, 8, 1        # scrypt 비용: 한 번에 약 16MB · 수십 ms
 
 
@@ -132,6 +133,20 @@ class Accounts:
                 raise ValueError('이미 있는 아이디')
             self._users[uid] = {'name': name or uid, 'hash': hash_password(password), 'sv': 1}
             self._save()
+
+    def set_name(self, uid, name):
+        """화면에 보이는 이름 바꾸기(아이디는 그대로). 앞뒤 공백 · 줄바꿈 등 보이지 않는 글자는 뺀다."""
+        name = ''.join(ch for ch in ' '.join(str(name or '').split()) if ch.isprintable())
+        if not name or len(name) > NAME_MAX:
+            raise ValueError(f'이름은 1~{NAME_MAX}자')
+        with self._lock:
+            self._refresh()
+            u = self._users.get(uid)
+            if not u:
+                raise ValueError('없는 아이디')
+            u['name'] = name
+            self._save()
+        return name
 
     def set_password(self, uid, password):
         if len(password) < MIN_PASSWORD:

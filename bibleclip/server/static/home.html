@@ -53,7 +53,16 @@
   </section>
 
   <section class="account">
+    <button class="link-btn" id="name-open" type="button">이름 바꾸기</button>
+    <span class="muted">·</span>
     <button class="link-btn" id="pw-open" type="button">비밀번호 바꾸기</button>
+    <form class="form pw-form" id="name-form" hidden>
+      <label>화면에 보일 이름<input type="text" name="name" maxlength="30" required></label>
+      <p class="hint">커뮤니티 글쓴이 · 공감 · 텔레그램 안내에 이 이름이 보입니다. 로그인 아이디는 그대로예요.</p>
+      <p class="pw-msg" id="name-msg" role="status"></p>
+      <div class="form-acts"><button class="btn" type="button" id="name-cancel">취소</button>
+        <button class="btn primary" type="submit">바꾸기</button></div>
+    </form>
     <form class="form pw-form" id="pw-form" hidden>
       <label>지금 비밀번호<input type="password" name="current" autocomplete="current-password" required></label>
       <label>새 비밀번호(8자 이상)<input type="password" name="new" autocomplete="new-password" minlength="8" required></label>
@@ -133,10 +142,33 @@
   }
   tgRender();
 
+  // 이름 바꾸기(화면에 보이는 이름 — 아이디는 그대로).
+  const nf = $("name-form"), nmsg = $("name-msg");
+  const accountLinks = (show) => { $("name-open").hidden = !show; $("pw-open").hidden = !show; };
+  $("name-open").addEventListener("click", () => {
+    nf.hidden = false; accountLinks(false); nf.name.value = myName; nf.name.focus(); nf.name.select();
+  });
+  $("name-cancel").addEventListener("click", () => { nmsg.textContent = ""; nf.hidden = true; accountLinks(true); });
+  nf.addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const r = await fetch("account/name", {
+      method: "POST", credentials: "same-origin",
+      headers: { "Content-Type": "application/json", "X-BibleClip": "1" },
+      body: JSON.stringify({ name: nf.name.value }),
+    });
+    const b = await r.json().catch(() => ({}));
+    if (!r.ok) { nmsg.textContent = "이름은 1~30자로 적어 주세요."; return; }
+    myName = b.name;
+    $("who").textContent = b.name;
+    $("hello").textContent = "안녕하세요, " + b.name + "님";
+    nmsg.textContent = "바꿨습니다.";
+    setTimeout(() => $("name-cancel").click(), 1200);
+  });
+
   // 비밀번호 바꾸기(계정은 서버 주인이 만들고, 비밀번호는 각자 바꾼다).
   const pf = $("pw-form"), msg = $("pw-msg");
-  $("pw-open").addEventListener("click", () => { pf.hidden = false; $("pw-open").hidden = true; pf.current.focus(); });
-  $("pw-cancel").addEventListener("click", () => { pf.reset(); msg.textContent = ""; pf.hidden = true; $("pw-open").hidden = false; });
+  $("pw-open").addEventListener("click", () => { pf.hidden = false; accountLinks(false); pf.current.focus(); });
+  $("pw-cancel").addEventListener("click", () => { pf.reset(); msg.textContent = ""; pf.hidden = true; accountLinks(true); });
   pf.addEventListener("submit", async (e) => {
     e.preventDefault();
     if (pf.new.value !== pf.again.value) { msg.textContent = "새 비밀번호 두 칸이 다릅니다."; return; }
@@ -151,7 +183,9 @@
           invalid: "새 비밀번호는 8자 이상이어야 합니다." }[b.error] || "바꾸지 못했습니다.";
     if (r.ok) { pf.reset(); setTimeout(() => $("pw-cancel").click(), 1500); }
   });
+  let myName = "";
   Site.me().then((m) => {
+    myName = m.name;
     $("who").textContent = m.name;
     $("hello").textContent = "안녕하세요, " + m.name + "님";
     Site.themeMenu($("theme-btn"), m);

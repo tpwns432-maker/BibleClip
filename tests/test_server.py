@@ -278,6 +278,18 @@ def run():
     assert c5.post('/login', data={'id': 'alice', 'password': PW['alice']},
                    headers={'X-Forwarded-For': '100.64.0.10'}).status_code == 303
 
+    # ---- 내 이름 바꾸기(아이디는 그대로, 커뮤니티 · /auth/me 에 바로) ----
+    nm = login(app, 'bob', 'bob-new-pass-3')
+    NM = lambda c, name, h=H: c.post('/account/name', json={'name': name}, headers=h)  # noqa: E731
+    assert NM(nm, '새이름', {}).status_code == 403                       # 머리글 없음
+    for bad in ('', '   ', 'x' * 31, None):
+        assert NM(nm, bad).status_code == 400, bad
+    assert NM(nm, '  김\n세준 \t ').get_json() == {'ok': True, 'name': '김 세준'}
+    assert nm.get('/auth/me').get_json()['name'] == '김 세준'
+    assert accounts.verify('bob', 'bob-new-pass-3')['name'] == '김 세준'
+    assert anon.post('/account/name', json={'name': 'x'}, headers=H).status_code == 401
+    accounts.set_name('bob', '밥')
+
     # ---- 내 비밀번호 바꾸기 ----
     me1 = login(app, 'alice')
     me2 = login(app, 'alice')                                   # 다른 기기
