@@ -97,7 +97,34 @@ class WebHub:
             if api is None:
                 folder = os.path.join(self.users_dir, uid)
                 os.makedirs(folder, exist_ok=True)
-                api = WebApi(Library(user_dir=folder, engine=self.engine), self._lock)
+                api = WebApi(Library(user_dir=folder, engine=self.engine), self._lock,
+                             {'id': uid, 'name': name or uid})
                 self._apis[uid] = api
-            api.user = {'id': uid, 'name': name or uid}
+            elif name:
+                api.user = {'id': uid, 'name': name}
             return api
+
+    def verse_text(self, uid, verse):
+        """글에 단 구절의 본문 — 읽는 사람이 성경 화면에서 맨 앞에 둔 역본으로."""
+        with self._lock:
+            lib = self.api_for(uid).lib
+            version = lib.primary_version()
+            if not version:
+                return None
+            rows = lib.get_chapter(version, verse['book'], verse['chapter'])
+            return {'version': lib.dbs[version].display_name,
+                    'verses': [{'n': n, 'text': t} for n, t in rows
+                               if verse['verse'] <= n <= verse['verse_end']]}
+
+    def partner_highlights(self, uid, others, book, chapter, versions):
+        """상대(들)의 형광펜 — [{user:{id,name}, hl:{역본:{절:[구간]}}}]. 읽기만 한다."""
+        out = []
+        with self._lock:
+            for oid, name in others:
+                if oid == uid:
+                    continue
+                hl = self.api_for(oid, name).lib.highlights
+                data = {v: hl.for_chapter(book, chapter, v) for v in versions}
+                if any(data.values()):
+                    out.append({'user': {'id': oid, 'name': name}, 'hl': data})
+        return out

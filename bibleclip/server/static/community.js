@@ -60,6 +60,25 @@
     return "#/s/" + s.kind + "/" + encodeURIComponent(s.title);
   }
 
+  // 글에 단 구절(성경 화면에서 "함께 쓰기") — 링크와 본문 인용.
+  function verseHref(v) {
+    const vs = [];
+    for (let n = v.verse; n <= v.verse_end; n++) vs.push(n);
+    return Site.goHref({ book: v.book, chapter: v.chapter, verses: vs });
+  }
+  function quoteHtml(vt) {
+    if (!vt || !vt.verses || !vt.verses.length) return "";
+    return vt.verses.map((x) => `<sup>${x.n}</sup>${esc(x.text)}`).join(" ") +
+      `<cite>${esc(vt.version)}</cite>`;
+  }
+  function parseVerseParam(q) {
+    const m = /^(\d+)\.(\d+)\.(\d+)(?:-(\d+))?$/.exec(q || "");
+    if (!m) return null;
+    const v = { book: +m[1], chapter: +m[2], verse: +m[3], verse_end: +(m[4] || m[3]) };
+    if (v.verse_end < v.verse) v.verse_end = v.verse;
+    return v;
+  }
+
   // ---- 주제 목록(왼쪽, 휴대폰에선 위쪽 칩) ----
 
   async function loadTopics() {
@@ -91,6 +110,7 @@
         <div class="pi-meta"><a class="topic" href="#/t/${p.topic.id}">${esc(p.topic.name)}</a>
           · ${esc(p.author.name)} · ${timeTag(p.created_at)}${p.is_new ? ' <span class="new">새</span>' : ""}</div>
         <a class="pi-title" href="#/p/${p.id}">${title}</a>
+        ${p.verse ? `<a class="src-chip verse" href="${esc(verseHref(p.verse))}" title="성경에서 열기">📖 ${esc(p.verse.label)}</a>` : ""}
         ${p.source ? `<a class="src-chip" href="${sourceHref(p.source)}" title="같은 ${SOURCE[p.source.kind].label}의 글 모아 보기">${sourceLine(p.source)}</a>` : ""}
         ${p.snippet ? `<p class="pi-snippet">${esc(p.snippet)}</p>` : ""}
         <div class="pi-foot"><a href="#/p/${p.id}">💬 댓글 ${p.comments}</a>
@@ -200,7 +220,9 @@
       <article class="post-full">
         <div class="pi-meta"><span class="topic">${esc(p.topic.name)}</span> · ${esc(p.author.name)} ·
           ${timeTag(p.created_at)}${p.edited_at ? " · 고침" : ""}</div>
-        ${p.deleted ? '<h1 class="deleted">지운 글입니다</h1>' : `<h1>${esc(p.title)}</h1>${src}${link}
+        ${p.deleted ? '<h1 class="deleted">지운 글입니다</h1>' : `<h1>${esc(p.title)}</h1>${p.verse ? `
+        <div class="verse-quote"><a class="vq-label" href="${esc(verseHref(p.verse))}" title="성경에서 열기">📖 ${esc(p.verse.label)}</a>
+          ${p.verse_text ? `<blockquote>${quoteHtml(p.verse_text)}</blockquote>` : ""}</div>` : ""}${src}${link}
         <div class="body">${renderText(p.body, p.refs)}</div>
         <div class="post-acts">
           <button class="like-btn${p.liked ? " on" : ""}" data-act="like-post" data-id="${p.id}">♥ 공감 <span class="cnt">${p.likes || ""}</span></button>
@@ -253,14 +275,19 @@
   function readDraft() { try { return JSON.parse(localStorage.getItem(DRAFT) || "null"); } catch (_) { return null; } }
   function writeDraft(d) { try { d ? localStorage.setItem(DRAFT, JSON.stringify(d)) : localStorage.removeItem(DRAFT); } catch (_) {} }
 
-  async function showCompose(topicId, editId) {
+  async function showCompose(topicId, editId, verseParam) {
     let post = null;
     if (editId) {
       try { post = await capi("post", { id: editId }); } catch (e) { fail(e); return; }
       if (!post.mine || post.deleted) { view.innerHTML = `<div class="empty">${ERR.forbidden}</div>`; return; }
     }
-    const draft = editId ? null : readDraft();
+    const fromBible = parseVerseParam(verseParam);       // 성경 화면에서 "함께 쓰기"로 왔다
+    const draft = editId || fromBible ? null : readDraft();
     const v = post || draft || {};
+    let verse = post ? post.verse : (fromBible || (draft && draft.verse) || null);
+    if (fromBible && !topicId) {
+      try { topicId = (await capi("default_topic")).id; } catch (_) {}
+    }
     const tid = (post && post.topic.id) || topicId || (draft && draft.topic_id) || (topics[0] && topics[0].id);
     renderTopics(tid);
     const src = v.source || null;
@@ -270,6 +297,7 @@
       <form class="form" id="compose">
         <label>주제<select name="topic">${topics.map((t) =>
           `<option value="${t.id}"${t.id === tid ? " selected" : ""}>${esc(t.name)}</option>`).join("")}</select></label>
+        <div class="verse-box" id="vbox" hidden></div>
         <label>제목<input type="text" name="title" maxlength="200" required></label>
         <fieldset><legend>무엇에 대한 감상인가요? (선택)</legend>
           <div class="seg" id="kind">${[["", "없음"], ["sermon", "🎤 설교"], ["book", "📘 책"]].map(([k, l]) =>
@@ -304,8 +332,50 @@
     const collect = () => {
       const s = kind ? Object.fromEntries(SOURCE[kind].fields.map(([fld]) => [fld, f[kind + "-" + fld].value.trim()])) : null;
       return { topic_id: +f.topic.value, title: f.title.value, body: f.body.value,
-               source: s && s.title ? Object.assign({ kind }, s) : null };
+               source: s && s.title ? Object.assign({ kind }, s) : null,
+               verse: verse ? { book: verse.book, chapter: verse.chapter, verse: verse.verse, verse_end: verse.verse_end } : null };
     };
+    // 구절 상자: 절 범위를 고치면 이름표와 본문을 다시 받아 보여 준다.
+    let previewTimer = 0;
+    async function previewVerse() {
+      const lab = $("vb-label"), txt = $("vb-text");
+      if (!verse || !lab) return;
+      try {
+        const r = await capi("verse_preview", { verse: collect().verse });
+        lab.textContent = "📖 " + r.verse.label;
+        txt.innerHTML = quoteHtml(r.verse_text) || '<span class="muted">본문을 찾지 못했습니다.</span>';
+      } catch (_) {
+        lab.textContent = "📖 구절 범위를 확인해 주세요";
+        txt.innerHTML = "";
+      }
+    }
+    function renderVerseBox() {
+      const box = $("vbox");
+      if (!verse) { box.hidden = true; box.innerHTML = ""; return; }
+      box.hidden = false;
+      box.innerHTML = `<div class="vb-head"><b id="vb-label">📖 ${esc(verse.label || "")}</b>
+        <span class="vb-range">절 <input type="number" min="1" max="176" id="vb-s" value="${verse.verse}">
+        ~ <input type="number" min="1" max="176" id="vb-e" value="${verse.verse_end}"></span>
+        <button type="button" class="link-btn" id="vb-del">구절 떼기</button></div>
+        <blockquote class="vb-text" id="vb-text"></blockquote>`;
+      const onRange = () => {
+        const a = +$("vb-s").value, b = +$("vb-e").value;
+        if (!a || !b) return;
+        verse = Object.assign({}, verse, { verse: Math.min(a, b), verse_end: Math.max(a, b) });
+        clearTimeout(previewTimer);
+        previewTimer = setTimeout(previewVerse, 250);
+        if (!editId) writeDraft(collect());
+      };
+      $("vb-s").addEventListener("input", onRange);
+      $("vb-e").addEventListener("input", onRange);
+      $("vb-del").addEventListener("click", () => {
+        verse = null;
+        renderVerseBox();
+        if (!editId) writeDraft(collect());
+      });
+      previewVerse();
+    }
+    renderVerseBox();
     if (!editId) f.addEventListener("input", () => writeDraft(collect()));
     f.addEventListener("submit", async (e) => {
       e.preventDefault();
@@ -403,13 +473,15 @@
 
   async function route() {
     const h = location.hash.replace(/^#\/?/, "");
-    const parts = h.split("/").filter(Boolean);
+    const [path, query] = h.split("?");
+    const parts = path.split("/").filter(Boolean);
+    const q = new URLSearchParams(query || "");
     window.scrollTo(0, 0);
     if (parts[0] === "t" && parts[1]) return showList({ topic_id: +parts[1] });
     if (parts[0] === "s" && SOURCE[parts[1]] && parts[2])
       return showList({ source_kind: parts[1], source_title: decodeURIComponent(parts.slice(2).join("/")) });
     if (parts[0] === "p" && parts[1]) return showPost(+parts[1]);
-    if (parts[0] === "new") return showCompose(parts[1] ? +parts[1] : null);
+    if (parts[0] === "new") return showCompose(parts[1] ? +parts[1] : null, null, q.get("verse"));
     if (parts[0] === "edit" && parts[1]) return showCompose(null, +parts[1]);
     if (parts[0] === "topic") return showTopicForm(parts[1] === "new" ? null : +parts[1]);
     return showList({});
@@ -421,6 +493,7 @@
     try {
       me = await Site.me();
       $("who").textContent = me.name;
+      Site.themeMenu($("theme-btn"), me);
       await loadTopics();
     } catch (e) { fail(e); return; }
     route();
