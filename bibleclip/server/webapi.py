@@ -8,8 +8,10 @@ docs/WEB_PLAN.md. 데스크톱(pywebview)은 화면이 Python 객체의 모든 �
 목록에 없다. 복사는 서버가 글을 만들어 돌려주고, 클립보드에 넣는 일은 브라우저가 한다
 (server/static/bridge.js).
 """
+import os
 import threading
 
+from bibleclip.core.library import Library
 from bibleclip.webui.api import Api
 
 #: 브라우저가 부를 수 있는 기능.
@@ -35,12 +37,14 @@ ALLOWED = frozenset({
 
 
 class WebApi(Api):
-    """웹 서버가 쓰는 Api. 요청은 여러 스레드에서 오지만 Library 는 한 사람이 쓰는
-    데스크톱용이라, 기능 하나가 끝날 때까지 다음 요청을 기다리게 한다(사용자 둘이면 충분)."""
+    """한 사람 몫의 Api. 요청은 여러 스레드에서 오지만 Library 는 데스크톱용이라, 기능 하나가
+    끝날 때까지 다음 요청을 기다리게 한다(사용자 둘이면 충분). 두 사람이 성경 엔진을 나눠 쓰므로
+    잠금(lock)도 WebHub 가 하나를 나눠 준다."""
 
-    def __init__(self, library):
+    def __init__(self, library, lock=None, user=None):
         super().__init__(library)
-        self._lock = threading.RLock()
+        self._lock = lock or threading.RLock()
+        self.user = user or {}      # {'id', 'name'} — 화면의 로그아웃 단추에 쓴다
 
     def call(self, name, args):
         """브라우저 요청 하나. 허용 목록 밖이면 None."""
@@ -54,6 +58,7 @@ class WebApi(Api):
         d['auto_update_check'] = False   # 서버는 git pull 로 바뀐다
         d['tour_done'] = True            # 첫 실행 안내는 데스크톱 버튼을 가리킨다(웹용은 나중에)
         d['cart'] = []
+        d['web_user'] = dict(self.user)
         return d
 
     def note_position(self, book, chapter):
@@ -72,3 +77,27 @@ class WebApi(Api):
         finally:
             self._popup_factory = None
         return {'ok': bool(r and r.get('ok') and 'html' in box), **box}
+
+
+class WebHub:
+    """성경 엔진(역본 · 원어)은 한 벌, 설정 · 노트 · 형광펜은 사람마다.
+
+    <데이터 폴더>/users/<아이디>/ 에 그 사람의 bibleclip_settings.json · user_notes.json ·
+    user_highlights.json 이 생긴다. 사람별 Api 는 처음 들어올 때 만든다."""
+
+    def __init__(self, engine, data_dir):
+        self.engine = engine
+        self.users_dir = os.path.join(data_dir, 'users')
+        self._lock = threading.RLock()
+        self._apis = {}
+
+    def api_for(self, uid, name=None):
+        with self._lock:
+            api = self._apis.get(uid)
+            if api is None:
+                folder = os.path.join(self.users_dir, uid)
+                os.makedirs(folder, exist_ok=True)
+                api = WebApi(Library(user_dir=folder, engine=self.engine), self._lock)
+                self._apis[uid] = api
+            api.user = {'id': uid, 'name': name or uid}
+            return api
