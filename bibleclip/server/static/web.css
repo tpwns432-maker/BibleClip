@@ -22,3 +22,34 @@
 .set-group:has(#opt-poll),
 #opt-auto-update,
 #act-data-folder, #act-github { display: none !important; }
+
+/* ---- 성경 ↔ 커뮤니티(4단계, bridge.js) ---- */
+/* 함께 나눈 글이 걸린 절: 왼쪽에 옅은 세로줄. 첫 절 끝에 💬(노트 📄 와 같은 자리). */
+.mcard[data-type="bible"] .v.wc-shared { box-shadow: inset 3px 0 0 color-mix(in srgb, var(--accent) 45%, transparent); }
+.wc-badge {
+  cursor: pointer; margin: 0 1px 0 5px; font-size: .78em; vertical-align: middle; line-height: 1;
+  opacity: .85; -webkit-user-select: none; user-select: none; white-space: nowrap;
+}
+.wc-badge:hover { opacity: 1; }
+.wc-badge.new::after { content: ""; display: inline-block; width: 6px; height: 6px; margin-left: 2px;
+                       border-radius: 50%; background: var(--accent); vertical-align: top; }
+.mcard:is(:fullscreen, .pseudo-fs) .wc-badge { display: none !important; }
+.mcard:is(:fullscreen, .pseudo-fs) .v.wc-shared { box-shadow: none; }
+.wc-pop {
+  position: fixed; z-index: 1400; min-width: 220px; max-width: min(340px, calc(100vw - 16px));
+  padding: 6px; border-radius: 12px; background: var(--card-bg); border: 1px solid var(--card-border);
+  box-shadow: 0 16px 40px -18px rgba(0, 0, 0, .45); font-size: 14px;
+}
+.wc-item, .wc-write { display: flex; flex-direction: column; padding: 7px 10px; border-radius: 8px;
+                      color: var(--text); text-decoration: none; }
+.wc-item:hover, .wc-write:hover { background: var(--chip-bg); }
+.wc-item span { font-size: 12.5px; color: var(--text-muted); }
+.wc-new { font-style: normal; font-size: 11px; padding: 0 5px; border-radius: 999px;
+          background: var(--accent); color: var(--on-accent); }
+.wc-write { color: var(--accent-text); font-size: 13px; border-top: 1px solid var(--hairline); margin-top: 4px; }
+
+/* 상대 형광펜 = 밑줄(CSS Custom Highlight). 내 형광펜(배경색)과 겹쳐도 둘 다 보인다. */
+::highlight(bc-partner-y) { text-decoration: underline 3px var(--hl-y-dot); }
+::highlight(bc-partner-g) { text-decoration: underline 3px var(--hl-g-dot); }
+::highlight(bc-partner-b) { text-decoration: underline 3px var(--hl-b-dot); }
+::highlight(bc-partner-p) { text-decoration: underline 3px var(--hl-p-dot); }

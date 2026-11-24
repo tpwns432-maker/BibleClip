@@ -12,6 +12,8 @@ import sqlite3
 import threading
 from datetime import datetime, timezone
 
+from bibleclip.core.engine import Engine
+
 DB_FILE = 'community.db'
 
 TITLE_MAX, BODY_MAX, COMMENT_MAX = 200, 20000, 5000
@@ -43,7 +45,8 @@ CREATE TABLE IF NOT EXISTS posts(
   author TEXT NOT NULL, title TEXT NOT NULL, body TEXT NOT NULL,
   source_kind TEXT NOT NULL DEFAULT '', source_title TEXT NOT NULL DEFAULT '', source TEXT,
   verse TEXT, created_at TEXT NOT NULL, edited_at TEXT, activity_at TEXT NOT NULL,
-  activity_seq INTEGER NOT NULL DEFAULT 0, deleted INTEGER NOT NULL DEFAULT 0);
+  activity_seq INTEGER NOT NULL DEFAULT 0, deleted INTEGER NOT NULL DEFAULT 0,
+  v_book INTEGER, v_chapter INTEGER);
 CREATE INDEX IF NOT EXISTS posts_topic ON posts(topic_id, activity_at);
 CREATE TABLE IF NOT EXISTS comments(
   id INTEGER PRIMARY KEY, post_id INTEGER NOT NULL REFERENCES posts(id),
@@ -109,6 +112,24 @@ def clean_source(src):
     return out
 
 
+def clean_verse(v):
+    """글에 단 구절 범위 {book, chapter, verse, verse_end} — 한 장 안. 없으면 None.
+    책 번호는 우리 번호(10..730)여야 하고, 보기 좋은 이름(label)을 붙여 돌려준다."""
+    if v is None:
+        return None
+    if not isinstance(v, dict):
+        raise CommunityError('invalid', 'verse')
+    book = _id(v.get('book'), 'verse')
+    chapter = _id(v.get('chapter'), 'verse')
+    start = _id(v.get('verse'), 'verse')
+    end = _id(v.get('verse_end', start), 'verse')
+    canon = Engine._canon(book)
+    if not canon or chapter > 150 or end > 176 or end < start:
+        raise CommunityError('invalid', 'verse')
+    label = f'{canon[1]} {chapter}:{start}' + (f'-{end}' if end > start else '')
+    return {'book': book, 'chapter': chapter, 'verse': start, 'verse_end': end, 'label': label}
+
+
 # ---- 구절 자동 링크 ----
 
 _REF_RE = re.compile(
@@ -149,23 +170,28 @@ def find_refs(text, parse):
 
 
 class Community:
-    def __init__(self, path, names=None, parse=None):
-        """path: community.db. names(): {uid: 보이는 이름}. parse: 구절 인식기(없으면 링크 없음)."""
+    def __init__(self, path, names=None, parse=None, verse_text=None):
+        """path: community.db. names(): {uid: 보이는 이름}. parse: 구절 인식기(없으면 링크 없음).
+        verse_text(uid, verse) → {version, verses: [{n, text}]}: 글에 단 구절의 본문(읽는 사람의 역본)."""
         self._db = sqlite3.connect(path, check_same_thread=False)
         self._db.row_factory = sqlite3.Row
         self._lock = threading.RLock()
         self._names = names or (lambda: {})
         self._parse = parse
+        self._verse_text = verse_text
         with self._lock, self._db:
             self._db.execute('PRAGMA journal_mode=WAL')
             self._db.execute('PRAGMA foreign_keys=ON')
             self._db.executescript(_SCHEMA)
             # 앞 버전에서 만든 파일에 새 칸을 붙인다(지우지 않고 더하기만).
             for table, col, decl in (('posts', 'activity_seq', 'INTEGER NOT NULL DEFAULT 0'),
-                                     ('seen', 'last_cid', 'INTEGER NOT NULL DEFAULT 0')):
+                                     ('seen', 'last_cid', 'INTEGER NOT NULL DEFAULT 0'),
+                                     ('posts', 'v_book', 'INTEGER'),
+                                     ('posts', 'v_chapter', 'INTEGER')):
                 cols = [r[1] for r in self._db.execute(f'PRAGMA table_info({table})')]
                 if col not in cols:
                     self._db.execute(f'ALTER TABLE {table} ADD COLUMN {col} {decl}')
+            self._db.execute('CREATE INDEX IF NOT EXISTS posts_verse ON posts(v_book, v_chapter)')
             if not self._db.execute("SELECT 1 FROM meta WHERE key='seeded'").fetchone():
                 now = _now()
                 for pos, (name, desc, kind) in enumerate(SEED_TOPICS):
@@ -338,6 +364,12 @@ class Community:
             out = self._post_summary(uid, p, names)
             out['body'] = '' if p['deleted'] else p['body']
             out['refs'] = self._refs(out['body'])
+            out['verse_text'] = None
+            if out['verse'] and self._verse_text:
+                try:
+                    out['verse_text'] = self._verse_text(uid, out['verse'])
+                except Exception:
+                    out['verse_text'] = None
             seen = self._seen(uid, p['id'])
             comments = []
             for c in self._q('SELECT * FROM comments WHERE post_id=? ORDER BY id',
@@ -363,6 +395,8 @@ class Community:
         stitle = source['title'].casefold() if source else ''
         sjson = json.dumps(source, ensure_ascii=False) if source else None
         tid = _id(a.get('topic_id'), 'topic_id')
+        has_verse = 'verse' in a
+        verse = clean_verse(a.get('verse')) if has_verse else None
         now = _now()
         with self._lock, self._db:
             if not self._one('SELECT 1 FROM topics WHERE id=?', (tid,)):
@@ -373,17 +407,20 @@ class Community:
                     raise CommunityError('forbidden')
                 if p['deleted']:
                     raise CommunityError('notfound')
+                if not has_verse:      # 고칠 때 구절을 안 보내면 그대로 둔다
+                    verse = json.loads(p['verse']) if p['verse'] else None
                 self._db.execute(
                     'UPDATE posts SET topic_id=?, title=?, body=?, source_kind=?, source_title=?,'
-                    ' source=?, edited_at=? WHERE id=?',
-                    (tid, title, body, skind, stitle, sjson, now, p['id']))
+                    ' source=?, verse=?, v_book=?, v_chapter=?, edited_at=? WHERE id=?',
+                    (tid, title, body, skind, stitle, sjson, *self._verse_cols(verse), now, p['id']))
                 pid = p['id']
             else:
                 pid = self._db.execute(
                     'INSERT INTO posts(topic_id, author, title, body, source_kind, source_title,'
-                    ' source, created_at, activity_at, activity_seq) VALUES(?,?,?,?,?,?,?,?,?,?)',
-                    (tid, uid, title, body, skind, stitle, sjson, now, now,
-                     self._next_seq())).lastrowid
+                    ' source, verse, v_book, v_chapter, created_at, activity_at, activity_seq)'
+                    ' VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?)',
+                    (tid, uid, title, body, skind, stitle, sjson, *self._verse_cols(verse),
+                     now, now, self._next_seq())).lastrowid
             self._mark_seen(uid, pid)
         return {'id': pid}
 
@@ -395,13 +432,50 @@ class Community:
             if self._one('SELECT 1 FROM comments WHERE post_id=? LIMIT 1', (p['id'],)):
                 # 댓글은 상대의 글이기도 하다 — 글만 비우고 자리는 남긴다.
                 self._db.execute("UPDATE posts SET deleted=1, title='', body='', source=NULL,"
-                                 " source_kind='', source_title='', verse=NULL WHERE id=?",
-                                 (p['id'],))
+                                 " source_kind='', source_title='', verse=NULL, v_book=NULL,"
+                                 " v_chapter=NULL WHERE id=?", (p['id'],))
             else:
                 self._db.execute("DELETE FROM likes WHERE kind='post' AND target=?", (p['id'],))
                 self._db.execute('DELETE FROM seen WHERE post_id=?', (p['id'],))
                 self._db.execute('DELETE FROM posts WHERE id=?', (p['id'],))
         return {'ok': True}
+
+    @staticmethod
+    def _verse_cols(verse):
+        if not verse:
+            return None, None, None
+        return json.dumps(verse, ensure_ascii=False), verse['book'], verse['chapter']
+
+    def verse_posts(self, uid, a):
+        """성경 한 장에 달린 글(지운 글 빼고) — 성경 화면의 절 표시용. 구절 순."""
+        book, chapter = _id(a.get('book'), 'book'), _id(a.get('chapter'), 'chapter')
+        with self._lock:
+            names = {r['id']: r['name'] for r in self._q('SELECT id, name FROM topics')}
+            rows = self._q('SELECT * FROM posts WHERE v_book=? AND v_chapter=? AND deleted=0'
+                           ' ORDER BY id', (book, chapter))
+            items = [self._post_summary(uid, p, names) for p in rows]
+        items.sort(key=lambda p: (p['verse']['verse'], p['verse']['verse_end'], p['id']))
+        return {'posts': items}
+
+    def verse_preview(self, uid, a):
+        """글쓰기 화면에서 고른 구절을 확인 · 미리 보기(이름표 + 읽는 사람 역본의 본문)."""
+        v = clean_verse(a.get('verse'))
+        if not v:
+            raise CommunityError('invalid', 'verse')
+        text = None
+        if self._verse_text:
+            try:
+                text = self._verse_text(uid, v)
+            except Exception:
+                text = None
+        return {'verse': v, 'verse_text': text}
+
+    def default_topic(self, uid=None):
+        """'함께 쓰기'가 고를 주제: 이름이 '성경 묵상'인 주제, 없으면 첫 주제."""
+        with self._lock:
+            r = (self._one("SELECT id FROM topics WHERE name='성경 묵상'")
+                 or self._one('SELECT id FROM topics ORDER BY position, id LIMIT 1'))
+        return {'id': r['id'] if r else None}
 
     # ---- 댓글 ----
 
@@ -470,7 +544,8 @@ class Community:
 
     #: 화면이 부를 수 있는 동작.
     ACTIONS = ('home', 'topics', 'topic_save', 'topic_delete', 'posts', 'post', 'post_save',
-               'post_delete', 'comment_save', 'comment_delete', 'like')
+               'post_delete', 'comment_save', 'comment_delete', 'like', 'verse_posts',
+               'verse_preview', 'default_topic')
 
     def call(self, uid, action, args):
         if action not in self.ACTIONS:
@@ -478,4 +553,4 @@ class Community:
         if not isinstance(args, dict):
             raise CommunityError('invalid', 'args')
         fn = getattr(self, action)
-        return fn(uid) if action in ('home', 'topics') else fn(uid, args)
+        return fn(uid) if action in ('home', 'topics', 'default_topic') else fn(uid, args)

@@ -7,7 +7,7 @@
     users.json         계정(비밀번호는 해시만)          secret_key   로그인 쿠키 서명 열쇠
     users/<아이디>/     그 사람의 설정 · 노트 · 형광펜     bible_versions/  서버 주인이 넣는 역본
     community.db       커뮤니티(주제 · 글 · 댓글 · 공감 · 읽음)
-지금은 이 컴퓨터(127.0.0.1)에서만 열린다. 다른 기기에서 들어오는 길은 4단계(설치)에서 연다.
+지금은 이 컴퓨터(127.0.0.1)에서만 열린다. 다른 기기에서 들어오는 길은 5단계(설치)에서 연다.
 """
 import argparse
 import os
@@ -27,7 +27,7 @@ def main(argv=None):
                    help='로그인 쿠키를 https 로만 보낸다(https 로 접속할 때 켠다)')
     a = p.parse_args(argv)
     if a.host not in ('127.0.0.1', 'localhost', '::1'):
-        p.error('지금은 이 컴퓨터(127.0.0.1)에서만 연다 — 다른 기기의 접속은 4단계(설치)에서.')
+        p.error('지금은 이 컴퓨터(127.0.0.1)에서만 연다 — 다른 기기의 접속은 5단계(설치)에서.')
 
     os.environ[DATA_DIR_ENV] = a.data
     # config 는 가져올 때 데이터 폴더(BASE_DIR)를 정한다 — 그래서 환경 변수를 정한 뒤 다시 읽는다.
@@ -69,7 +69,8 @@ def main(argv=None):
     def parse(text):            # 글 속 구절 찾기 — 사용자 약칭까지(엔진은 hub 잠금 안에서)
         with hub._lock:
             return engine.parse_reference(text)
-    community = Community(os.path.join(data, DB_FILE), names=accounts.users, parse=parse)
+    community = Community(os.path.join(data, DB_FILE), names=accounts.users, parse=parse,
+                          verse_text=hub.verse_text)
 
     app = create_app(hub, accounts, secret_key(data), Throttle(), community,
                      secure_cookie=a.secure_cookie)

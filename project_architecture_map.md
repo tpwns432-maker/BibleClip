@@ -87,9 +87,9 @@ BibleClip Project/
 │     ├─ __main__.py               #   python -m bibleclip.server --data <폴더> (127.0.0.1 전용, 계정 없으면 안 켜짐)
 │     ├─ accounts.py               #   계정(users.json, scrypt 해시 · sv=비번 바꾸면 로그인 무효) · Throttle(15분 5회) · secret_key · 관리 명령
 │     ├─ app.py                    #   Flask: /login·/logout·/auth/me(+테마), 그 외 전부 로그인 필요. / = 홈, /bible = index.html(+bridge.js·web.css 주입), /community, POST /api/<기능>·/capi/<동작>
-│     ├─ community.py              #   커뮤니티(SQLite community.db): 주제·글·댓글(parent 나무)·공감·읽음(seen) + find_refs(글 속 구절 → JS 위치) — docs/WEB_PLAN.md
-│     ├─ webapi.py                 #   WebApi(Api) + 허용 목록 ALLOWED(밖은 null — Bridge.kt 와 같은 약속) · WebHub(엔진 한 벌, 사람별 Library(user_dir=users/<id>, engine))
-│     └─ static/                   #   bridge.js(fetch 연결·클립보드·내려받기·사전 새 창·로그아웃·B 로고→홈·#go= 구절 열기) · web.css(데스크톱 기능 숨김) · login.html · home.html · community.html/js · site.js/css(공용: capi·테마·renderText — HTML 해석 안 함)
+│     ├─ community.py              #   커뮤니티(SQLite community.db): 주제·글·댓글(parent 나무)·공감·읽음(seen.last_cid — 시간 아닌 번호)·글에 단 구절(clean_verse·verse_posts·verse_preview) + find_refs(글 속 구절 → JS 위치) — docs/WEB_PLAN.md
+│     ├─ webapi.py                 #   WebApi(Api) + 허용 목록 ALLOWED(밖은 null — Bridge.kt 와 같은 약속) · WebHub(엔진 한 벌, 사람별 Library(user_dir=users/<id>, engine), verse_text·partner_highlights)
+│     └─ static/                   #   bridge.js(fetch 연결·클립보드·내려받기·사전 새 창·로그아웃·B 로고→홈·#go= 구절 열기·**DOM 위에만 얹기**: 절 메뉴 '함께 쓰기'·💬 절 표시·상대 형광펜=CSS Custom Highlight 밑줄·설정 '함께' 묶음) · web.css · login.html · home.html · community.html/js · site.js/css(공용: capi·테마 단추 themeMenu·renderText — HTML 해석 안 함)
 ├─ web/                            # ★ 프론트엔드 SPA (vanilla JS, 프레임워크 없음)
 │  ├─ index.html                   #   DOM 셸(.rail/.main/뷰/드로어/모달)
 │  ├─ cart.html                    #   FEAT-07 설교 장바구니 팝아웃 창(자체완결, v1.1.5)

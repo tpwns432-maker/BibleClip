@@ -199,6 +199,21 @@ def run():
     # 성경 엔진은 한 벌을 나눠 쓴다.
     assert hub.api_for('alice').lib.dbs is engine.dbs is hub.api_for('bob').lib.dbs
 
+    # 상대 형광펜(4단계): 밥은 앨리스가 칠한 것을 받고, 앨리스 자신의 요청엔 앨리스 것이 없다.
+    r = alice.post('/capi/partner_highlights', json={'book': 500, 'chapter': 3, 'versions': ['KRV']}, headers=H)
+    assert r.status_code == 200 and r.get_json()['value'] == []        # 밥은 아직 안 칠함
+    got = bob.post('/capi/partner_highlights', json={'book': 500, 'chapter': 3, 'versions': ['KRV']},
+                   headers=H).get_json()['value']
+    assert got == [{'user': {'id': 'alice', 'name': '앨리스'}, 'hl': {'KRV': {'16': [dict(rng[0], ts=got[0]['hl']['KRV']['16'][0]['ts'])]}}}], got
+    assert bob.post('/capi/partner_highlights', json={'book': 'x', 'chapter': 3}, headers=H).status_code == 400
+    assert bob.post('/capi/partner_highlights', json={'book': 500, 'chapter': 3}).status_code == 403
+    assert bob.post('/capi/partner_highlights', json={'book': 500, 'chapter': 4, 'versions': ['KRV']},
+                    headers=H).get_json()['value'] == []
+    # 글에 단 구절의 본문 인용(읽는 사람의 맨 앞 역본).
+    vt = hub.verse_text('bob', {'book': 500, 'chapter': 3, 'verse': 16, 'verse_end': 17})
+    assert vt['version'].endswith('[KRV]') and [x['n'] for x in vt['verses']] == [16, 17]
+    assert '하나님이 세상을' in vt['verses'][0]['text']
+
     # 사전 창: 페이지를 돌려주면 브라우저가 새 창으로 연다.
     if engine.lexicon_ko is not None or engine.lexicon_en is not None:
         d = value(alice, 'open_dict_window', 'H430', 'ko', 10, 1, None, 'light')
