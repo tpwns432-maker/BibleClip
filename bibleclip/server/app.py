@@ -3,6 +3,7 @@
     GET  /login · POST /login   로그인(이것과 favicon 만 로그인 없이 열린다)
     POST /logout                로그아웃
     POST /account/password      내 비밀번호 바꾸기
+    POST /account/name          내 이름(화면에 보이는 것) 바꾸기
     GET  /auth/me               지금 로그인한 사람 {id, name, 테마}
     GET  /                      홈(성경 · 커뮤니티) — server/static/home.html
     GET  /bible                 성경 = web/index.html (+ 웹용 연결 JS · CSS 끼워 넣음)
@@ -173,6 +174,17 @@ def create_app(hub, accounts, secret_key, throttle, community=None,
             abort(403)
         session.clear()
         return jsonify(ok=True)
+
+    @app.post('/account/name')
+    def change_name():
+        if request.headers.get('X-BibleClip') != '1':
+            abort(403)
+        body = request.get_json(silent=True) or {}
+        try:
+            name = accounts.set_name(g.uid, body.get('name'))
+        except ValueError as e:
+            return jsonify(error='invalid', detail=str(e)), 400
+        return jsonify(ok=True, name=name)
 
     @app.post('/account/password')
     def change_password():
