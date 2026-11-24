@@ -62,7 +62,9 @@ def msg(uid_chat, text, kind='private', n=[0]):
 def run():
     tg, clock = FakeTelegram(), Clock()
     now = {'v': datetime(2026, 11, 25, 7, 0, tzinfo=rp.KST)}
-    bot = TelegramBot(DATA, lambda: NAMES, SITE + '/', BOOKS, http=tg, clock=clock, now=lambda: now['v'])
+    LOG = []
+    bot = TelegramBot(DATA, lambda: NAMES, SITE + '/', BOOKS, http=tg, clock=clock, now=lambda: now['v'],
+                      log=LOG.append)
 
     # ---- 봇 열쇠 ----
     s = bot.status('alice')
@@ -130,6 +132,19 @@ def run():
     assert tg.take() == []
     assert bot.set_prefs('carol', {'community': True}) == {'ok': False, 'error': 'not_linked'}
 
+    # ---- 기록: 누구에게 무엇을 보냈는지, 내용 · 열쇠 · 대화 번호는 없이 ----
+    joined = '\n'.join(LOG)
+    assert '봇 열쇠 설정됨 @bc_test_bot' in joined and '봇 열쇠 거절됨' in joined
+    assert '연결됨 alice' in joined and '연결됨 bob' in joined
+    assert '대기 새 글 글 #7 (쓴 사람 alice) → bob (60초 뒤 묶어 보냄)' in joined
+    assert '보냄 커뮤니티(새 글 1, 글 #7) → bob' in joined
+    assert '보냄 커뮤니티(새 글 1 · 새 댓글 2, 글 #7, #8) → bob' in joined
+    assert '대기 새 글 글 #9 (쓴 사람 alice) → 받을 사람 없음(상대가 연결 안 했거나 알림 끔)' in joined
+    assert '설정 bob: 커뮤니티 꺼짐 · 통독 켜짐' in joined
+    assert GOOD not in joined and '111' not in joined and '222' not in joined
+    assert '커뮤니티에 새 글이 있어요' not in joined                       # 메시지 내용은 안 남김
+    del LOG[:]
+
     # ---- 통독 알림: 한국 시간 8시 · 19시, 30분 안에만, 한 번씩 ----
     now['v'] = datetime(2026, 11, 25, 7, 59, tzinfo=rp.KST)
     bot.tick_reading()
@@ -139,6 +154,8 @@ def run():
     out = tg.take()
     assert sorted(c for c, _ in out) == [111, 222]
     assert out[0][1] == '☀️ 오늘의 통독 (1일째)\n창 1–4장\n' + SITE + '/bible#go=10.1', out[0][1]
+    assert '통독 아침(1일째 창 1–4장) 시작 — 받을 사람 2명' in LOG
+    assert '보냄 통독 아침(1일째 창 1–4장) → alice' in LOG and '보냄 통독 아침(1일째 창 1–4장) → bob' in LOG
     bot.tick_reading()
     assert tg.take() == []                                      # 같은 시각엔 한 번만
     assert bot.set_prefs('alice', {'reading': False})['ok']
@@ -158,6 +175,15 @@ def run():
     now['v'] = datetime(2026, 11, 25, 19, 15, tzinfo=rp.KST)
     bot2.tick_reading()
     assert tg.take() == []                                      # 19시는 이미 보냄
+
+    # 실패도 이유와 함께 남기고, 접속 실패는 상태가 바뀔 때만.
+    del LOG[:]
+    bad = TelegramBot(DATA, lambda: NAMES, SITE, BOOKS, http=lambda u, p, t: {'ok': False, 'description': 'Forbidden: bot was blocked by the user'},
+                      clock=clock, now=lambda: now['v'], log=LOG.append)
+    assert bad.send(222, 'x', 'bob', '시험') is False
+    assert LOG[-1] == '실패 시험 → bob: Forbidden: bot was blocked by the user'
+    bad.poll_once(); bad.poll_once()
+    assert sum('텔레그램 접속 실패' in m for m in LOG) == 1
 
     # ---- /stop · 연결 끊기 ----
     tg.updates = [msg(222, '/stop')]

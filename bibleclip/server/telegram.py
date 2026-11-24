@@ -11,6 +11,9 @@
 연결 코드(10분)는 메모리에만 둔다.
 
 알림 내용은 일부러 짧다(사용자 결정): "새 글이 있어요" + 링크. 글 제목 · 본문 · 성경 본문은 보내지 않는다.
+
+기록: 무엇을 · 누구(아이디)에게 보냈는지/실패했는지를 서비스 기록(journalctl -u bibleclip-web)에
+"telegram: …" 한 줄로 남긴다. 메시지 내용 · 봇 열쇠 · 텔레그램 대화 번호는 남기지 않는다.
 """
 import json
 import os
@@ -31,6 +34,10 @@ SLOT_WINDOW = 30 * 60       # 그 시각부터 30분 안에만 보낸다(서버�
 API = 'https://api.telegram.org'
 
 
+def _print_log(msg):
+    print(f'telegram: {msg}', flush=True)      # systemd 가 서비스 기록(journal)으로 모은다
+
+
 def _urllib_post(url, payload, timeout):
     req = urllib.request.Request(url, data=json.dumps(payload).encode('utf-8'),
                                  headers={'Content-Type': 'application/json'})
@@ -46,7 +53,7 @@ def _urllib_post(url, payload, timeout):
 
 class TelegramBot:
     def __init__(self, data_dir, names, site_url, books, start=rp.START,
-                 http=_urllib_post, clock=time.time, now=None):
+                 http=_urllib_post, clock=time.time, now=None, log=_print_log):
         """names(): {아이디: {'name': ...}} — 계정 목록. site_url: 링크 앞부분(https://….ts.net).
         books: [(책 번호, 짧은 이름, 장 수)] 성경 순서. http · clock · now 는 시험용으로 바꿔 끼운다."""
         self.path = os.path.join(data_dir, STATE_FILE)
@@ -57,6 +64,8 @@ class TelegramBot:
         self._http = http
         self._clock = clock
         self._now = now or (lambda: datetime.now(rp.KST))
+        self._log = log
+        self._poll_ok = True        # 접속 실패는 상태가 바뀔 때만 기록(실패가 이어질 때 기록이 넘치지 않게)
         self._lock = threading.RLock()
         self._codes = {}            # 코드 → (아이디, 만료 시각)
         self._pending = {}          # 받을 사람 → {'first': 시각, 'posts': set, 'comments': set, 'ids': set}
@@ -94,9 +103,14 @@ class TelegramBot:
         except (OSError, ValueError) as e:
             return {'ok': False, 'description': type(e).__name__}
 
-    def send(self, chat_id, text):
-        return self._api('sendMessage', {'chat_id': chat_id, 'text': text,
-                                         'disable_web_page_preview': True}).get('ok', False)
+    def send(self, chat_id, text, to='?', what='메시지'):
+        """보내고 기록한다. to = 받는 사람 아이디, what = 무슨 알림인지(기록용 — 내용은 남기지 않음)."""
+        r = self._api('sendMessage', {'chat_id': chat_id, 'text': text, 'disable_web_page_preview': True})
+        if r.get('ok'):
+            self._log(f'보냄 {what} → {to}')
+            return True
+        self._log(f"실패 {what} → {to}: {r.get('description', '알 수 없음')}")
+        return False
 
     # ---- 사이트에서 부르는 것(로그인한 사람) ----
 
@@ -124,11 +138,13 @@ class TelegramBot:
                     self.state['token'] = old
                 else:
                     self.state.pop('token', None)
+                self._log(f"봇 열쇠 거절됨: {me.get('description', '')}")
                 return {'ok': False, 'error': 'rejected'}
             self.state['bot_username'] = me['result'].get('username', '')
             if old != token:
                 self.state['offset'] = 0
             self._save()
+            self._log(f"봇 열쇠 설정됨 @{self.state['bot_username']}")
             return {'ok': True, 'bot': self.state['bot_username']}
 
     def link_url(self, uid):
@@ -147,7 +163,8 @@ class TelegramBot:
             link = self.state['links'].pop(uid, None)
             self._save()
         if link:
-            self.send(link['chat_id'], 'BibleClip 알림 연결을 끊었어요.')
+            self._log(f'연결 끊음(사이트) {uid}')
+            self.send(link['chat_id'], 'BibleClip 알림 연결을 끊었어요.', uid, '끊기 안내')
         return {'ok': True}
 
     def set_prefs(self, uid, prefs):
@@ -159,6 +176,8 @@ class TelegramBot:
                 if isinstance(prefs.get(k), bool):
                     link[k] = prefs[k]
             self._save()
+            self._log(f"설정 {uid}: 커뮤니티 {'켜짐' if link.get('community', True) else '꺼짐'} · "
+                      f"통독 {'켜짐' if link.get('reading', True) else '꺼짐'}")
             return {'ok': True}
 
     # ---- 텔레그램에서 온 메시지 ----
@@ -181,39 +200,51 @@ class TelegramBot:
                         self.state['links'].pop(u)          # 한 대화는 한 계정에만
                     self.state['links'][new_uid] = {'chat_id': chat_id, 'community': True, 'reading': True}
                     self._save()
+                    self._log(f'연결됨 {new_uid}')
                     name = self.names().get(new_uid, {}).get('name', new_uid)
                     self.send(chat_id, f'{name}님, BibleClip 알림을 연결했어요.\n'
                                        '· 커뮤니티에 새 글 · 댓글이 오면 알려 드려요.\n'
                                        '· 아침 8시 · 저녁 7시에 오늘의 통독을 알려 드려요.\n'
-                                       '끄려면 사이트 홈에서, 그만 받으려면 /stop')
+                                       '끄려면 사이트 홈에서, 그만 받으려면 /stop', new_uid, '연결 안내')
                     return
-                self.send(chat_id, '연결 코드가 없거나 지났어요. 사이트 홈의 "텔레그램 연결"을 다시 눌러 주세요.')
+                self._log('연결 코드가 없거나 지남')
+                self.send(chat_id, '연결 코드가 없거나 지났어요. 사이트 홈의 "텔레그램 연결"을 다시 눌러 주세요.',
+                          uid or '연결 안 된 대화', '코드 안내')
                 return
             if text == '/stop' and uid:
                 self.state['links'].pop(uid, None)
                 self._save()
-                self.send(chat_id, 'BibleClip 알림을 그만 보낼게요. 다시 받으려면 사이트 홈에서 연결해 주세요.')
+                self._log(f'연결 끊음(/stop) {uid}')
+                self.send(chat_id, 'BibleClip 알림을 그만 보낼게요. 다시 받으려면 사이트 홈에서 연결해 주세요.',
+                          uid, '끊기 안내')
                 return
             if uid:
                 r = rp.reading_for(self.chapters, rp.today_kst(self._now()), self.start)
                 self.send(chat_id, ('오늘의 통독: ' + r['label'] + '\n' + self._bible_href(r)) if r
-                          else 'BibleClip 알림 봇이에요. 그만 받으려면 /stop')
+                          else 'BibleClip 알림 봇이에요. 그만 받으려면 /stop', uid, '오늘의 통독 답장')
             else:
-                self.send(chat_id, 'BibleClip 사이트 홈의 "텔레그램 연결"로 먼저 연결해 주세요.')
+                self.send(chat_id, 'BibleClip 사이트 홈의 "텔레그램 연결"로 먼저 연결해 주세요.',
+                          '연결 안 된 대화', '연결 안내')
 
     def poll_once(self, timeout=25):
         """텔레그램에 새 메시지를 묻는다(최대 timeout 초 기다림)."""
         r = self._api('getUpdates', {'offset': self.state.get('offset', 0), 'timeout': timeout,
                                      'allowed_updates': ['message']}, timeout=timeout + 10)
         if not r.get('ok'):
+            if self._poll_ok:
+                self._log(f"텔레그램 접속 실패: {r.get('description', '알 수 없음')} (다시 시도)")
+            self._poll_ok = False
             return False
+        if not self._poll_ok:
+            self._log('텔레그램 접속 다시 됨')
+        self._poll_ok = True
         for upd in r.get('result', []):
             with self._lock:
                 self.state['offset'] = upd['update_id'] + 1
             try:
                 self.handle_update(upd)
-            except Exception:       # noqa: BLE001 — 메시지 하나 때문에 봇이 멈추지 않게
-                pass
+            except Exception as e:  # noqa: BLE001 — 메시지 하나 때문에 봇이 멈추지 않게
+                self._log(f'받은 메시지 처리 실패: {type(e).__name__}')
         if r.get('result'):
             with self._lock:
                 self._save()
@@ -224,6 +255,7 @@ class TelegramBot:
     def on_community(self, event):
         """community.py 가 부른다: {'kind': 'post'|'comment', 'author': 아이디, 'post_id': n}."""
         now = self._clock()
+        to = []
         with self._lock:
             for uid, link in self.state['links'].items():
                 if uid == event.get('author') or not link.get('community', True):
@@ -231,6 +263,10 @@ class TelegramBot:
                 p = self._pending.setdefault(uid, {'first': now, 'posts': 0, 'comments': 0, 'ids': set()})
                 p['posts' if event.get('kind') == 'post' else 'comments'] += 1
                 p['ids'].add(event.get('post_id'))
+                to.append(uid)
+        kind = '새 글' if event.get('kind') == 'post' else '새 댓글'
+        self._log(f"대기 {kind} 글 #{event.get('post_id')} (쓴 사람 {event.get('author')}) → "
+                  + (', '.join(to) + f' ({BATCH}초 뒤 묶어 보냄)' if to else '받을 사람 없음(상대가 연결 안 했거나 알림 끔)'))
 
     def flush_community(self, force=False):
         now = self._clock()
@@ -252,7 +288,10 @@ class TelegramBot:
                 bits = ([f"새 글 {p['posts']}"] if p['posts'] else []) + \
                        ([f"새 댓글 {p['comments']}"] if p['comments'] else [])
                 text = '📖 BibleClip · ' + ' · '.join(bits)
-            self.send(link['chat_id'], f'{text}\n{href}')
+            what = '커뮤니티(' + ' · '.join(([f"새 글 {p['posts']}"] if p['posts'] else []) +
+                                            ([f"새 댓글 {p['comments']}"] if p['comments'] else [])) + \
+                   ', 글 ' + ', '.join(f'#{i}' for i in sorted(ids)) + ')'
+            self.send(link['chat_id'], f'{text}\n{href}', uid, what)
 
     # ---- 통독 알림 ----
 
@@ -280,9 +319,11 @@ class TelegramBot:
             head = (f"☀️ 오늘의 통독 ({r['day']}일째)" if kind == 'morning'
                     else '🌙 오늘의 통독 다 읽으셨나요?')
             text = f"{head}\n{r['label']}\n{self._bible_href(r)}"
-            for link in links.values():
-                if link.get('reading', True):
-                    self.send(link['chat_id'], text)
+            to = [u for u, link in links.items() if link.get('reading', True)]
+            what = f"통독 {'아침' if kind == 'morning' else '저녁'}({r['day']}일째 {r['label']})"
+            self._log(f'{what} 시작 — 받을 사람 {len(to)}명')
+            for uid in to:
+                self.send(links[uid]['chat_id'], text, uid, what)
 
     # ---- 스레드 ----
 
@@ -301,10 +342,13 @@ class TelegramBot:
                         backoff = 5
                 else:
                     time.sleep(10)
-            except Exception:       # noqa: BLE001 — 봇이 죽어도 사이트는 계속 돈다
+            except Exception as e:  # noqa: BLE001 — 봇이 죽어도 사이트는 계속 돈다
+                self._log(f'봇 오류: {type(e).__name__} — 30초 뒤 다시')
                 time.sleep(30)
 
     def start_thread(self):
+        self._log(f"봇 시작 — 열쇠 {'있음 @' + self.state.get('bot_username', '') if self.state.get('token') else '없음'}, "
+                  f"연결 {len(self.state['links'])}명({', '.join(self.state['links']) or '-'})")
         t = threading.Thread(target=self.run_forever, name='telegram', daemon=True)
         t.start()
         return t
