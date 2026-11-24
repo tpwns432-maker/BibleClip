@@ -105,11 +105,12 @@ def run():
     anon = app.test_client()
 
     # ---- 로그인 없이는 로그인 화면과 아이콘만 ----
-    r = anon.get('/')
-    assert r.status_code == 302 and r.headers['Location'].endswith('login'), r.status_code
+    for page in ('/', '/bible', '/community'):
+        r = anon.get(page)
+        assert r.status_code == 302 and r.headers['Location'].endswith('login'), (page, r.status_code)
     assert 'name="password"' in anon.get('/login').get_data(as_text=True)
     assert anon.get('/favicon.ico').status_code == 200
-    for path in ('/js/core.js', '/_web/bridge.js', '/auth/me', '/index.html'):
+    for path in ('/js/core.js', '/_web/bridge.js', '/_web/site.js', '/auth/me', '/index.html'):
         assert anon.get(path).status_code in (302, 401), path
     assert post(anon, 'get_initial').status_code == 401
     assert post(anon, 'get_chapter', 'KRV', 10, 1).status_code == 401
@@ -124,14 +125,20 @@ def run():
     cookie = alice.get_cookie('bibleclip_session')
     assert cookie is not None and cookie.http_only and cookie.same_site == 'Lax'
     assert not cookie.secure
-    assert alice.get('/auth/me').get_json() == {'id': 'alice', 'name': '앨리스'}
+    me = alice.get('/auth/me').get_json()
+    assert me['id'] == 'alice' and me['name'] == '앨리스' and 'theme' in me and 'dark_mode' in me
     assert alice.get('/login').status_code == 302
 
     # ---- 화면: index.html 에 연결 JS(맨 앞 스크립트 앞) · 웹용 CSS 를 끼운다 ----
-    html = alice.get('/').get_data(as_text=True)
+    # 홈 · 커뮤니티 · 성경(/index.html 은 예전 주소 → 성경).
+    assert 'href="bible"' in alice.get('/').get_data(as_text=True)
+    assert 'community.js' in alice.get('/community').get_data(as_text=True)
+    assert alice.get('/index.html').headers['Location'].endswith('bible')
+    html = alice.get('/bible').get_data(as_text=True)
     assert html.index('_web/bridge.js') < html.index('js/i18n.js')
     assert '_web/web.css' in html
-    for path in ('/_web/bridge.js', '/_web/web.css', '/js/core.js', '/css/tokens.css'):
+    for path in ('/_web/bridge.js', '/_web/web.css', '/_web/site.js', '/_web/site.css',
+                 '/_web/community.js', '/js/core.js', '/js/theme.js', '/css/tokens.css'):
         assert alice.get(path).status_code == 200, path
     # web/ 밖의 파일은 못 꺼낸다(계정 파일 · 열쇠 포함).
     for path in ('/../bibleclip_settings.json', '/..%2Fbibleclip_settings.json', '/_web/../app.py',

@@ -86,9 +86,10 @@ BibleClip Project/
 │  └─ server/                      # ★ 웹판 서버(브라우저용, 2인 비공개 — docs/WEB_PLAN.md)
 │     ├─ __main__.py               #   python -m bibleclip.server --data <폴더> (127.0.0.1 전용, 계정 없으면 안 켜짐)
 │     ├─ accounts.py               #   계정(users.json, scrypt 해시 · sv=비번 바꾸면 로그인 무효) · Throttle(15분 5회) · secret_key · 관리 명령
-│     ├─ app.py                    #   Flask: /login·/logout·/auth/me, 그 외 전부 로그인 필요. index.html 에 bridge.js·web.css 주입, POST /api/<기능>
+│     ├─ app.py                    #   Flask: /login·/logout·/auth/me(+테마), 그 외 전부 로그인 필요. / = 홈, /bible = index.html(+bridge.js·web.css 주입), /community, POST /api/<기능>·/capi/<동작>
+│     ├─ community.py              #   커뮤니티(SQLite community.db): 주제·글·댓글(parent 나무)·공감·읽음(seen) + find_refs(글 속 구절 → JS 위치) — docs/WEB_PLAN.md
 │     ├─ webapi.py                 #   WebApi(Api) + 허용 목록 ALLOWED(밖은 null — Bridge.kt 와 같은 약속) · WebHub(엔진 한 벌, 사람별 Library(user_dir=users/<id>, engine))
-│     └─ static/                   #   bridge.js(fetch 연결·클립보드·내려받기·사전 새 창·로그아웃 단추·401→로그인) · web.css(데스크톱 기능 숨김) · login.html
+│     └─ static/                   #   bridge.js(fetch 연결·클립보드·내려받기·사전 새 창·로그아웃·B 로고→홈·#go= 구절 열기) · web.css(데스크톱 기능 숨김) · login.html · home.html · community.html/js · site.js/css(공용: capi·테마·renderText — HTML 해석 안 함)
 ├─ web/                            # ★ 프론트엔드 SPA (vanilla JS, 프레임워크 없음)
 │  ├─ index.html                   #   DOM 셸(.rail/.main/뷰/드로어/모달)
 │  ├─ cart.html                    #   FEAT-07 설교 장바구니 팝아웃 창(자체완결, v1.1.5)
@@ -444,6 +445,8 @@ BibleClip Project/
 ## 10. 테스트 (`tests/`)
 - `test_core.py` — Engine 파싱/Formatter/Library 코어
 - `test_webui_api.py` — Api 브리지 메서드(헤드리스, webview 미임포트 설계 덕분)
+- `test_community.py` — 웹판 커뮤니티(처음 주제 4개 · 주제 이름 겹침/글 있는 주제 삭제 거절 · 글/감상 대상 검사 · **새 글·새 댓글 표시** · 댓글 나무 · 권한(남의 것 못 고침) · 공감 · 정렬 · 같은 책 모아 보기 · 지우기(댓글 있으면 자리만) · 구절 찾기(이모지 앞에서도 JS 위치) · /capi 로그인·머리글·오류 코드)
+- `test_site_render.js` — 커뮤니티 글 그리기(**node**): 글 속 HTML 은 글자로, 구절 · http(s) 주소만 링크, 따옴표로 속성 깨기 차단
 - `test_server.py` — 웹판 서버(Flask 시험 손님, 데이터 폴더 = 임시 폴더 `BIBLECLIP_DATA_DIR`): 로그인 없이 차단 · 틀린 비번/다른 사이트 로그인 폼 거절 · 쿠키 속성 · 실패 제한 · 비번 변경 시 로그인 무효 · **두 사람 노트·형광펜·설정 분리 + 엔진 공유** · 계정 명령 · index 주입 · web/ 밖 파일 차단 · `X-BibleClip` 머리글/호스트 검사 · 허용 목록 밖 null · 노트·설정이 임시 폴더에 저장 · 사전 창 HTML · 127.0.0.1 외 거절
 - `test_installer.py` — installer 다운/스테이징/스크립트
 - `test_killswitch.py` — 킬스위치 fail-open/min_version 로직

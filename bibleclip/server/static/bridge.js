@@ -141,7 +141,37 @@
     anchor.parentNode.insertBefore(b, anchor);
   }
 
+  // ---- 홈으로 · 커뮤니티에서 온 구절 열기 ----
+
+  // 주소 끝의 #go=<책>.<장>.<절,절…> (커뮤니티 글 속 구절 링크) → 그 구절로.
+  // 첫 화면이 본문을 다 그린 뒤에 옮겨야 처음 불러오기가 덮어쓰지 않는다.
+  function goFromHash() {
+    const m = /^#go=(\d+)\.(\d+)(?:\.([\d,]+))?$/.exec(location.hash);
+    if (!m) return;
+    const book = +m[1], chapter = +m[2];
+    const verses = m[3] ? m[3].split(",").map(Number).filter(Boolean) : null;
+    let tries = 0;
+    (function wait() {
+      const BC = window.BC;
+      const ready = BC && BC.CardManager && document.querySelector('.mcard[data-type="bible"] .v[data-v]');
+      if (ready) {
+        BC.CardManager.goToRef(book, chapter, verses);
+        history.replaceState(null, "", location.pathname + location.search);
+      } else if (tries++ < 75) {
+        setTimeout(wait, 200);
+      }
+    })();
+  }
+  window.addEventListener("hashchange", goFromHash);
+
   document.addEventListener("DOMContentLoaded", function () {
+    goFromHash();
+    const logo = document.querySelector(".rail .logo-tile");
+    if (logo) {
+      logo.title = "홈으로";
+      logo.style.cursor = "pointer";
+      logo.addEventListener("click", function () { location.href = "./"; });
+    }
     fetch("auth/me", { credentials: "same-origin" })
       .then(function (r) { if (r.status === 401) toLogin(); return r.ok ? r.json() : null; })
       .then(function (me) { if (me) addLogoutButton(me); })

@@ -2,8 +2,11 @@
 
     GET  /login · POST /login   로그인(이것과 favicon 만 로그인 없이 열린다)
     POST /logout                로그아웃
-    GET  /auth/me               지금 로그인한 사람 {id, name}
-    GET  /                      web/index.html (+ 웹용 연결 JS · CSS 끼워 넣음)
+    GET  /auth/me               지금 로그인한 사람 {id, name, 테마}
+    GET  /                      홈(성경 · 커뮤니티) — server/static/home.html
+    GET  /bible                 성경 = web/index.html (+ 웹용 연결 JS · CSS 끼워 넣음)
+    GET  /community             커뮤니티 — server/static/community.html
+    POST /capi/<동작>            커뮤니티 {..} → {"value": ...} (server/community.py)
     GET  /<파일>                web/ 의 파일 그대로
     GET  /_web/<파일>           server/static/ (bridge.js · web.css)
     POST /api/<기능>            {"args": [...]} → {"value": ...}
@@ -21,11 +24,13 @@ from flask import (Flask, Response, abort, g, jsonify, redirect, request, send_f
                    session)
 
 from bibleclip.config import get_resource_dir
+from bibleclip.server.community import CommunityError
 
 STATIC_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'static')
 LOOPBACK_HOSTS = frozenset({'127.0.0.1', 'localhost', '[::1]'})
 _HOST_RE = re.compile(r'^(\[[^\]]+\]|[^:]+)(?::\d+)?$')
 _PUBLIC = frozenset({'/login', '/favicon.ico'})
+_PAGES = frozenset({'/', '/bible', '/community', '/index.html'})   # 로그인 전이면 로그인 화면으로
 
 
 def web_dir():
@@ -42,6 +47,11 @@ def index_html():
     return html
 
 
+def static_page(name):
+    with open(os.path.join(STATIC_DIR, name), encoding='utf-8') as f:
+        return Response(f.read(), mimetype='text/html')
+
+
 def login_html(error=''):
     with open(os.path.join(STATIC_DIR, 'login.html'), encoding='utf-8') as f:
         page = f.read()
@@ -54,9 +64,10 @@ def _host_name(host):
     return m.group(1).lower() if m else ''
 
 
-def create_app(hub, accounts, secret_key, throttle, allowed_hosts=LOOPBACK_HOSTS,
-               secure_cookie=False):
+def create_app(hub, accounts, secret_key, throttle, community=None,
+               allowed_hosts=LOOPBACK_HOSTS, secure_cookie=False):
     """hub: WebHub(사람별 WebApi). accounts: Accounts. throttle: 로그인 실패 제한.
+    community: Community(없으면 커뮤니티 기능 없음 — 시험용).
     allowed_hosts: 주소창에 올 수 있는 호스트 이름(None = 검사 안 함) — 다른 사이트가 이 서버
     주소를 자기 이름으로 바꿔 끼우는 공격(DNS rebinding)을 막는다.
     secure_cookie: https 로만 쿠키를 보낸다(서버 설치 때 켠다)."""
@@ -89,7 +100,7 @@ def create_app(hub, accounts, secret_key, throttle, allowed_hosts=LOOPBACK_HOSTS
         me = current_user()
         if me is None:
             session.clear()
-            if request.method == 'GET' and request.path in ('/', '/index.html'):
+            if request.method == 'GET' and request.path in _PAGES:
                 return redirect('login')
             return jsonify(error='login'), 401
         g.uid, g.user = me
@@ -143,7 +154,10 @@ def create_app(hub, accounts, secret_key, throttle, allowed_hosts=LOOPBACK_HOSTS
 
     @app.get('/auth/me')
     def me():
-        return jsonify(id=g.uid, name=g.user['name'])
+        # 홈 · 커뮤니티도 그 사람의 색 테마로 그린다(성경 화면 설정과 같은 값).
+        s = hub.api_for(g.uid, g.user['name']).lib.settings
+        return jsonify(id=g.uid, name=g.user['name'], theme=s.get('theme') or '',
+                       dark_mode=bool(s.get('dark_mode')), custom_theme=s.get('custom_theme'))
 
     # ---- 화면 · 기능 ----
 
@@ -152,9 +166,36 @@ def create_app(hub, accounts, secret_key, throttle, allowed_hosts=LOOPBACK_HOSTS
         return send_from_directory(get_resource_dir(), 'icon.ico', max_age=86400)
 
     @app.get('/')
-    @app.get('/index.html')
-    def index():
+    def home():
+        return static_page('home.html')
+
+    @app.get('/bible')
+    def bible():
         return Response(index_html(), mimetype='text/html')
+
+    @app.get('/index.html')
+    def old_index():
+        return redirect('bible')
+
+    @app.get('/community')
+    def community_page():
+        return static_page('community.html')
+
+    @app.post('/capi/<action>')
+    def capi(action):
+        if request.headers.get('X-BibleClip') != '1':
+            abort(403)
+        if community is None:
+            abort(404)
+        body = request.get_json(silent=True)
+        if not isinstance(body, dict):
+            abort(400)
+        try:
+            value = community.call(g.uid, action, body)
+        except CommunityError as e:
+            status = {'notfound': 404, 'forbidden': 403}.get(e.code, 400)
+            return jsonify(error=e.code, detail=e.detail), status
+        return jsonify(value=value)
 
     @app.get('/_web/<path:name>')
     def web_static(name):

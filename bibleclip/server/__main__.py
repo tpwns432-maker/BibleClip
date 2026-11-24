@@ -6,6 +6,7 @@
 데이터 폴더(docs/WEB_PLAN.md):
     users.json         계정(비밀번호는 해시만)          secret_key   로그인 쿠키 서명 열쇠
     users/<아이디>/     그 사람의 설정 · 노트 · 형광펜     bible_versions/  서버 주인이 넣는 역본
+    community.db       커뮤니티(주제 · 글 · 댓글 · 공감 · 읽음)
 지금은 이 컴퓨터(127.0.0.1)에서만 열린다. 다른 기기에서 들어오는 길은 4단계(설치)에서 연다.
 """
 import argparse
@@ -45,6 +46,7 @@ def main(argv=None):
     from waitress import serve
     from bibleclip.core.library import Library
     from bibleclip.server.app import create_app
+    from bibleclip.server.community import DB_FILE, Community
     from bibleclip.server.webapi import WebHub
     from bibleclip.webui import api as api_mod
 
@@ -62,7 +64,14 @@ def main(argv=None):
             pass
     threading.Thread(target=_warm_index, daemon=True).start()
 
-    app = create_app(WebHub(engine, data), accounts, secret_key(data), Throttle(),
+    hub = WebHub(engine, data)
+
+    def parse(text):            # 글 속 구절 찾기 — 사용자 약칭까지(엔진은 hub 잠금 안에서)
+        with hub._lock:
+            return engine.parse_reference(text)
+    community = Community(os.path.join(data, DB_FILE), names=accounts.users, parse=parse)
+
+    app = create_app(hub, accounts, secret_key(data), Throttle(), community,
                      secure_cookie=a.secure_cookie)
     print(f'BibleClip 웹판: http://127.0.0.1:{a.port}/   (데이터: {data})', flush=True)
     serve(app, host=a.host, port=a.port, threads=8)   # 첫 화면이 파일을 한꺼번에 받는다
