@@ -123,8 +123,9 @@ ok "계정 $(count_users)개"
 # ---- 6. 시작 ----
 say "6/6 시작"
 systemctl restart "$SERVICE"
-# shellcheck disable=SC1090
-PORT="$(. "$CONF"; echo "${BIBLECLIP_PORT:-8765}")"
+# 설정 파일은 실행하지 않고 글자로만 읽는다(값에 띄어쓰기가 있어도 안전하게).
+PORT="$(sed -n 's/^BIBLECLIP_PORT=//p' "$CONF" | tail -n 1)"
+PORT="${PORT:-8765}"
 for _ in $(seq 1 30); do
   if "$VENV/bin/python" - "$PORT" <<'PY' 2>/dev/null; then
 import sys, urllib.request
