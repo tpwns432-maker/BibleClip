@@ -1,0 +1,35 @@
+# 웹판 테스트 — 서버 주인 컴퓨터와 같은 Ubuntu 22.04 · Python 3.10 에서(docs/WEB_SETUP.md).
+# 이 PC(Python 3.13)에서만 되는 문법이 섞이면 서버에서 프로그램이 아예 안 켜진다(2026-11-24 실제로 겪음).
+name: web
+
+on:
+  pull_request:
+    paths: ['bibleclip/**', 'web/**', 'tests/**', 'deploy/**', 'requirements-server.txt', '.github/workflows/web.yml']
+  push:
+    branches: [main]
+    paths: ['bibleclip/**', 'web/**', 'tests/**', 'deploy/**', 'requirements-server.txt', '.github/workflows/web.yml']
+
+jobs:
+  test:
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.10'
+      - name: 라이브러리
+        run: pip install -r requirements-server.txt
+      - name: 3.10 문법 검사(패키지 전체)
+        run: python -m compileall -q bibleclip tests
+      - name: 웹판 · 코어 테스트
+        run: |
+          for t in test_server test_community test_webui_api test_core test_highlights test_killswitch; do
+            echo "== $t"; python -X utf8 tests/$t.py || exit 1
+          done
+      - name: 설치 스크립트 문법
+        run: for f in deploy/*.sh; do bash -n "$f"; done
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: 화면 테스트(node)
+        run: for t in tests/*.js; do node "$t" || exit 1; done
