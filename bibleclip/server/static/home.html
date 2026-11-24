@@ -1,0 +1,75 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>BibleClip</title>
+<link rel="icon" href="favicon.ico">
+<link rel="stylesheet" href="css/fonts.css">
+<link rel="stylesheet" href="css/tokens.css">
+<link rel="stylesheet" href="_web/site.css">
+<script src="js/theme.js"></script>
+<script src="_web/site.js"></script>
+</head>
+<body class="site">
+<header class="site-top">
+  <a class="brand" href="./"><b>B</b><span>BibleClip</span></a>
+  <span class="spacer"></span>
+  <span class="who" id="who"></span>
+  <button class="btn ghost" id="logout" type="button">로그아웃</button>
+</header>
+
+<main class="home">
+  <p class="hello" id="hello">&nbsp;</p>
+  <div class="tiles">
+    <a class="tile" href="bible">
+      <span class="tile-ico" aria-hidden="true">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/><path d="M12 6v7M9 8.5h6"/></svg>
+      </span>
+      <b>성경</b>
+      <small>읽기 · 검색 · 원어 · 나만 노트</small>
+    </a>
+    <a class="tile" href="community">
+      <span class="tile-ico" aria-hidden="true">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/><path d="M8 9h8M8 13h5"/></svg>
+      </span>
+      <b>커뮤니티</b>
+      <small>말씀 · 모임 서적 · 묵상 나눔</small>
+      <span class="badge" id="unread" hidden></span>
+    </a>
+  </div>
+
+  <section class="recent" id="recent" hidden>
+    <h2>최근 글</h2>
+    <div class="recent-list" id="recent-list"></div>
+  </section>
+</main>
+
+<script>
+(function () {
+  "use strict";
+  const $ = (id) => document.getElementById(id);
+  $("logout").addEventListener("click", Site.logout);
+  Site.me().then((m) => {
+    $("who").textContent = m.name;
+    $("hello").textContent = "안녕하세요, " + m.name + "님";
+  }).catch(() => {});
+  Site.capi("home").then((h) => {
+    if (h.unread > 0) {
+      $("unread").textContent = "새 글 " + h.unread;
+      $("unread").hidden = false;
+    }
+    if (!h.recent.length) return;
+    $("recent-list").innerHTML = h.recent.map((p) =>
+      `<a class="recent-item" href="community#/p/${p.id}">` +
+        `<span class="ri-title">${p.deleted ? "<i>지운 글입니다</i>" : Site.esc(p.title)}</span>` +
+        `<span class="ri-meta">${Site.esc(p.topic.name)} · ${Site.esc(p.author.name)} · ${Site.timeTag(p.activity_at)}` +
+        `${p.comments ? " · 댓글 " + p.comments : ""}` +
+        `${p.is_new || p.new_comments ? ' <span class="new">새</span>' : ""}</span>` +
+      `</a>`).join("");
+    $("recent").hidden = false;
+  }).catch(() => {});
+})();
+</script>
+</body>
+</html>
