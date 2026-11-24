@@ -171,7 +171,7 @@ button, input, select, textarea { font: inherit; color: inherit; }
 .comments h2 { font-size: 15px; margin: 0 0 10px; }
 .c-form { display: flex; flex-direction: column; gap: 8px; margin-bottom: 14px; }
 .c-form .row { display: flex; justify-content: flex-end; gap: 6px; }
-textarea, input[type=text], input[type=url], input[type=date], select {
+textarea, input[type=text], input[type=url], input[type=date], input[type=password], input[type=number], select {
   width: 100%; padding: 9px 12px; border-radius: 10px; border: 1px solid var(--card-border);
   background: var(--card-bg); color: var(--text);
 }
@@ -271,3 +271,15 @@ textarea:focus, input:focus, select:focus { outline: 2px solid var(--accent); ou
 .account { margin-top: 28px; text-align: center; }
 .pw-form { max-width: 380px; margin: 8px auto 0; text-align: left; }
 .pw-msg { margin: 0; font-size: 13px; color: var(--accent-text); min-height: 1em; }
+
+/* ---- 홈: 텔레그램 알림 ---- */
+.tg { margin-top: 28px; }
+.tg h2 { font-size: 15px; color: var(--text-muted); font-weight: 600; margin: 0 0 8px; }
+.tg-box { background: var(--card-bg); border: 1px solid var(--card-border); border-radius: 14px; padding: 14px 16px;
+          display: flex; flex-direction: column; gap: 8px; }
+.tg-box p { margin: 0; font-size: 14px; }
+.tg-row { display: flex; gap: 8px; align-items: center; }
+.tg-row input { flex: 1; }
+.tg-opt { display: flex; gap: 8px; align-items: center; font-size: 14px; }
+.tg-today { color: var(--text); }
+.tg-msg { font-size: 13px; color: var(--accent-text); }

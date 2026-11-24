@@ -8,6 +8,7 @@
     GET  /bible                 성경 = web/index.html (+ 웹용 연결 JS · CSS 끼워 넣음)
     GET  /community             커뮤니티 — server/static/community.html
     POST /capi/<동작>            커뮤니티 {..} → {"value": ...} (server/community.py)
+    GET  /tg/status · POST /tg/token · /tg/link · /tg/unlink · /tg/prefs   텔레그램 알림(server/telegram.py)
     GET  /<파일>                web/ 의 파일 그대로
     GET  /_web/<파일>           server/static/ (bridge.js · web.css)
     POST /api/<기능>            {"args": [...]} → {"value": ...}
@@ -75,7 +76,7 @@ def _host_name(host):
 
 def create_app(hub, accounts, secret_key, throttle, community=None,
                allowed_hosts=LOOPBACK_HOSTS, secure_cookie=False, extra_hosts=(),
-               behind_proxy=False):
+               behind_proxy=False, telegram=None):
     """hub: WebHub(사람별 WebApi). accounts: Accounts. throttle: 로그인 실패 제한.
     community: Community(없으면 커뮤니티 기능 없음 — 시험용).
     allowed_hosts: 주소창에 올 수 있는 호스트 이름(None = 검사 안 함) — 다른 사이트가 이 서버
@@ -268,6 +269,45 @@ def create_app(hub, accounts, secret_key, throttle, community=None,
             app.logger.exception('api %s', name)
             return jsonify(error=type(e).__name__), 500
         return jsonify(value=value)
+
+    # ---- 텔레그램 알림(로그인한 사람 자기 것만) ----
+
+    def _tg():
+        if telegram is None:
+            abort(404)
+        return telegram
+
+    def _tg_post():
+        if request.headers.get('X-BibleClip') != '1':
+            abort(403)
+        body = request.get_json(silent=True)
+        return body if isinstance(body, dict) else {}
+
+    @app.get('/tg/status')
+    def tg_status():
+        return jsonify(_tg().status(g.uid))
+
+    @app.post('/tg/token')
+    def tg_token():
+        bot = _tg()
+        return jsonify(bot.set_token(str(_tg_post().get('token') or '')))
+
+    @app.post('/tg/link')
+    def tg_link():
+        bot = _tg()
+        _tg_post()
+        return jsonify(bot.link_url(g.uid))
+
+    @app.post('/tg/unlink')
+    def tg_unlink():
+        bot = _tg()
+        _tg_post()
+        return jsonify(bot.unlink(g.uid))
+
+    @app.post('/tg/prefs')
+    def tg_prefs():
+        bot = _tg()
+        return jsonify(bot.set_prefs(g.uid, _tg_post()))
 
     def partner_highlights(a):
         """성경 한 장에서 상대가 칠한 형광펜(bridge.js 가 밑줄로 그린다)."""
