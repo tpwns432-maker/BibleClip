@@ -93,7 +93,11 @@ class Library:
         'tour_done': False,
     }
 
-    def __init__(self):
+    def __init__(self, user_dir=None, engine=None):
+        """user_dir · engine 은 웹판 서버만 쓴다(docs/WEB_PLAN.md). 데스크톱 · 테스트는 Library().
+        user_dir: 이 사람의 설정 · 노트 · 형광펜을 두는 폴더(없으면 데이터 폴더 = 지금 그대로).
+        engine: 이미 성경을 읽어 둔 Library — 역본 · 원어를 다시 읽지 않고 나눠 쓴다."""
+        self.user_dir = user_dir
         self.dbs = {}
         self.bethlehem_strongs = None  # 개역한글S — KRV-based, drives middle panel
         self.bethlehem_wonjun = None   # 원전분해 — kept for potential future use
@@ -109,21 +113,28 @@ class Library:
 
         # 묵상 노트 store (userdata/user_notes.json). Fail-soft.
         from bibleclip.notes import Notes
-        self.notes = Notes()
+        self.notes = Notes(user_dir)
 
         # 절 내부 단어 하이라이트 store (userdata/user_highlights.json, v1.1.12).
         # 노트와 같은 절 앵커 사용자 콘텐츠지만 역본별로 갈린다. Fail-soft.
         from bibleclip.highlights import Highlights
-        self.highlights = Highlights()
+        self.highlights = Highlights(user_dir)
 
         # 설교 장바구니 store (userdata/sermon_cart.json) — survives restart
         # (FEAT-08). localStorage was unreliable (random loopback port → origin
         # changes each launch), so persistence is backend-side. Fail-soft.
         from bibleclip.cart import Cart
-        self.cart = Cart()
+        self.cart = Cart(user_dir)
 
-        self.load_databases()
-        self.load_bethlehem()
+        if engine is not None:
+            self.dbs = engine.dbs
+            self.bethlehem_strongs = engine.bethlehem_strongs
+            self.bethlehem_wonjun = engine.bethlehem_wonjun
+            self.lexicon_ko = engine.lexicon_ko
+            self.lexicon_en = engine.lexicon_en
+        else:
+            self.load_databases()
+            self.load_bethlehem()
         self.load_settings()
 
     def reload_user_config(self):
@@ -308,11 +319,11 @@ class Library:
     def load_settings(self):
         """Load + validate settings from disk. UI concerns (window geometry)
         are left to the caller, which reads ``self.settings['geometry']``."""
-        path = os.path.join(BASE_DIR, SETTINGS_FILE)
+        path = os.path.join(self.user_dir or BASE_DIR, SETTINGS_FILE)
         # One-time migration: if the new file doesn't exist yet but the legacy
         # autobible_settings.json does, read from it. The next save_settings
         # writes the new file; the legacy file is left untouched (rollback-safe).
-        if not os.path.exists(path):
+        if not os.path.exists(path) and not self.user_dir:
             legacy = os.path.join(BASE_DIR, LEGACY_SETTINGS_FILE)
             if os.path.exists(legacy):
                 path = legacy
@@ -378,7 +389,7 @@ class Library:
     def save_settings(self):
         """Persist settings to disk. The caller is responsible for stamping any
         UI-only fields (e.g. ``settings['geometry']``) before calling."""
-        path = os.path.join(BASE_DIR, SETTINGS_FILE)
+        path = os.path.join(self.user_dir or BASE_DIR, SETTINGS_FILE)
         try:
             with open(path, 'w', encoding='utf-8') as f:
                 json.dump(self.settings, f, ensure_ascii=False, indent=2)

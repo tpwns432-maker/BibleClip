@@ -1,23 +1,31 @@
-"""웹판 서버 — 화면(web/)을 내주고, 화면의 기능 호출을 WebApi 로 넘긴다.
+"""웹판 서버 — 로그인한 사람에게 화면(web/)을 내주고, 화면의 기능 호출을 그 사람의 WebApi 로 넘긴다.
 
-    GET  /                → web/index.html (+ 웹용 연결 JS · CSS 끼워 넣음)
-    GET  /<파일>          → web/ 의 파일 그대로
-    GET  /_web/<파일>     → server/static/ (bridge.js · web.css)
-    POST /api/<기능>      → {"args": [...]} → {"value": ...}
+    GET  /login · POST /login   로그인(이것과 favicon 만 로그인 없이 열린다)
+    POST /logout                로그아웃
+    GET  /auth/me               지금 로그인한 사람 {id, name}
+    GET  /                      web/index.html (+ 웹용 연결 JS · CSS 끼워 넣음)
+    GET  /<파일>                web/ 의 파일 그대로
+    GET  /_web/<파일>           server/static/ (bridge.js · web.css)
+    POST /api/<기능>            {"args": [...]} → {"value": ...}
 
 web/ 는 데스크톱 · 폰과 같은 파일이다. 폰판(MainActivity.kt)처럼 index.html 을 내줄 때
 연결 JS 를 맨 앞 <script> 앞에, 웹용 CSS 를 </head> 앞에 끼운다 → web/ 를 고치지 않는다.
 """
+import html as _html
 import os
 import re
+from datetime import timedelta
+from urllib.parse import urlsplit
 
-from flask import Flask, Response, abort, jsonify, request, send_from_directory
+from flask import (Flask, Response, abort, g, jsonify, redirect, request, send_from_directory,
+                   session)
 
 from bibleclip.config import get_resource_dir
 
 STATIC_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'static')
 LOOPBACK_HOSTS = frozenset({'127.0.0.1', 'localhost', '[::1]'})
 _HOST_RE = re.compile(r'^(\[[^\]]+\]|[^:]+)(?::\d+)?$')
+_PUBLIC = frozenset({'/login', '/favicon.ico'})
 
 
 def web_dir():
@@ -34,39 +42,119 @@ def index_html():
     return html
 
 
+def login_html(error=''):
+    with open(os.path.join(STATIC_DIR, 'login.html'), encoding='utf-8') as f:
+        page = f.read()
+    msg = f'<p class="err" role="alert">{_html.escape(error)}</p>' if error else ''
+    return page.replace('<!--ERROR-->', msg)
+
+
 def _host_name(host):
     m = _HOST_RE.match(host or '')
     return m.group(1).lower() if m else ''
 
 
-def create_app(api, allowed_hosts=LOOPBACK_HOSTS):
-    """api: WebApi. allowed_hosts: 주소창에 올 수 있는 호스트 이름(None = 검사 안 함).
-    호스트 검사는 다른 사이트가 이 서버 주소를 자기 이름으로 바꿔 끼우는 공격(DNS
-    rebinding)을 막는다."""
+def create_app(hub, accounts, secret_key, throttle, allowed_hosts=LOOPBACK_HOSTS,
+               secure_cookie=False):
+    """hub: WebHub(사람별 WebApi). accounts: Accounts. throttle: 로그인 실패 제한.
+    allowed_hosts: 주소창에 올 수 있는 호스트 이름(None = 검사 안 함) — 다른 사이트가 이 서버
+    주소를 자기 이름으로 바꿔 끼우는 공격(DNS rebinding)을 막는다.
+    secure_cookie: https 로만 쿠키를 보낸다(서버 설치 때 켠다)."""
     app = Flask(__name__, static_folder=None)
+    app.secret_key = secret_key
+    app.config.update(
+        SESSION_COOKIE_NAME='bibleclip_session',
+        SESSION_COOKIE_HTTPONLY=True,          # 페이지 스크립트가 쿠키를 못 읽는다
+        SESSION_COOKIE_SAMESITE='Lax',         # 다른 사이트에서 보낸 요청엔 쿠키가 안 붙는다
+        SESSION_COOKIE_SECURE=bool(secure_cookie),
+        PERMANENT_SESSION_LIFETIME=timedelta(days=30),
+        MAX_CONTENT_LENGTH=2 * 1024 * 1024,
+    )
     app.json.sort_keys = False      # 역본 순서 등 dict 순서를 그대로
     app.json.ensure_ascii = False
 
+    def current_user():
+        uid = session.get('uid')
+        u = accounts.get(uid) if uid else None
+        if not u or u['sv'] != session.get('sv'):
+            return None
+        return uid, u
+
     @app.before_request
-    def _check_host():
+    def _guard():
         if allowed_hosts is not None and _host_name(request.host) not in allowed_hosts:
             abort(403)
+        if request.path in _PUBLIC:
+            return None
+        me = current_user()
+        if me is None:
+            session.clear()
+            if request.method == 'GET' and request.path in ('/', '/index.html'):
+                return redirect('login')
+            return jsonify(error='login'), 401
+        g.uid, g.user = me
+        return None
 
     @app.after_request
     def _headers(resp):
         resp.headers.setdefault('Cache-Control', 'no-store')
         resp.headers['X-Content-Type-Options'] = 'nosniff'
         resp.headers['Referrer-Policy'] = 'same-origin'
+        resp.headers['X-Frame-Options'] = 'DENY'
         return resp
+
+    # ---- 로그인 ----
+
+    @app.get('/login')
+    def login_page():
+        if current_user():
+            return redirect('./')
+        return Response(login_html(), mimetype='text/html')
+
+    @app.post('/login')
+    def login():
+        # 다른 사이트의 폼이 이 서버로 로그인시키는 것을 막는다(브라우저가 Origin 을 붙인다).
+        origin = request.headers.get('Origin')
+        if origin and urlsplit(origin).netloc != request.host:
+            abort(403)
+        uid = (request.form.get('id') or '').strip().lower()
+        pw = request.form.get('password') or ''
+        keys = ('id:' + uid, 'ip:' + (request.remote_addr or ''))
+        if throttle.blocked(*keys):
+            return Response(login_html('여러 번 틀려서 잠시 막혔습니다. 15분 뒤에 다시 해 주세요.'),
+                            status=429, mimetype='text/html')
+        u = accounts.verify(uid, pw)
+        if not u:
+            throttle.fail(*keys)
+            return Response(login_html('아이디나 비밀번호가 맞지 않습니다.'),
+                            status=401, mimetype='text/html')
+        throttle.clear(*keys)
+        session.clear()
+        session.permanent = True
+        session['uid'], session['sv'] = uid, u['sv']
+        return redirect('./', code=303)
+
+    @app.post('/logout')
+    def logout():
+        if request.headers.get('X-BibleClip') != '1':
+            abort(403)
+        session.clear()
+        return jsonify(ok=True)
+
+    @app.get('/auth/me')
+    def me():
+        return jsonify(id=g.uid, name=g.user['name'])
+
+    # ---- 화면 · 기능 ----
+
+    @app.get('/favicon.ico')
+    def favicon():
+        return send_from_directory(get_resource_dir(), 'icon.ico', max_age=86400)
 
     @app.get('/')
     @app.get('/index.html')
     def index():
         return Response(index_html(), mimetype='text/html')
-
-    @app.get('/favicon.ico')
-    def favicon():
-        return send_from_directory(get_resource_dir(), 'icon.ico', max_age=86400)
 
     @app.get('/_web/<path:name>')
     def web_static(name):
@@ -81,6 +169,7 @@ def create_app(api, allowed_hosts=LOOPBACK_HOSTS):
         args = body.get('args', []) if isinstance(body, dict) else None
         if not isinstance(args, list):
             abort(400)
+        api = hub.api_for(g.uid, g.user['name'])
         try:
             value = api.call(name, args)
         except TypeError as e:          # 인자 개수 · 모양이 틀림

@@ -52,12 +52,14 @@ class Cart:
     """In-memory sermon-cart store backed by userdata/sermon_cart.json
     (write-through, sanitized on every replace)."""
 
-    def __init__(self):
+    def __init__(self, folder=None):
+        # folder: 한 사람의 저장 폴더(웹판, docs/WEB_PLAN.md). 없으면 데이터 폴더의 userdata/.
+        self._file = os.path.join(folder, CART_FILE) if folder else None
         self.items = self._load()
 
     def _load(self):
         try:
-            with open(_path(), "r", encoding="utf-8") as f:
+            with open(self._file or _path(), "r", encoding="utf-8") as f:
                 d = json.load(f)
             return _sanitize(d) if isinstance(d, list) else []
         except Exception:
@@ -65,7 +67,7 @@ class Cart:
 
     def _save(self):
         try:
-            with open(_path(), "w", encoding="utf-8") as f:
+            with open(self._file or _path(), "w", encoding="utf-8") as f:
                 json.dump(self.items, f, ensure_ascii=False, indent=2)
             return True
         except Exception:
