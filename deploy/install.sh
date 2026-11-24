@@ -131,7 +131,7 @@ import sys, urllib.request
 urllib.request.urlopen(f"http://127.0.0.1:{sys.argv[1]}/login", timeout=2)
 PY
     ok "켜졌습니다:  http://127.0.0.1:$PORT  (이 컴퓨터에서만)"
-    ver="$(cd "$APP_DIR" && git describe --tags --always 2>/dev/null || true)"
+    ver="$(cd "$APP_DIR" && git describe --tags --match 'v*' --always 2>/dev/null || true)"
     [ -n "$ver" ] && ok "버전 $ver"
     if ! grep -q -- '--allow-host' "$CONF"; then
       printf '\n  다음: 다른 기기에서 들어오려면 Tailscale 연결  →  sudo %s/deploy/tailscale.sh\n' "$APP_DIR"
