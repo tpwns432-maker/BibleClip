@@ -106,14 +106,14 @@ if [ "$n" -eq 0 ] && [ "$UPDATE" -eq 0 ]; then
   echo "  두 분의 계정을 만듭니다. 비밀번호는 화면에 보이지 않습니다."
   echo "  상대의 비밀번호는 임시로 정해 알려 주고, 상대가 홈 화면에서 직접 바꾸면 됩니다."
   while :; do
-    read -rp "  아이디(영문 소문자 · 숫자, 예: sejun): " uid
+    read -rp "  아이디(영문 소문자 · 숫자, 예: sejun): " uid || die "입력이 끊겼습니다."
     [ -n "$uid" ] || continue
-    read -rp "  화면에 보일 이름(예: 세준): " uname
+    read -rp "  화면에 보일 이름(예: 세준): " uname || die "입력이 끊겼습니다."
     if as_svc "$VENV/bin/python" -m bibleclip.server.accounts --data "$DATA_DIR" add "$uid" --name "${uname:-$uid}"; then
       n=$((n + 1))
     fi
     if [ "$n" -ge 2 ]; then break; fi
-    read -rp "  계정을 하나 더 만들까요? [Y/n] " more
+    read -rp "  계정을 하나 더 만들까요? [Y/n] " more || die "입력이 끊겼습니다."
     case "$more" in [nN]*) [ "$n" -ge 1 ] && break ;; esac
   done
 fi
