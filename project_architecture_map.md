@@ -87,6 +87,8 @@ BibleClip Project/
 │     ├─ __main__.py               #   python -m bibleclip.server --data <폴더> (127.0.0.1 전용, 계정 없으면 안 켜짐)
 │     ├─ accounts.py               #   계정(users.json, scrypt 해시 · sv=비번 바꾸면 로그인 무효) · Throttle(15분 5회) · secret_key · 관리 명령
 │     ├─ app.py                    #   Flask: /login·/logout·/account/password·/auth/me(+테마), ProxyFix(--behind-proxy)·extra_hosts, /_android/mobile.css·mobile.js(안드로이드 폰 화면 재사용, media=휴대폰일 때만), 그 외 전부 로그인 필요. / = 홈, /bible = index.html(+bridge.js·web.css 주입), /community, POST /api/<기능>·/capi/<동작>
+│     ├─ telegram.py               #   텔레그램 봇(웹 서비스 안 스레드 · 폴링 · urllib): 토큰(사이트에서 입력 → telegram.json 600) · /start 일회용 코드 연결 · 커뮤니티 알림(1분 묶음, 제목 없이) · 통독 알림(KST 8 · 19시, 30분 창, sent 기록) — docs/TELEGRAM_PLAN.md
+│     ├─ readingplan.py            #   1년 1독(1189장/365일, 시작 2026-11-25) 날짜 → 범위 · 이름표(순수 함수)
 │     ├─ community.py              #   커뮤니티(SQLite community.db): 주제·글·댓글(parent 나무)·공감·읽음(seen.last_cid — 시간 아닌 번호)·글에 단 구절(clean_verse·verse_posts·verse_preview) + find_refs(글 속 구절 → JS 위치) — docs/WEB_PLAN.md
 │     ├─ webapi.py                 #   WebApi(Api) + 허용 목록 ALLOWED(밖은 null — Bridge.kt 와 같은 약속) · WebHub(엔진 한 벌, 사람별 Library(user_dir=users/<id>, engine), verse_text·partner_highlights) · get/save_phone_prefs(폰 카드 배치·글자 크기, PC 와 따로)
 │     └─ static/                   #   bridge.js(fetch 연결·클립보드·내려받기·사전 새 창·로그아웃·B 로고→홈·#go= 구절 열기·**DOM 위에만 얹기**: 절 메뉴 '함께 쓰기'·💬 절 표시·상대 형광펜=CSS Custom Highlight 밑줄·설정 '함께' 묶음) · web.css · login.html · home.html · community.html/js · site.js/css(공용: capi·테마 단추 themeMenu·renderText — HTML 해석 안 함)
@@ -446,6 +448,8 @@ BibleClip Project/
 ## 10. 테스트 (`tests/`)
 - `test_core.py` — Engine 파싱/Formatter/Library 코어
 - `test_webui_api.py` — Api 브리지 메서드(헤드리스, webview 미임포트 설계 덕분)
+- `test_telegram.py` — 텔레그램 봇(가짜 텔레그램): 열쇠 확인 · 일회용 연결 코드(만료 · 재사용 · 단체방 무시) · 1분 묶음 알림 · KST 8/19시 · 중복 없음 · 재시작 유지 · /stop · /tg 경로 · 커뮤니티 새 글/댓글 신호
+- `test_readingplan.py` — 1년 1독 계산(1189장 빠짐없이 · 하루 3~4장 · 1일째/365일째/2독째 · UTC→KST 날짜)
 - `test_community.py` — 웹판 커뮤니티(처음 주제 4개 · 주제 이름 겹침/글 있는 주제 삭제 거절 · 글/감상 대상 검사 · **새 글·새 댓글 표시** · 댓글 나무 · 권한(남의 것 못 고침) · 공감 · 정렬 · 같은 책 모아 보기 · 지우기(댓글 있으면 자리만) · 구절 찾기(이모지 앞에서도 JS 위치) · /capi 로그인·머리글·오류 코드)
 - `test_site_render.js` — 커뮤니티 글 그리기(**node**): 글 속 HTML 은 글자로, 구절 · http(s) 주소만 링크, 따옴표로 속성 깨기 차단
 - `test_server.py` — 웹판 서버(Flask 시험 손님, 데이터 폴더 = 임시 폴더 `BIBLECLIP_DATA_DIR`): 로그인 없이 차단 · 틀린 비번/다른 사이트 로그인 폼 거절 · 쿠키 속성 · 실패 제한 · 비번 변경 시 로그인 무효 · **두 사람 노트·형광펜·설정 분리 + 엔진 공유** · 계정 명령 · index 주입 · web/ 밖 파일 차단 · `X-BibleClip` 머리글/호스트 검사 · 허용 목록 밖 null · 노트·설정이 임시 폴더에 저장 · 사전 창 HTML · 127.0.0.1 외 거절

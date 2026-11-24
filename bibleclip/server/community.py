@@ -172,7 +172,7 @@ def find_refs(text, parse):
 
 
 class Community:
-    def __init__(self, path, names=None, parse=None, verse_text=None):
+    def __init__(self, path, names=None, parse=None, verse_text=None, on_event=None):
         """path: community.db. names(): {uid: 보이는 이름}. parse: 구절 인식기(없으면 링크 없음).
         verse_text(uid, verse) → {version, verses: [{n, text}]}: 글에 단 구절의 본문(읽는 사람의 역본)."""
         self._db = sqlite3.connect(path, check_same_thread=False)
@@ -181,6 +181,7 @@ class Community:
         self._names = names or (lambda: {})
         self._parse = parse
         self._verse_text = verse_text
+        self._on_event = on_event       # 새 글 · 댓글 알림(텔레그램 봇) — {'kind', 'author', 'post_id'}
         with self._lock, self._db:
             self._db.execute('PRAGMA journal_mode=WAL')
             self._db.execute('PRAGMA foreign_keys=ON')
@@ -397,6 +398,7 @@ class Community:
         stitle = source['title'].casefold() if source else ''
         sjson = json.dumps(source, ensure_ascii=False) if source else None
         tid = _id(a.get('topic_id'), 'topic_id')
+        created = False
         has_verse = 'verse' in a
         verse = clean_verse(a.get('verse')) if has_verse else None
         now = _now()
@@ -423,7 +425,10 @@ class Community:
                     ' VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?)',
                     (tid, uid, title, body, skind, stitle, sjson, *self._verse_cols(verse),
                      now, now, self._next_seq())).lastrowid
+                created = True
             self._mark_seen(uid, pid)
+        if a.get('id') is None and created:
+            self._emit('post', uid, pid)
         return {'id': pid}
 
     def post_delete(self, uid, a):
@@ -508,6 +513,7 @@ class Community:
             self._db.execute('UPDATE posts SET activity_at=?, activity_seq=? WHERE id=?',
                              (now, self._next_seq(), p['id']))
             self._mark_seen(uid, p['id'])
+        self._emit('comment', uid, p['id'])
         return {'id': cid}
 
     def comment_delete(self, uid, a):
@@ -523,6 +529,13 @@ class Community:
                 self._db.execute("DELETE FROM likes WHERE kind='comment' AND target=?", (c['id'],))
                 self._db.execute('DELETE FROM comments WHERE id=?', (c['id'],))
         return {'ok': True}
+
+    def _emit(self, kind, author, post_id):
+        if self._on_event:
+            try:
+                self._on_event({'kind': kind, 'author': author, 'post_id': post_id})
+            except Exception:       # noqa: BLE001 — 알림이 실패해도 글쓰기는 된다
+                pass
 
     # ---- 공감 ----
 

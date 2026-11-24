@@ -75,12 +75,21 @@ def main(argv=None):
     def parse(text):            # 글 속 구절 찾기 — 사용자 약칭까지(엔진은 hub 잠금 안에서)
         with hub._lock:
             return engine.parse_reference(text)
+    # 텔레그램 알림(docs/TELEGRAM_PLAN.md): 봇 열쇠는 사이트에서 넣는다 — 없으면 조용히 기다린다.
+    from bibleclip.core.engine import Engine
+    from bibleclip.server.telegram import TelegramBot
+    site = f'https://{a.allow_host[0]}' if a.allow_host else f'http://127.0.0.1:{a.port}'
+    kr = engine.primary_version() if 'KRV' not in engine.dbs else 'KRV'
+    books = [(b['num'], (Engine._canon(b['num']) or (0, b['short']))[1], len(engine.get_chapters(kr, b['num'])))
+             for b in engine.books(kr)] if kr else []
+    bot = TelegramBot(data, accounts.users, site, books)
     community = Community(os.path.join(data, DB_FILE), names=accounts.users, parse=parse,
-                          verse_text=hub.verse_text)
+                          verse_text=hub.verse_text, on_event=bot.on_community)
+    bot.start_thread()
 
     app = create_app(hub, accounts, secret_key(data), Throttle(), community,
                      secure_cookie=a.secure_cookie, extra_hosts=a.allow_host,
-                     behind_proxy=a.behind_proxy)
+                     behind_proxy=a.behind_proxy, telegram=bot)
     print(f'BibleClip 웹판: http://127.0.0.1:{a.port}/   (데이터: {data})', flush=True)
     serve(app, host=a.host, port=a.port, threads=8)   # 첫 화면이 파일을 한꺼번에 받는다
 
