@@ -108,18 +108,25 @@ web/ 는 고치지 않고 `server/static/bridge.js` 가 그려진 화면(DOM) �
 - 15분 안에 5번 틀리면 15분 동안 막는다. 다른 사이트에서 보낸 요청(머리글 · Origin · 호스트 검사)은 거절.
 - 저장소가 공개라 **비밀 값은 코드에 넣지 않는다**(계정 · 열쇠는 서버의 데이터 폴더에만).
 
-## 배포 (리눅스, Docker 없이)
-Docker는 깔려 있지 않다. 두 명이 쓰는 작은 앱이라 Docker 없이 **Python 가상환경 + systemd**로 간다
+## 배포 (리눅스, Docker 없이 — 5단계)
+서버 = 집에 있는 리눅스, Docker 없음 → **Python 가상환경 + systemd**
 (systemd = 리눅스가 프로그램을 켜 두고, 꺼지면 다시 켜고, 재부팅 때 자동으로 켜 주는 장치).
-설치 스크립트 `deploy/install.sh`가 아래를 대신 한다. 서버 주인이 하는 일:
+서버 주인용 안내서 **`docs/WEB_SETUP.md`**. 서버 주인이 하는 일:
 ```
-git clone https://github.com/tpwns432-maker/BibleClip.git
-cd BibleClip && sudo deploy/install.sh        # 가상환경 · 서비스 등록 · 계정 2개 만들기
-(역본 파일을 데이터 폴더의 bible_versions/ 에 넣기)
-# 업데이트
-git pull && sudo systemctl restart bibleclip-web
+sudo git clone https://github.com/tpwns432-maker/BibleClip.git /opt/bibleclip
+sudo /opt/bibleclip/deploy/install.sh      # Python · 전용 사용자 · 가상환경 · 서비스 · 계정 · 시작 확인
+sudo /opt/bibleclip/deploy/tailscale.sh    # https://<서버>.<사설망>.ts.net 으로 내보내기
+sudo /opt/bibleclip/deploy/update.sh       # 업데이트(git pull + 다시 맞춤)
+sudo /opt/bibleclip/deploy/backup.sh       # 백업(쓰는 중인 커뮤니티 DB 도 SQLite 백업 기능으로 안전하게)
 ```
-- 설치 안내서 `docs/WEB_SETUP.md`(서버 주인용, 명령을 그대로 따라 치면 되게). 백업 대상 = 데이터 폴더.
+| 위치 | 내용 |
+|---|---|
+| `/opt/bibleclip` | 프로그램(+ `.venv`). 서비스 사용자는 읽기만 |
+| `/var/lib/bibleclip` | 데이터(계정 · 사람별 폴더 · community.db · bible_versions) — 백업 대상 |
+| `/etc/bibleclip/web.env` | `BIBLECLIP_PORT` · `BIBLECLIP_ARGS`(tailscale.sh 가 채움) |
+- 서비스는 전용 사용자 `bibleclip`(로그인 불가)로, 데이터 폴더 말고는 쓸 수 없게(`ProtectSystem=strict` 등) 돈다.
+- 계정은 서버 주인이 만들고, 상대의 비밀번호는 임시로 → 상대가 홈 화면 **"비밀번호 바꾸기"**로 바꾼다
+  (바꾸면 다른 기기의 로그인은 풀리고 그 기기는 유지).
 
 ## 접속 (도메인 없음)
 도메인이 없으면 일반 https 주소(자물쇠)를 받기 어렵다. 후보:
@@ -130,19 +137,22 @@ git pull && sudo systemctl restart bibleclip-web
 | 무료 주소 + 자동 인증서 | DuckDNS 같은 무료 하위 주소 + Caddy(인증서 자동) | 아무 브라우저로 바로 접속 | 서버를 인터넷에 열어야 함(공유기 포트 열기 · 공인 IP 필요) · 무차별 로그인 시도에 노출 |
 | 도메인 사기 | 연 1~2만 원 + Caddy | 깔끔한 주소 | 비용 · 나머지는 위와 같음 |
 
-두 명만 쓰는 비공개 공간이라 **Tailscale**을 권한다. 앱(로그인 화면)은 어느 방법이든 똑같이 둔다.
+두 명만 쓰는 비공개 공간이라 **Tailscale**로 정했다(서버 주인 동의). 앱은 127.0.0.1 에만 열고,
+`tailscale serve` 가 https 로 받아 넘긴다 → 앱은 `--allow-host <ts.net 주소> --behind-proxy --secure-cookie`
+(그 주소를 받아들이고, 접속한 기기 주소 · https 여부는 Tailscale 이 붙여 준 머리글을 믿는다).
+상대에게는 관리 화면의 **Share**(기기 하나만 공유)로 연다.
 
 ## 서버 주인께 확인할 것
-- 확인됨: 리눅스 · Docker 없음 · 도메인 없음
-- 남은 것: 리눅스 종류와 버전(`cat /etc/os-release`) · `sudo` 가능 여부 ·
-  서버가 집에 있는지 클라우드(VPS)인지 · Tailscale 설치에 동의하는지
+- 확인됨: 리눅스 · Docker 없음 · 도메인 없음 · 집에 있음 · Tailscale 설치 예정
+- 답 기다리는 중: 리눅스 종류 · 버전 · CPU 종류 · Python 버전(`cat /etc/os-release; uname -m; python3 --version`) ·
+  `sudo` 가능 여부
 
 ## 단계
 1. ~~**내 PC 브라우저에서 열기**~~ — 웹 서버 + `bridge.js`, 데스크톱 기능 숨김. (#16)
 2. ~~**로그인 + 사람별 데이터**~~ — 계정 2개, 엔진 한 벌 · 저장소 사람별. (#17)
 3. ~~**홈 + 커뮤니티**~~ — 홈 화면, 주제 · 글 · 댓글 · 공감 · 감상 대상 · 새 글 표시 · 구절 자동 링크. (#18)
 4. ~~**성경과 연결**~~ — 구절 범위로 "함께 쓰기"(= 성경 묵상 글), 글이 달린 절 표시, 상대 형광펜, 어디서나 테마. (#19)
-5. **포장** — 설치 스크립트 · systemd · 설치 안내서 · 접속 방법.
+5. ~~**포장**~~ — 설치 스크립트 · systemd · 설치 안내서 · Tailscale · 비밀번호 바꾸기. (#20)
 6. **서버 설치** — 서버 주인과 함께.
 
 ## 데스크톱 · 폰과의 관계

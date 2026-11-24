@@ -2,6 +2,7 @@
 
     GET  /login · POST /login   로그인(이것과 favicon 만 로그인 없이 열린다)
     POST /logout                로그아웃
+    POST /account/password      내 비밀번호 바꾸기
     GET  /auth/me               지금 로그인한 사람 {id, name, 테마}
     GET  /                      홈(성경 · 커뮤니티) — server/static/home.html
     GET  /bible                 성경 = web/index.html (+ 웹용 연결 JS · CSS 끼워 넣음)
@@ -22,6 +23,7 @@ from urllib.parse import urlsplit
 
 from flask import (Flask, Response, abort, g, jsonify, redirect, request, send_from_directory,
                    session)
+from werkzeug.middleware.proxy_fix import ProxyFix
 
 from bibleclip.config import get_resource_dir
 from bibleclip.server.community import CommunityError
@@ -65,13 +67,22 @@ def _host_name(host):
 
 
 def create_app(hub, accounts, secret_key, throttle, community=None,
-               allowed_hosts=LOOPBACK_HOSTS, secure_cookie=False):
+               allowed_hosts=LOOPBACK_HOSTS, secure_cookie=False, extra_hosts=(),
+               behind_proxy=False):
     """hub: WebHub(사람별 WebApi). accounts: Accounts. throttle: 로그인 실패 제한.
     community: Community(없으면 커뮤니티 기능 없음 — 시험용).
     allowed_hosts: 주소창에 올 수 있는 호스트 이름(None = 검사 안 함) — 다른 사이트가 이 서버
     주소를 자기 이름으로 바꿔 끼우는 공격(DNS rebinding)을 막는다.
-    secure_cookie: https 로만 쿠키를 보낸다(서버 설치 때 켠다)."""
+    secure_cookie: https 로만 쿠키를 보낸다(서버 설치 때 켠다).
+    extra_hosts: 이 컴퓨터 말고 들어올 주소 이름(예: Tailscale 의 bibleclip.xxx.ts.net).
+    behind_proxy: 앞에서 받아 넘겨주는 프로그램(Tailscale serve)이 붙여 준 '원래 접속한 사람 주소 ·
+    https 여부'를 믿는다. 앱은 127.0.0.1 에만 열려 있어 그 프로그램만 이 머리글을 붙일 수 있다."""
+    extra = frozenset(h.strip().lower() for h in extra_hosts if h and h.strip())
+    if allowed_hosts is not None:
+        allowed_hosts = frozenset(allowed_hosts) | extra
     app = Flask(__name__, static_folder=None)
+    if behind_proxy:
+        app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1)
     app.secret_key = secret_key
     app.config.update(
         SESSION_COOKIE_NAME='bibleclip_session',
@@ -126,8 +137,11 @@ def create_app(hub, accounts, secret_key, throttle, community=None,
     def login():
         # 다른 사이트의 폼이 이 서버로 로그인시키는 것을 막는다(브라우저가 Origin 을 붙인다).
         origin = request.headers.get('Origin')
-        if origin and urlsplit(origin).netloc != request.host:
-            abort(403)
+        if origin:
+            o = urlsplit(origin).netloc
+            # 앞 프로그램이 호스트 이름을 127.0.0.1 로 바꿔 넘겨도, 정해 둔 주소에서 온 것이면 받는다.
+            if o != request.host and _host_name(o) not in extra:
+                abort(403)
         uid = (request.form.get('id') or '').strip().lower()
         pw = request.form.get('password') or ''
         keys = ('id:' + uid, 'ip:' + (request.remote_addr or ''))
@@ -150,6 +164,26 @@ def create_app(hub, accounts, secret_key, throttle, community=None,
         if request.headers.get('X-BibleClip') != '1':
             abort(403)
         session.clear()
+        return jsonify(ok=True)
+
+    @app.post('/account/password')
+    def change_password():
+        """지금 비밀번호를 확인하고 새 비밀번호로. 다른 기기의 로그인은 풀리고 이 기기는 유지."""
+        if request.headers.get('X-BibleClip') != '1':
+            abort(403)
+        body = request.get_json(silent=True) or {}
+        cur, new = str(body.get('current') or ''), str(body.get('new') or '')
+        keys = ('id:' + g.uid, 'ip:' + (request.remote_addr or ''))
+        if throttle.blocked(*keys):
+            return jsonify(error='blocked'), 429
+        if not accounts.verify(g.uid, cur):
+            throttle.fail(*keys)
+            return jsonify(error='wrong'), 403
+        try:
+            accounts.set_password(g.uid, new)
+        except ValueError as e:
+            return jsonify(error='invalid', detail=str(e)), 400
+        session['sv'] = accounts.get(g.uid)['sv']
         return jsonify(ok=True)
 
     @app.get('/auth/me')
