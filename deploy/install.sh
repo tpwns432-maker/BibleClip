@@ -35,14 +35,16 @@ say "1/6 Python 확인"
 py_ok() { command -v python3 >/dev/null && python3 -c 'import sys, venv, ensurepip; sys.exit(sys.version_info < (3, 9))' 2>/dev/null; }
 if ! py_ok; then
   echo "  Python 3.9 이상(가상환경 포함)을 설치합니다."
+  # 패키지 설치가 키보드 입력을 가로채지 않게(</dev/null) — 뒤에서 계정을 물어본다.
   if command -v apt-get >/dev/null; then
-    apt-get update -qq && apt-get install -y -qq python3 python3-venv
+    export DEBIAN_FRONTEND=noninteractive
+    apt-get update -qq </dev/null && apt-get install -y -qq python3 python3-venv </dev/null
   elif command -v dnf >/dev/null; then
-    dnf install -y -q python3
+    dnf install -y -q python3 </dev/null
   elif command -v pacman >/dev/null; then
-    pacman -Sy --noconfirm --needed python
+    pacman -Sy --noconfirm --needed python </dev/null
   elif command -v zypper >/dev/null; then
-    zypper --non-interactive install python3
+    zypper --non-interactive install python3 </dev/null
   else
     die "Python 3.9 이상을 직접 설치한 뒤 다시 실행해 주세요."
   fi
