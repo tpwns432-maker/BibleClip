@@ -148,7 +148,9 @@ def find_refs(text, parse):
     out = []
     for m in _REF_RE.finditer(text or ''):
         book_tok = m.group(1)
-        tail = f' {m.group(2)}:{re.sub(r"\s", "", m.group(3))}'
+        # (f-string 안에 역슬래시를 쓰면 Python 3.12 미만에서 문법 오류 — 서버는 3.10)
+        verses = re.sub(r'\s', '', m.group(3))
+        tail = f' {m.group(2)}:{verses}'
         # "말씀은요 3:16" 처럼 앞말이 붙어 있으면 뒤에서부터 줄여 가며 책 이름을 찾는다.
         for i in range(len(book_tok)):
             if book_tok[i].isspace():
