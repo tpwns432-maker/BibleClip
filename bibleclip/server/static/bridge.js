@@ -12,6 +12,7 @@
       body: JSON.stringify({ args: args }),
       credentials: "same-origin",
     }).then(function (res) {
+      if (res.status === 401) toLogin();     // 로그인이 풀림(비밀번호 변경 · 30일 지남)
       return res.json().catch(function () { return {}; }).then(function (body) {
         if (!res.ok) throw new Error(body.error || ("HTTP " + res.status));
         return body.value === undefined ? null : body.value;
@@ -110,4 +111,40 @@
 
   window.pywebview = { api: api, platform: "web" };
   document.documentElement.classList.add("platform-web");
+
+  // ---- 로그인 · 로그아웃 ----
+
+  let leaving = false;
+  function toLogin() {
+    if (leaving) return;
+    leaving = true;
+    location.href = "login";
+  }
+
+  // 왼쪽 레일의 테마 단추 위에 로그아웃 단추(누가 들어와 있는지 말풍선으로).
+  function addLogoutButton(me) {
+    const anchor = document.getElementById("theme-toggle");
+    if (!anchor || document.getElementById("web-logout")) return;
+    const b = document.createElement("div");
+    b.className = "nav-icon";
+    b.id = "web-logout";
+    b.title = (me && me.name ? me.name + " · " : "") + "로그아웃";
+    b.setAttribute("aria-label", b.title);
+    b.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" ' +
+      'stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/>' +
+      '<path d="M16 17l5-5-5-5"/><path d="M21 12H9"/></svg>';
+    b.addEventListener("click", function () {
+      if (!confirm("로그아웃할까요?")) return;
+      fetch("logout", { method: "POST", headers: { "X-BibleClip": "1" }, credentials: "same-origin" })
+        .finally(toLogin);
+    });
+    anchor.parentNode.insertBefore(b, anchor);
+  }
+
+  document.addEventListener("DOMContentLoaded", function () {
+    fetch("auth/me", { credentials: "same-origin" })
+      .then(function (r) { if (r.status === 401) toLogin(); return r.ok ? r.json() : null; })
+      .then(function (me) { if (me) addLogoutButton(me); })
+      .catch(function () {});
+  });
 })();
