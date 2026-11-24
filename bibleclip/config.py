@@ -58,6 +58,7 @@ def get_app_dir():
 
 
 MAC_DATA_DIR = os.path.join('~', 'Library', 'Application Support', 'BibleClip')
+DATA_DIR_ENV = 'BIBLECLIP_DATA_DIR'
 
 
 def get_base_dir():
@@ -69,6 +70,11 @@ def get_base_dir():
     app run from the DMG or moved inside a folder is "translocated" to a
     read-only temp path, where settings and notes were silently lost.
     """
+    # 웹 서버(bibleclip.server)는 데이터 폴더를 따로 둔다(docs/WEB_PLAN.md).
+    # 데스크톱·폰은 이 변수를 쓰지 않는다.
+    env = os.environ.get(DATA_DIR_ENV)
+    if env:
+        return os.path.abspath(os.path.expanduser(env))
     if _is_mac_app():
         return os.path.expanduser(MAC_DATA_DIR)
     return get_app_dir()
@@ -134,6 +140,9 @@ def candidate_data_roots():
     Gatekeeper report the whole app as "damaged".
     """
     roots = [BASE_DIR]
+    # 데이터 폴더를 따로 둔 웹 서버: 저장소에 든 자료(개역한글 · 원어)도 찾는다.
+    if os.environ.get(DATA_DIR_ENV) and get_app_dir() not in roots:
+        roots.append(get_app_dir())
     if getattr(sys, 'frozen', False):
         exe_dir = os.path.dirname(sys.executable)
         if exe_dir not in roots:
