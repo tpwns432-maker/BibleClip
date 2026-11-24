@@ -40,15 +40,23 @@ sudo /opt/bibleclip/deploy/install.sh
      **"비밀번호 바꾸기"**로 직접 바꿉니다(서버 주인도 모르는 비밀번호가 됩니다).
 6. 시작 확인 — `✔ 켜졌습니다` 가 나오면 성공
 
-## 3. 역본 넣기
-개역한글과 원어 사전은 프로그램에 들어 있습니다. 개역개정 같은 다른 역본은 **저작권 때문에 GitHub에
-없으므로** 가지고 계신 `.SQLite3` 파일을 직접 넣습니다.
+## 3. 역본 · 한국어 원어 사전 넣기
+개역한글 · KJV+ · 원어 분해(개역한글S) · 영어 원어 사전은 프로그램에 들어 있습니다. 그 밖의 것은
+**저작권 때문에 GitHub에 없으므로** 가지고 있는 파일을 직접 넣습니다.
+
+| 파일 | 넣을 곳 |
+|---|---|
+| 역본(`개역개정.SQLite3` 등 `.SQLite3`) | `/var/lib/bibleclip/bible_versions/` |
+| 한국어 원어 사전 `HebGrkKo.dct` | `/var/lib/bibleclip/original_lang/` |
+
 ```bash
-sudo cp 개역개정.SQLite3 /var/lib/bibleclip/bible_versions/
-sudo chown bibleclip: /var/lib/bibleclip/bible_versions/*
+sudo cp *.SQLite3 /var/lib/bibleclip/bible_versions/
+sudo cp HebGrkKo.dct /var/lib/bibleclip/original_lang/
+sudo chown -R bibleclip: /var/lib/bibleclip/bible_versions /var/lib/bibleclip/original_lang
 sudo systemctl restart bibleclip-web
 ```
-(파일을 다른 컴퓨터에서 옮길 때는 USB나 `scp 파일 사용자@서버:~/` 로 서버에 먼저 가져온 뒤 위 명령.)
+(파일을 다른 컴퓨터에서 옮길 때는 USB로, 또는 Tailscale 연결 뒤 `scp 파일 사용자@서버:~/` 로 서버에 먼저
+가져온 뒤 위 명령.)
 
 ## 4. Tailscale로 연결하기
 1. Tailscale 설치 · 로그인(처음 한 번):

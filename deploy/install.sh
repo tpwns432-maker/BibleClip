@@ -61,7 +61,7 @@ if ! id -u "$SVC_USER" >/dev/null 2>&1; then
 else
   ok "사용자가 이미 있습니다"
 fi
-install -d -o "$SVC_USER" -g "$SVC_USER" -m 750 "$DATA_DIR" "$DATA_DIR/bible_versions"
+install -d -o "$SVC_USER" -g "$SVC_USER" -m 750 "$DATA_DIR" "$DATA_DIR/bible_versions" "$DATA_DIR/original_lang"
 # 프로그램 폴더는 읽기만 하면 된다(고칠 수는 없게).
 chmod -R o+rX "$APP_DIR"
 as_svc test -r "$APP_DIR/bibleclip/server/__main__.py" \
