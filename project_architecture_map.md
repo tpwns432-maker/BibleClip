@@ -72,17 +72,22 @@ BibleClip Project/
 │  │  ├─ theming.py                #   다크/라이트 토글 + 위젯 테밍
 │  │  ├─ updater_ui.py             #   업뎃체크/진행바/플랫폼 업데이터 스크립트
 │  │  └─ widgets.py                #   ScrollDropdown(스크롤 가능 드롭다운)
-│  └─ webui/                       # ★ pywebview 데스크톱(웹 프론트 + JS브리지)
-│     ├─ app.py                    #   pywebview 창 부트스트랩/생명주기/.NET 에러
-│     ├─ api.py                    #   Api 브리지 파사드(5개 라우트 믹스인 조합)
-│     ├─ dicthtml.py               #   렉시콘 마크업 → HTML 헬퍼
-│     ├─ __main__.py               #   python -m bibleclip.webui
-│     └─ routes/                   #   JS-호출 가능 브리지 메서드(HTTP 아님)
-│        ├─ bible.py               #     성경 탐색/검색/렉시콘 (BibleRoutes)
-│        ├─ notes.py               #     묵상 노트 CRUD (NoteRoutes)
-│        ├─ highlights.py          #     형광펜 CRUD (HighlightRoutes)
-│        ├─ slides.py              #     자막(PPT) 슬라이드·장 탐색·겉모습 (SlideRoutes)
-│        └─ system.py              #     부트/설정/업뎃/폰트/출력포맷 (SystemRoutes)
+│  ├─ webui/                       # ★ pywebview 데스크톱(웹 프론트 + JS브리지)
+│  │  ├─ app.py                    #   pywebview 창 부트스트랩/생명주기/.NET 에러
+│  │  ├─ api.py                    #   Api 브리지 파사드(5개 라우트 믹스인 조합)
+│  │  ├─ dicthtml.py               #   렉시콘 마크업 → HTML 헬퍼
+│  │  ├─ __main__.py               #   python -m bibleclip.webui
+│  │  └─ routes/                   #   JS-호출 가능 브리지 메서드(HTTP 아님)
+│  │     ├─ bible.py               #     성경 탐색/검색/렉시콘 (BibleRoutes)
+│  │     ├─ notes.py               #     묵상 노트 CRUD (NoteRoutes)
+│  │     ├─ highlights.py          #     형광펜 CRUD (HighlightRoutes)
+│  │     ├─ slides.py              #     자막(PPT) 슬라이드·장 탐색·겉모습 (SlideRoutes)
+│  │     └─ system.py              #     부트/설정/업뎃/폰트/출력포맷 (SystemRoutes)
+│  └─ server/                      # ★ 웹판 서버(브라우저용, 1단계 — docs/WEB_PLAN.md)
+│     ├─ __main__.py               #   python -m bibleclip.server --data <폴더> (127.0.0.1 전용)
+│     ├─ app.py                    #   Flask: web/ 서빙 + index.html 에 bridge.js·web.css 주입, POST /api/<기능>
+│     ├─ webapi.py                 #   WebApi(Api) + 허용 목록 ALLOWED(밖은 null — Bridge.kt 와 같은 약속)
+│     └─ static/                   #   bridge.js(fetch 연결·클립보드·내려받기·사전 새 창) · web.css(데스크톱 기능 숨김)
 ├─ web/                            # ★ 프론트엔드 SPA (vanilla JS, 프레임워크 없음)
 │  ├─ index.html                   #   DOM 셸(.rail/.main/뷰/드로어/모달)
 │  ├─ cart.html                    #   FEAT-07 설교 장바구니 팝아웃 창(자체완결, v1.1.5)
@@ -437,6 +442,7 @@ BibleClip Project/
 ## 10. 테스트 (`tests/`)
 - `test_core.py` — Engine 파싱/Formatter/Library 코어
 - `test_webui_api.py` — Api 브리지 메서드(헤드리스, webview 미임포트 설계 덕분)
+- `test_server.py` — 웹판 서버(Flask 시험 손님, 데이터 폴더 = 임시 폴더 `BIBLECLIP_DATA_DIR`): index 주입 · web/ 밖 파일 차단 · `X-BibleClip` 머리글/호스트 검사 · 허용 목록 밖 null · 노트·설정이 임시 폴더에 저장 · 사전 창 HTML · 127.0.0.1 외 거절
 - `test_installer.py` — installer 다운/스테이징/스크립트
 - `test_killswitch.py` — 킬스위치 fail-open/min_version 로직
 - `test_highlights.py` — 형광펜 store(`_norm` 정렬·비겹침·캡, CRUD, **역본 격리**, 장/책 경계, `:` 포함 역본명, 손상 파일·쓰기불가 fail-soft)
