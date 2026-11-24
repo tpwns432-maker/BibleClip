@@ -26,8 +26,9 @@ NAME="$(printf '%s' "$STATUS" | python3 -c 'import json,sys; print(json.load(sys
 [ -n "$NAME" ] || die "이 컴퓨터의 Tailscale 주소를 찾지 못했습니다. 관리 화면에서 MagicDNS 를 켜 주세요."
 ok "이 컴퓨터의 주소: $NAME"
 
-# shellcheck disable=SC1090
-PORT="$(. "$CONF"; echo "${BIBLECLIP_PORT:-8765}")"
+# 설정 파일은 실행하지 않고 글자로만 읽는다(값에 띄어쓰기가 있어도 안전하게).
+PORT="$(sed -n 's/^BIBLECLIP_PORT=//p' "$CONF" | tail -n 1)"
+PORT="${PORT:-8765}"
 
 say "2/3 https 로 내보내기(tailscale serve)"
 echo "  처음이면 Tailscale 이 'HTTPS 인증서 켜기' 링크를 보여 줄 수 있습니다. 링크를 열어 켠 뒤 다시 실행하세요."
