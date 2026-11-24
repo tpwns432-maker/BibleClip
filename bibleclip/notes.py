@@ -25,12 +25,14 @@ def _key(book, chapter, verse):
 class Notes:
     """In-memory note store backed by userdata/user_notes.json (write-through)."""
 
-    def __init__(self):
+    def __init__(self, folder=None):
+        # folder: 한 사람의 저장 폴더(웹판, docs/WEB_PLAN.md). 없으면 데이터 폴더의 userdata/.
+        self._file = os.path.join(folder, NOTES_FILE) if folder else None
         self.data = self._load()
 
     def _load(self):
         try:
-            with open(_path(), "r", encoding="utf-8") as f:
+            with open(self._file or _path(), "r", encoding="utf-8") as f:
                 d = json.load(f)
             return d if isinstance(d, dict) else {}
         except Exception:
@@ -38,7 +40,7 @@ class Notes:
 
     def _save(self):
         try:
-            with open(_path(), "w", encoding="utf-8") as f:
+            with open(self._file or _path(), "w", encoding="utf-8") as f:
                 json.dump(self.data, f, ensure_ascii=False, indent=2)
             return True
         except Exception:
