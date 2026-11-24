@@ -185,11 +185,13 @@ def create_app(hub, accounts, secret_key, throttle, community=None,
     def capi(action):
         if request.headers.get('X-BibleClip') != '1':
             abort(403)
-        if community is None:
-            abort(404)
         body = request.get_json(silent=True)
         if not isinstance(body, dict):
             abort(400)
+        if action == 'partner_highlights':
+            return jsonify(value=partner_highlights(body))
+        if community is None:
+            abort(404)
         try:
             value = community.call(g.uid, action, body)
         except CommunityError as e:
@@ -219,6 +221,16 @@ def create_app(hub, accounts, secret_key, throttle, community=None,
             app.logger.exception('api %s', name)
             return jsonify(error=type(e).__name__), 500
         return jsonify(value=value)
+
+    def partner_highlights(a):
+        """성경 한 장에서 상대가 칠한 형광펜(bridge.js 가 밑줄로 그린다)."""
+        try:
+            book, chapter = int(a.get('book')), int(a.get('chapter'))
+        except (TypeError, ValueError):
+            abort(400)
+        versions = [str(v) for v in (a.get('versions') or []) if isinstance(v, str)][:8]
+        others = [(k, u['name']) for k, u in accounts.users().items() if k != g.uid]
+        return hub.partner_highlights(g.uid, others, book, chapter, versions)
 
     @app.get('/<path:name>')
     def files(name):

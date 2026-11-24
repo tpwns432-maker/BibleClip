@@ -18,9 +18,10 @@ os.environ['BIBLECLIP_DATA_DIR'] = DATA
 
 from bibleclip.core.engine import Engine  # noqa: E402
 from bibleclip.server.community import (  # noqa: E402
-    Community, CommunityError, SEED_TOPICS, clean_source, find_refs)
+    Community, CommunityError, SEED_TOPICS, clean_source, clean_verse, find_refs)
 
 A, B = 'alice', 'bob'
+PSALMS = Engine.parse_reference('시 23:1')[0][0]
 NAMES = {A: {'name': '앨리스'}, B: {'name': '밥'}}
 
 
@@ -180,6 +181,59 @@ def check_refs():
     assert labels('at 3:30 meet, 3:16만, 오늘 23편 1절') == []    # 책 이름이 없으면 링크 아님
 
 
+def check_verse():
+    """성경 화면의 "함께 쓰기": 구절 범위가 달린 글, 장 표시, 미리 보기, 본문 인용."""
+    def quote(uid, v):
+        return {'version': uid, 'verses': [{'n': n, 'text': f't{n}'}
+                                           for n in range(v['verse'], v['verse_end'] + 1)]}
+    c = Community(os.path.join(DATA, 'v.db'), names=lambda: NAMES, verse_text=quote)
+    med = c.default_topic()['id']
+    assert [t['name'] for t in c.topics(A) if t['id'] == med] == ['성경 묵상']
+
+    v = {'book': 500, 'chapter': 3, 'verse': 16, 'verse_end': 18}
+    assert clean_verse(v) == dict(v, label='요 3:16-18')
+    assert clean_verse({'book': 500, 'chapter': 3, 'verse': 16})['label'] == '요 3:16'
+    assert clean_verse(None) is None
+    for bad in ({'book': 999, 'chapter': 1, 'verse': 1}, {'book': 500, 'chapter': 3, 'verse': 18, 'verse_end': 16},
+                {'book': 500, 'chapter': 0, 'verse': 1}, {'book': True, 'chapter': 1, 'verse': 1},
+                {'book': 500, 'chapter': 3, 'verse': '16'}, 'x'):
+        err('invalid', clean_verse, bad)
+
+    p = c.post_save(A, {'topic_id': med, 'title': '독생자', 'body': '묵상', 'verse': v})['id']
+    view = c.post(B, {'id': p})
+    assert view['verse']['label'] == '요 3:16-18'
+    assert view['verse_text']['version'] == B                     # 읽는 사람의 역본으로 인용
+    assert [x['n'] for x in view['verse_text']['verses']] == [16, 17, 18]
+    assert c.posts(B, {'topic_id': med})['posts'][0]['verse']['label'] == '요 3:16-18'
+
+    # 장 표시: 그 장의 글만, 구절 순.
+    p0 = c.post_save(B, {'topic_id': med, 'title': '앞 절', 'body': 'x',
+                         'verse': {'book': 500, 'chapter': 3, 'verse': 1}})['id']
+    assert [x['id'] for x in c.verse_posts(A, {'book': 500, 'chapter': 3})['posts']] == [p0, p]
+    assert c.verse_posts(A, {'book': 500, 'chapter': 4})['posts'] == []
+    assert c.verse_posts(A, {'book': 500, 'chapter': 3})['posts'][0]['is_new']     # 밥의 새 글
+    err('invalid', c.verse_posts, A, {'book': 'x', 'chapter': 3})
+
+    # 고칠 때 구절을 안 보내면 그대로, None 이면 뗀다.
+    c.post_save(A, {'id': p, 'topic_id': med, 'title': '독생자2', 'body': '묵상'})
+    assert c.post(A, {'id': p})['verse']['verse_end'] == 18
+    c.post_save(B, {'id': p0, 'topic_id': med, 'title': '앞 절', 'body': 'x', 'verse': None})
+    assert c.post(B, {'id': p0})['verse'] is None
+    assert [x['id'] for x in c.verse_posts(A, {'book': 500, 'chapter': 3})['posts']] == [p]
+
+    # 미리 보기.
+    pv = c.verse_preview(A, {'verse': {'book': PSALMS, 'chapter': 23, 'verse': 1, 'verse_end': 6}})
+    assert pv['verse']['label'] == '시 23:1-6' and len(pv['verse_text']['verses']) == 6
+    err('invalid', c.verse_preview, A, {'verse': None})
+
+    # 지운 글(댓글 있음 → 자리만)은 장 표시에서 빠진다.
+    c.comment_save(B, {'post_id': p, 'body': '아멘'})
+    c.post_delete(A, {'id': p})
+    assert c.verse_posts(A, {'book': 500, 'chapter': 3})['posts'] == []
+    assert c.post(A, {'id': p})['verse'] is None
+    c.close()
+
+
 def check_routes():
     from bibleclip.core.library import Library
     from bibleclip.server.accounts import Accounts, Throttle
@@ -225,6 +279,7 @@ if __name__ == '__main__':
     try:
         check_refs()
         check_store()
+        check_verse()
         check_routes()
         print('test_community: ok')
     except Exception:
