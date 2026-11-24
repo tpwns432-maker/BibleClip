@@ -29,6 +29,12 @@ from bibleclip.config import get_resource_dir
 from bibleclip.server.community import CommunityError
 
 STATIC_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'static')
+# 휴대폰 화면은 안드로이드 앱의 것을 그대로 쓴다(같은 web/ 위에 얹는 CSS · JS).
+ANDROID_DIR = ('android', 'app', 'src', 'main', 'assets', 'android')
+ANDROID_FILES = frozenset({'mobile.css', 'mobile.js'})
+# 휴대폰 = 손가락 화면이면서 짧은 변이 600px 미만(태블릿은 PC 모양). bridge.js 와 같은 기준.
+PHONE_MEDIA = ('(pointer: coarse) and (max-device-width: 600px), '
+               '(pointer: coarse) and (max-device-height: 600px)')
 LOOPBACK_HOSTS = frozenset({'127.0.0.1', 'localhost', '[::1]'})
 _HOST_RE = re.compile(r'^(\[[^\]]+\]|[^:]+)(?::\d+)?$')
 _PUBLIC = frozenset({'/login', '/favicon.ico'})
@@ -42,7 +48,8 @@ def web_dir():
 def index_html():
     with open(os.path.join(web_dir(), 'index.html'), encoding='utf-8') as f:
         html = f.read()
-    html = html.replace('</head>', '<link rel="stylesheet" href="_web/web.css">\n</head>', 1)
+    html = html.replace('</head>', f'<link rel="stylesheet" id="bc-phone-css" href="_android/mobile.css" '
+                        f'media="{PHONE_MEDIA}">\n<link rel="stylesheet" href="_web/web.css">\n</head>', 1)
     i = html.find('<script')
     if i >= 0:
         html = html[:i] + '<script src="_web/bridge.js"></script>\n' + html[i:]
@@ -232,6 +239,12 @@ def create_app(hub, accounts, secret_key, throttle, community=None,
             status = {'notfound': 404, 'forbidden': 403}.get(e.code, 400)
             return jsonify(error=e.code, detail=e.detail), status
         return jsonify(value=value)
+
+    @app.get('/_android/<name>')
+    def android_static(name):
+        if name not in ANDROID_FILES:
+            abort(404)
+        return send_from_directory(os.path.join(get_resource_dir(), *ANDROID_DIR), name, max_age=0)
 
     @app.get('/_web/<path:name>')
     def web_static(name):

@@ -99,6 +99,37 @@
     set_native_fullscreen: function () { return Promise.resolve(null); },
   };
 
+  // ---- 휴대폰 화면: 안드로이드 앱의 폰 화면을 그대로 ----
+  // 휴대폰 = 손가락 화면이면서 짧은 변이 600px 미만(태블릿은 PC 모양). 설정에서 바꿀 수 있다.
+  // 서버가 끼운 android/mobile.css 를 켜고, 화면 코드에는 "android" 로 알린다(카드 2장 위아래 등).
+  const PHONE_MQ = "(pointer: coarse) and (max-device-width: 600px), " +
+                   "(pointer: coarse) and (max-device-height: 600px)";
+  let layoutPref = "auto";
+  try { layoutPref = localStorage.getItem("bc-layout") || "auto"; } catch (_) {}
+  const PHONE = layoutPref === "phone" ||
+    (layoutPref !== "desktop" && !!(window.matchMedia && matchMedia(PHONE_MQ).matches));
+  const phoneCss = document.getElementById("bc-phone-css");
+  if (phoneCss) phoneCss.media = PHONE ? "all" : "not all";
+
+  if (PHONE) {
+    // 폰의 카드 배치 · 글자 크기는 PC 와 따로 저장(서버 get/save_phone_prefs).
+    local.get_initial = function () {
+      return Promise.all([call("get_initial", []), call("get_phone_prefs", [])]).then(function (r) {
+        const init = r[0], prefs = r[1] || {};
+        if (init) {
+          init.web_cards_layout = prefs.layout || null;
+          if (prefs.font_size) init.font_size = prefs.font_size;
+        }
+        return init;
+      });
+    };
+    local.save_cards_layout = function (layout) { return call("save_phone_prefs", [{ layout: layout }]); };
+    local.set_font_size = function (n) {
+      return call("save_phone_prefs", [{ font_size: n }]).then(function () { return n; });
+    };
+    local.haptic = function () { try { navigator.vibrate && navigator.vibrate(8); } catch (_) {} return Promise.resolve(null); };
+  }
+
   // 어떤 이름이든 부를 수 있다(서버가 허용하지 않는 이름은 null).
   // `typeof api().xxx === "function"` 같은 검사도 통과한다.
   const api = new Proxy({}, {
@@ -109,8 +140,9 @@
     },
   });
 
-  window.pywebview = { api: api, platform: "web" };
+  window.pywebview = { api: api, platform: PHONE ? "android" : "web" };
   document.documentElement.classList.add("platform-web");
+  if (PHONE) document.documentElement.classList.add("platform-android", "platform-phone");
 
   // ---- 로그인 · 로그아웃 ----
 
@@ -375,25 +407,85 @@
     });
   }
 
-  // 설정 창에 "상대 형광펜 보기" 줄을 끼운다(정보 · 관리 묶음 앞).
+  // 설정 창에 "웹" 묶음을 끼운다(정보 · 관리 묶음 앞): 상대 형광펜 · 화면 모양.
   function addPartnerSetting() {
     const info = document.getElementById("set-version");
     const group = info && info.closest(".set-group");
     if (!group || document.getElementById("opt-partner-hl")) return;
     const g = document.createElement("div");
     g.className = "set-group";
-    g.innerHTML = '<div class="set-group-h">함께</div>' +
+    const seg = [["auto", "자동"], ["phone", "휴대폰"], ["desktop", "PC"]].map(function (o) {
+      return '<div class="opt' + (o[0] === layoutPref ? " on" : "") + '" data-val="' + o[0] + '">' + o[1] + "</div>";
+    }).join("");
+    g.innerHTML = '<div class="set-group-h">웹</div>' +
       '<div class="set-toggle" id="opt-partner-hl"><span class="set-label">상대 형광펜 보기 (밑줄)</span>' +
       '<span class="switch' + (partnerOn ? " on" : "") + '"><span class="knob"></span></span></div>' +
       '<p class="set-note">상대가 칠한 형광펜을 본문에 밑줄로 보여 줍니다. 이 기기에만 기억합니다.' +
-      (HL_OK ? "" : " (이 브라우저는 밑줄 표시를 지원하지 않습니다)") + "</p>";
+      (HL_OK ? "" : " (이 브라우저는 밑줄 표시를 지원하지 않습니다)") + "</p>" +
+      '<div class="set-row"><span class="set-label">화면 모양</span><div class="seg" id="opt-layout">' + seg + "</div></div>" +
+      '<p class="set-note">자동: 휴대폰이면 휴대폰 앱 모양, 태블릿 · PC 는 PC 모양. 이 기기에만 기억합니다.</p>';
     g.querySelector("#opt-partner-hl").addEventListener("click", function () {
       partnerOn = !partnerOn;
       this.querySelector(".switch").classList.toggle("on", partnerOn);
       try { localStorage.setItem("bc-partner-hl", partnerOn ? "1" : "0"); } catch (_) {}
       schedule();
     });
+    g.querySelector("#opt-layout").addEventListener("click", function (e) {
+      const o = e.target.closest("[data-val]");
+      if (!o || o.dataset.val === layoutPref) return;
+      try { localStorage.setItem("bc-layout", o.dataset.val); } catch (_) {}
+      location.reload();
+    });
     group.parentNode.insertBefore(g, group);
+  }
+
+  // 폰: 왼쪽 레일이 아래 메뉴가 되면서 B 로고(홈)가 숨는다 → 메뉴 맨 앞에 홈 단추.
+  //     절 메뉴는 절 번호를 눌러 연다. 앱은 2초 누르기를 손가락으로 지켜보지만, 브라우저는
+  //     길게 누르면 글자 선택(형광펜)이 시작되면서 손가락 신호를 잃어 같은 방법을 쓸 수 없다.
+  function phoneExtras() {
+    const rail = document.querySelector(".rail");
+    if (rail && !document.getElementById("web-home")) {
+      const h = document.createElement("div");
+      h.className = "nav-icon";
+      h.id = "web-home";
+      h.title = "홈";
+      h.setAttribute("aria-label", "홈");
+      h.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" ' +
+        'stroke-linecap="round" stroke-linejoin="round"><path d="M3 10.5 12 3l9 7.5"/>' +
+        '<path d="M5 9.5V21h14V9.5"/><path d="M10 21v-6h4v6"/></svg>';
+      h.addEventListener("click", function () { location.href = "./"; });
+      const first = rail.querySelector(".nav-icon");
+      rail.insertBefore(h, first || null);
+      // 보이는 것 앞에 끼우면 브라우저가 보던 자리를 지키려고 메뉴를 그만큼 민다 — 맨 앞으로.
+      requestAnimationFrame(function () { rail.scrollLeft = 0; });
+    }
+    document.addEventListener("click", function (e) {
+      const num = e.target.closest && e.target.closest('.mcard[data-type="bible"] .vnum');
+      if (!num || typeof window.BibleClipLongHold !== "function") return;
+      const v = num.closest(".v[data-v]");
+      const hit = v && bibleCardOf(v);
+      if (hit) lastPick = { book: hit.card.book, chapter: hit.card.chapter, verse: +v.dataset.v, verse_end: +v.dataset.v };
+      const r = num.getBoundingClientRect();
+      e.preventDefault();
+      window.BibleClipLongHold(r.left + r.width / 2, r.top + r.height / 2);
+    }, true);
+    // 안드로이드 앱의 폰 전용 동작(역본 칩 줄 끝 흐림 · 자판이 뜨면 아래 메뉴 숨김).
+    const s = document.createElement("script");
+    s.src = "_android/mobile.js";
+    s.onload = webSearchHint;     // mobile.js 가 앱용 문구(다른 앱에서 …)로 바꾼 것을 웹 문구로
+    document.body.appendChild(s);
+  }
+
+  // 검색 빈 화면 문구: 데스크톱은 "#키워드를 복사", 앱은 "다른 앱에서 선택" — 웹엔 둘 다 없다.
+  function webSearchHint() {
+    document.querySelectorAll('[data-i18n-html="search.empty"], [data-i18n-html="search.emptyPhone"]')
+      .forEach(function (el) {
+        el.setAttribute("data-i18n-html", "search.emptyWeb");
+        if (window.I18N && I18N.apply) I18N.apply(el.parentNode || el);
+      });
+    // 폰: mobile.js 가 검색창 안내를 짧은 폰 문구로 바꿔 둔 것을 다시 그린다(늦게 불러와서).
+    const si = document.getElementById("search-input");
+    if (si && window.I18N && I18N.apply) I18N.apply(si.parentNode);
   }
 
   // 화면이 바뀔 때마다(장 이동 · 다시 그리기 · 메뉴) 잠깐 기다렸다가 한 번에 얹는다.
@@ -424,6 +516,8 @@
 
   document.addEventListener("DOMContentLoaded", function () {
     goFromHash();
+    webSearchHint();
+    if (PHONE) phoneExtras();
     const logo = document.querySelector(".rail .logo-tile");
     if (logo) {
       logo.title = "홈으로";

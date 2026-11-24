@@ -53,3 +53,13 @@
 ::highlight(bc-partner-g) { text-decoration: underline 3px var(--hl-g-dot); }
 ::highlight(bc-partner-b) { text-decoration: underline 3px var(--hl-b-dot); }
 ::highlight(bc-partner-p) { text-decoration: underline 3px var(--hl-p-dot); }
+
+/* ---- 휴대폰(android/mobile.css 위에): 절 번호를 누르면 절 메뉴(bridge.js) ---- */
+.platform-phone .mcard[data-type="bible"] .vnum {
+  cursor: pointer; padding: 2px 5px 2px 2px; margin-left: -2px; border-radius: 6px;
+  -webkit-user-select: none; user-select: none; -webkit-tap-highlight-color: transparent;
+}
+.platform-phone .mcard[data-type="bible"] .vnum:active { background: var(--chip-bg); }
+/* 폰: 검색 줄(검색창 · 역본 · AND/OR · 검색)이 한 줄에 안 들어간다 → 검색창을 첫 줄 전체로. */
+.platform-phone .search-bar { flex-wrap: wrap; row-gap: 8px; }
+.platform-phone .search-bar .search-input { flex: 1 1 100%; min-width: 0; }

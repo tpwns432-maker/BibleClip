@@ -8,6 +8,7 @@ docs/WEB_PLAN.md. 데스크톱(pywebview)은 화면이 Python 객체의 모든 �
 목록에 없다. 복사는 서버가 글을 만들어 돌려주고, 클립보드에 넣는 일은 브라우저가 한다
 (server/static/bridge.js).
 """
+import json
 import os
 import threading
 
@@ -33,7 +34,12 @@ ALLOWED = frozenset({
     'clear_verse_highlights', 'get_all_highlights',
     # 복사(글만 만든다 — 클립보드는 브라우저)
     'copy_reference', 'copy_references',
+    # 휴대폰 화면의 카드 배치 · 글자 크기(PC 와 따로)
+    'get_phone_prefs', 'save_phone_prefs',
 })
+
+PHONE_PREFS_FILE = 'phone_prefs.json'
+PHONE_PREFS_MAX = 64 * 1024
 
 
 class WebApi(Api):
@@ -60,6 +66,44 @@ class WebApi(Api):
         d['cart'] = []
         d['web_user'] = dict(self.user)
         return d
+
+    # ---- 휴대폰 화면 설정: PC 와 같은 계정이어도 카드 배치 · 글자 크기는 따로 ----
+    # 같은 설정(web_cards_layout · viewer_font_size)을 쓰면 폰에서 카드 2장으로 줄인 배치가
+    # PC 의 원어 · 사전 카드를 지우고, PC 글자 크기가 폰에선 너무 작다. 그래서 사람 폴더에 따로 둔다.
+
+    def _phone_prefs_path(self):
+        return os.path.join(self.lib.user_dir, PHONE_PREFS_FILE) if self.lib.user_dir else None
+
+    def get_phone_prefs(self):
+        path = self._phone_prefs_path()
+        try:
+            with open(path, encoding='utf-8') as f:
+                d = json.load(f)
+            return d if isinstance(d, dict) else {}
+        except (OSError, TypeError, ValueError):
+            return {}
+
+    def save_phone_prefs(self, patch):
+        """patch: {layout?, font_size?} — 받은 칸만 바꾼다."""
+        path = self._phone_prefs_path()
+        if not path or not isinstance(patch, dict):
+            return {'ok': False}
+        d = self.get_phone_prefs()
+        if 'layout' in patch:
+            d['layout'] = patch['layout']
+        if 'font_size' in patch:
+            try:
+                d['font_size'] = max(8, min(400, int(patch['font_size'])))
+            except (TypeError, ValueError):
+                pass
+        text = json.dumps(d, ensure_ascii=False)
+        if len(text) > PHONE_PREFS_MAX:
+            return {'ok': False}
+        tmp = path + '.tmp'
+        with open(tmp, 'w', encoding='utf-8') as f:
+            f.write(text)
+        os.replace(tmp, path)
+        return {'ok': True}
 
     def note_position(self, book, chapter):
         # 데스크톱은 창을 닫을 때 저장한다. 웹에는 '창 닫기'가 없으니 바로 저장.
