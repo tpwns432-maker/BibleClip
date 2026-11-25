@@ -93,6 +93,11 @@ def real():
     assert dict(lib.get_chapter('BSB', 10, 1))[1] == 'In the beginning God created the heavens and the earth.'
     inter = dict(lib.interlinear(500, 3, 'BSB'))[16]
     assert inter[:4] == [('For', 'G1063'), ('God', 'G2316'), ('so', 'G3779'), ('loved', 'G25')], inter[:4]
+    # 문장부호 · 따옴표 · 줄표가 공식 본문 그대로(대역표의 영어 없는 줄에 달린 것도 살림 — 예전엔 5,616절에서 빠졌다).
+    assert dict(lib.get_chapter('BSB', 10, 1))[7] == \
+        'So God made the expanse and separated the waters beneath it from the waters above. And it was so.'
+    assert dict(lib.get_chapter('BSB', 10, 3))[4] == '“You will not surely die,” the serpent told the woman.'
+    assert dict(lib.get_chapter('BSB', 10, 8))[17].startswith('Bring out all the living creatures that are with you—birds,')
     n = bsb.conn.execute('SELECT COUNT(*) FROM verses').fetchone()[0]
     assert n > 31000, n
     assert bsb.conn.execute("SELECT COUNT(*) FROM verses WHERE text LIKE '%[%'").fetchone()[0] == 0
