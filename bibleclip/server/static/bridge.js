@@ -144,6 +144,32 @@
   document.documentElement.classList.add("platform-web");
   if (PHONE) document.documentElement.classList.add("platform-android", "platform-phone");
 
+  // ---- 앱 화면 높이 = 실제로 보이는 높이 ----
+  // 아이폰 사파리(iOS 26)는 주소창이 화면 아래에 떠 있고, 100vh · 100dvh 는 그 뒤까지 잡아서
+  // 맨 아래 메뉴가 주소창에 가려진다. 사파리는 position:fixed 의 bottom:0 을 주소창 위에 두므로,
+  // 보이지 않는 fixed 막대(top:0 ~ bottom:0)의 높이를 재서 --bc-vh 로 쓴다(web.css 의 .app).
+  // PC · 안드로이드에선 이 값이 창 높이와 같아 달라지는 것이 없다.
+  (function fitHeight() {
+    const probe = document.createElement("div");
+    probe.setAttribute("aria-hidden", "true");
+    probe.style.cssText = "position:fixed;top:0;bottom:0;left:0;width:0;visibility:hidden;pointer-events:none";
+    let last = 0;
+    function measure() {
+      if (!probe.isConnected) (document.body || document.documentElement).appendChild(probe);
+      const h = Math.round(probe.getBoundingClientRect().height);
+      if (h > 100 && h !== last) {
+        last = h;
+        document.documentElement.style.setProperty("--bc-vh", h + "px");
+      }
+    }
+    let raf = 0;
+    function later() { cancelAnimationFrame(raf); raf = requestAnimationFrame(measure); }
+    if (document.body) measure(); else document.addEventListener("DOMContentLoaded", measure);
+    window.addEventListener("resize", later);
+    window.addEventListener("orientationchange", function () { later(); setTimeout(later, 350); });
+    window.addEventListener("pageshow", later);
+  })();
+
   // ---- 로그인 · 로그아웃 ----
 
   let leaving = false;

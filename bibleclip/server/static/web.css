@@ -1,6 +1,10 @@
 /* BibleClip 웹판 — 데스크톱 전용 기능을 숨긴다(docs/WEB_PLAN.md "기능 구성").
    서버가 index.html 의 </head> 앞에 끼운다. web/ 의 CSS 는 고치지 않는다. */
 
+/* 앱 화면 높이: 아이폰 사파리의 떠 있는 아래 주소창에 메뉴가 가리지 않게(bridge.js 가 --bc-vh 를 잰다).
+   재기 전 · 못 잴 때는 100dvh(주소창이 보일 때의 높이), 그것도 모르는 브라우저는 styles.css 의 100vh. */
+html.platform-web .app { height: 100dvh; height: var(--bc-vh, 100dvh); }
+
 /* 왼쪽 레일: 활동 로그(클립보드) · 장바구니 · 자막 · 안내 · 감시 단추 · 업데이트 */
 #log-toggle, #log-drawer,
 #cart-toggle, #cart-drawer,
