@@ -1,0 +1,5 @@
+# ios/prepare.sh 가 채우는 앱 묶음, xcodegen 이 만드는 프로젝트, 빌드 산출물
+BibleClip/Bundle/
+BibleClip.xcodeproj/
+build/
+BibleClipCore/.build/
