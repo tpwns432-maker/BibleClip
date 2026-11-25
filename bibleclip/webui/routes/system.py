@@ -99,10 +99,13 @@ class SystemRoutes:
 
     def _interlin_sources(self):
         """원전 분해 소스 목록: [{name, display, lang}]. name='' = 한국어 개역한글S
-        (기본). inline Strong's 플래그가 켜진 영어 역본(KJV+ 등)을 뒤에 잇는다."""
+        (기본), 개역개정S(넣었을 때). inline Strong's 플래그가 켜진 영어 역본(KJV+ 등)을 뒤에 잇는다."""
         out = []
         if self.lib.bethlehem_strongs is not None:
             out.append({'name': '', 'display': '개역한글S', 'lang': 'ko'})
+        if getattr(self.lib, 'bethlehem_strongs_nkrv', None) is not None:
+            # 개역개정S.sdb 를 넣었을 때만(저작권 자료라 앱에 없음). 개역한글S 가 없으면 이것만 뜬다.
+            out.append({'name': self.lib.NKRV_STRONGS, 'display': '개역개정S', 'lang': 'ko'})
         for name, db in self.lib.dbs.items():
             if getattr(db, 'has_strongs', False):
                 out.append({'name': name, 'display': name,

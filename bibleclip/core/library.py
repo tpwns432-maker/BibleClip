@@ -28,6 +28,9 @@ from bibleclip.data.original_lang import (
 
 
 class Library:
+    # 원전 분해 소스 이름: 개역개정S(original_lang/개역개정S.sdb). '' = 개역한글S(기본).
+    NKRV_STRONGS = '개역개정S'
+
     DEFAULT_SETTINGS = {
         'book_name': 'short_ko',         # short_ko, long_ko, short_en, long_en
         'chapter_verse_format': 'colon',  # colon, korean
@@ -100,6 +103,9 @@ class Library:
         self.user_dir = user_dir
         self.dbs = {}
         self.bethlehem_strongs = None  # 개역한글S — KRV-based, drives middle panel
+        # 개역개정S — 같은 형식(개역개정 본문 + Strong 번호). 사용자가 original_lang 에 넣었을 때만.
+        # 저작권 자료라 앱에 넣어 배포하지 않는다. 원전 분해 소스 이름 NKRV_STRONGS 로 고른다.
+        self.bethlehem_strongs_nkrv = None
         self.bethlehem_wonjun = None   # 원전분해 — kept for potential future use
         self.lexicon_ko = None
         self.lexicon_en = None
@@ -129,6 +135,7 @@ class Library:
         if engine is not None:
             self.dbs = engine.dbs
             self.bethlehem_strongs = engine.bethlehem_strongs
+            self.bethlehem_strongs_nkrv = engine.bethlehem_strongs_nkrv
             self.bethlehem_wonjun = engine.bethlehem_wonjun
             self.lexicon_ko = engine.lexicon_ko
             self.lexicon_en = engine.lexicon_en
@@ -182,6 +189,12 @@ class Library:
                 self.bethlehem_strongs = BethlehemDB(strongs_path)
             except Exception as e:
                 print(f"개역한글S load error: {e}")
+        nkrv_path = find_original_lang_file('개역개정S.sdb', 'NKRV_S.sdb')
+        if nkrv_path:
+            try:
+                self.bethlehem_strongs_nkrv = BethlehemDB(nkrv_path)
+            except Exception as e:
+                print(f"개역개정S load error: {e}")
         wonjun_path = find_original_lang_file('원전분해.sdb')
         if wonjun_path:
             try:
@@ -198,7 +211,15 @@ class Library:
                     print(f"{fname} load error: {e}")
 
     def bethlehem_ready(self):
-        return bool(self.bethlehem_strongs and (self.lexicon_ko or self.lexicon_en))
+        return bool((self.bethlehem_strongs or self.bethlehem_strongs_nkrv)
+                    and (self.lexicon_ko or self.lexicon_en))
+
+    def _korean_strongs(self, source=None):
+        """원전 분해에 쓸 한국어 Strong 역본: source == NKRV_STRONGS 면 개역개정S, 아니면 개역한글S.
+        고른 쪽이 없으면 있는 쪽으로(둘 다 없으면 None)."""
+        if source == self.NKRV_STRONGS:
+            return self.bethlehem_strongs_nkrv or self.bethlehem_strongs
+        return self.bethlehem_strongs or self.bethlehem_strongs_nkrv
 
     def refresh_databases(self):
         """Rescan the bible_versions folder for new DB files.
@@ -606,11 +627,12 @@ class Library:
         [{book_num, chapter, verse, text}] with clean (tag-stripped) Korean text,
         or [] when the tagged bible isn't loaded. Copyright-clean (KRV + PD
         Strong's numbering only) — the basis of the original-language search."""
-        if not self.bethlehem_strongs or not code:
+        src = self._korean_strongs()
+        if not src or not code:
             return []
         return [{'book_num': ob, 'chapter': ch, 'verse': v,
                  'text': strip_korean_strongs(bt)}
-                for ob, ch, v, bt in self.bethlehem_strongs.search_by_strong(code)]
+                for ob, ch, v, bt in src.search_by_strong(code)]
 
     def interlinear(self, book_num, chapter, version=None):
         """[(verse, [(word, code), ...]), ...] for one chapter.
@@ -620,15 +642,17 @@ class Library:
         flag), the breakdown is built from THAT version's own English words instead
         — identical shape, so the 원전 분해 card and dict routing stay version-
         agnostic. The H/G prefix for KJV+ comes from the testament (parse_english_
-        strongs), matching the codes in HebGrkEn/Ko.dct."""
+        strongs), matching the codes in HebGrkEn/Ko.dct.
+        `version` == NKRV_STRONGS ('개역개정S') → 개역개정S.sdb 의 개역개정 단어로(있을 때)."""
         db = self.dbs.get(version) if version else None
         if db is not None and getattr(db, 'has_strongs', False):
             return [(verse, parse_english_strongs(raw, book_num))
                     for verse, raw in db.get_chapter_raw(book_num, chapter)]
-        if not self.bethlehem_strongs:
+        src = self._korean_strongs(version)
+        if not src:
             return []
         return [(verse, parse_korean_strongs(btext))
-                for verse, btext in self.bethlehem_strongs.get_chapter_verses(book_num, chapter)]
+                for verse, btext in src.get_chapter_verses(book_num, chapter)]
 
     def morphology(self, code, book_num, chapter, verse):
         """Morphological analysis entries for one Strong's code in one verse,
