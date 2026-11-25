@@ -9,8 +9,8 @@
 |---|---|
 | 화면 | 안드로이드와 같다. `web/` + `mobile.css`/`mobile.js`를 WKWebView로 띄우고, `window.pywebview.api`와 같은 이름의 브리지를 Swift가 제공한다 |
 | 핵심 로직 | Kotlin 코어(`android/.../core/`, 약 1,100줄)를 **Swift로 옮긴다**. 골든 테스트로 PC·안드로이드와 결과가 같은지 확인한다 |
-| 최소 버전 | iOS 17 (사용자 기기: iPhone 17 Pro · iOS 27.0.1) |
-| 설치 | 무료 Apple ID + 윈도우용 AltStore. 7일마다 다시 서명(같은 와이파이에서 자동). 안 되면 Sideloadly(수동), 그래도 안 되면 개발자 등록($99/년) |
+| 최소 버전 | iOS 17 (사용자 기기: iPhone 17 Pro · iOS 27.2.1) |
+| 설치 | 무료 Apple ID + 윈도우용 **Impactor**(오픈소스, MIT). 7일마다 다시 서명. 시험 앱으로 iOS 27.2.1 실기기 설치 확인(#44, 2026-11-25). 안 되면 개발자 등록($99/년) |
 | 기본 역본 | 데스크톱과 같다. KRV·KJV+만 넣고, 나머지(NRKV 등)는 "파일" 앱에서 추가 |
 | 프로젝트 파일 | XcodeGen의 `ios/project.yml`로 CI에서 `.xcodeproj`를 만든다. 맥이 없으니 Xcode 프로젝트 파일을 손으로 고치지 않는다 |
 
@@ -52,13 +52,17 @@ ios/
 - **화면**: 2단계에서 Simulator 화면을 CI가 스크린샷으로 남긴다(주요 화면 몇 개).
 - **실기기 디버깅**: WKWebView를 `isInspectable = true`(iOS 16.4+)로 둔다. 윈도우에서 `ios-webkit-debug-proxy`로 크롬 개발자 도구에 붙인다(지금의 CDP 시험과 비슷). 안 되면 화면 안에 오류 기록 창을 띄워 대신한다.
 
-## 설치 (처음 한 번)
-1. PC에 AltServer(+ Apple 홈페이지판 iTunes·iCloud)를 깔고, 아이폰에 AltStore를 넣는다.
-2. 아이폰: 설정 → 개인정보 보호 및 보안 → **개발자 모드** 켜기.
-3. Release에서 받은 `BibleClip-ios-<버전>.ipa`를 AltStore로 연다.
-4. 이후 PC에서 AltServer가 켜져 있고 같은 와이파이면 7일 전에 자동으로 다시 서명된다. 만료돼도 데이터는 남는다. 다시 서명하면 그대로 열린다.
+## 설치 (처음 한 번) — 2026-11-25 시험 앱(#44)으로 확인한 순서
+1. PC: Microsoft Store판 **iTunes**(아이폰 드라이버). iTunes가 **켜져 있어야** 기기 서비스(usbmuxd)가 돈다.
+2. PC: **Impactor 2.7.3 이상**(`winget install CLARATION.Impactor.GUI` 또는 github.com/claration/impactor 릴리스).
+   2.7.2는 Apple 로그인에서 `HTTP 403 … GsService2`로 막힌다(헤더 소문자화 버그, impactor#318).
+3. 아이폰: 설정 → 개인정보 보호 및 보안 → **개발자 모드** 켜기 → 재시동. 메뉴가 안 보이면 PC에서
+   `pymobiledevice3 amfi reveal-developer-mode`로 꺼낸다.
+4. Impactor에 `.ipa`를 끌어 놓고 Apple ID로 로그인 → Install. 옵션 체크는 모두 끈다. Identifier는 바꾸지 않는다.
+5. 처음 열 때 "신뢰하지 않는 개발자" → 설정 → 일반 → VPN 및 기기 관리 → 내 Apple ID → 신뢰.
+6. 7일마다 같은 방법으로 다시 설치한다(데이터는 남는다). Impactor의 Auto Refresh(베타)로 자동화할 수 있다.
 
-무료 계정 제한: 동시에 앱 3개까지(AltStore가 1개 차지), 새 앱 ID는 7일에 10개까지. 번들 ID는 `com.bibleclip.app.<임의값>` 하나로 고정한다. 바꾸면 다른 앱이 되어 데이터가 따로 논다.
+무료 계정 제한: 동시에 앱 3개까지, 새 앱 ID는 7일에 10개까지. 번들 ID는 `com.bibleclip.app.sejun` 하나로 고정한다. 바꾸면 다른 앱이 되어 데이터가 따로 논다.
 
 ## 단계
 | 단계 | 내용 | 끝 기준 |
@@ -80,9 +84,7 @@ CI에서 안드로이드와 아이폰이 모두 같은 `tests/golden/*.json`을 
 ## 데스크톱에서 빼는 것
 안드로이드와 같다. 클립보드 감시, 자막·PPT 창, F11 전체화면, 자동 업데이트, 글꼴 설치, 원어 사전(38MB)은 뺀다.
 
-## 위험 — 설치 도구의 iOS 27 지원
-AltStore가 iOS 27을 지원한다는 공식 발표는 아직 확인되지 않았다(2026-11-04). 새 iOS는 보통 Apple 로그인 단계부터 깨진다.
-그래서 **1단계 시작 전에** 빈 시험 앱(.ipa)을 먼저 CI로 만들어 실제 아이폰에 설치해 본다. 엔진 이식(0단계)은 설치와 상관없으니 그동안 진행한다.
-- AltStore가 되면 → 계획대로
-- 안 되면 → Sideloadly(7일마다 PC에 연결해 수동으로 다시 설치)
-- 그것도 안 되면 → Apple 개발자 등록(연 $99, 1년 유효, 같은 CI에서 서명)
+## 위험 — 설치 도구의 iOS 27 지원 (해결, 2026-11-25)
+AltStore의 iOS 27 지원이 불확실해서, 1단계 전에 빈 시험 앱을 CI로 만들어 실제 아이폰에 설치해 보았다(#44).
+**Impactor 2.7.3 + 무료 Apple ID로 iOS 27.2.1에 설치되고, WKWebView ↔ Swift 브리지도 동작했다.** 그래서 AltStore 대신 Impactor로 간다.
+Apple이 이런 도구의 로그인을 다시 막으면(2026-11 다른 도구들이 GSA 503을 겪음) Impactor 새 버전을 기다리거나 개발자 등록($99/년)으로 간다.
