@@ -58,10 +58,13 @@
         };
         if (c.type === "bible") {
           o.version = c.version; o.book = c.book; o.chapter = c.chapter; o.locked = !!c.locked;
+        } else if (c.type === "study") {
+          // 영어공부: 성경 카드처럼 단독(자기 책 · 장) — 다른 카드에 연결하지 않는다.
+          o.book = c.book; o.chapter = c.chapter;
+          o.en = c.en || null; o.ko = c.ko || null; o.mode = c.mode || "word";
         } else {
           o.link = c.link || null;
           if (c.type === "interlinear" && typeof c.source === "string") o.source = c.source;
-          if (c.type === "study") { o.en = c.en || null; o.ko = c.ko || null; o.mode = c.mode || "word"; }
         }
         return o;
       });
@@ -123,14 +126,20 @@
             x: raw.x, y: raw.y, w: raw.w, h: raw.h, z: raw.z,
           });
           bibleN++;
-        } else if (!IS_ANDROID && (raw.type === "interlinear" || raw.type === "lexicon" || raw.type === "study")) {
+        } else if (!IS_ANDROID && raw.type === "study") {
+          // 영어공부: 단독 카드 — 자기 책 · 장, 영어 · 한국어 역본, 끊는 단위(word | phrase).
+          out.push({
+            rawId: raw.id, id: "", type: "study",
+            book: raw.book || state.lastBook, chapter: raw.chapter || state.lastChapter,
+            en: typeof raw.en === "string" ? raw.en : undefined,
+            ko: typeof raw.ko === "string" ? raw.ko : undefined,
+            mode: raw.mode === "phrase" ? "phrase" : "word",
+            x: raw.x, y: raw.y, w: raw.w, h: raw.h, z: raw.z,
+          });
+        } else if (!IS_ANDROID && (raw.type === "interlinear" || raw.type === "lexicon")) {
           out.push({
             rawId: raw.id, id: "", type: raw.type,
             link: typeof raw.link === "string" ? raw.link : null,
-            // 영한 끊어 읽기: 영어 · 한국어 역본, 끊는 단위(word | phrase).
-            en: (raw.type === "study" && typeof raw.en === "string") ? raw.en : undefined,
-            ko: (raw.type === "study" && typeof raw.ko === "string") ? raw.ko : undefined,
-            mode: (raw.type === "study" && raw.mode === "phrase") ? "phrase" : "word",
             // 원전 분해 소스 역본(KJV+ 등). 미저장(undefined)이면 로드 시 UI 언어
             // 기준 기본값으로 해석한다. ''(빈문자)=개역한글S 라는 명시적 선택값.
             source: (raw.type === "interlinear" && typeof raw.source === "string")
@@ -177,7 +186,7 @@
       });
       const firstB = (out.find((c) => c.type === "bible") || {}).id || null;
       out.forEach((c) => {
-        if (c.type !== "bible") {
+        if (c.type !== "bible" && c.type !== "study") {
           c.link = (c.link && idMap[c.link]) || firstB;
         }
         delete c.rawId;
@@ -301,6 +310,21 @@
           `<span class="card-x" data-act="close" data-tip="카드 닫기" data-i18n-tip="card.tip.close">✕</span>` +
         `</div>`;
       }
+      if (card.type === "study") {
+        return `<div class="card-hd">${grip}<span class="card-title" data-i18n="card.type.study">${typeLabel("study")}</span>` +
+          `<span class="card-hd-ctrls">` +
+            `<span class="hd-pill dropdown" data-act="book">…</span>` +
+            `<span class="hd-pill dropdown" data-act="chapter">${I18N.t("card.chapterLabel", { n: card.chapter || 1 })}</span>` +
+            `<span class="hd-mini" data-act="prev" data-tip="이전 장" data-i18n-tip="card.tip.prevChapter">‹</span>` +
+            `<span class="hd-mini" data-act="next" data-tip="다음 장" data-i18n-tip="card.tip.nextChapter">›</span>` +
+            `<span class="hd-pill dropdown" data-act="study-en" data-tip="영어 역본" data-i18n-tip="card.tip.studyEn">${esc(studyLabel("en", card.en))}</span>` +
+            `<span class="hd-pill dropdown" data-act="study-ko" data-tip="한국어 역본" data-i18n-tip="card.tip.studyKo">${esc(studyLabel("ko", card.ko))}</span>` +
+            `<span class="hd-pill dropdown" data-act="study-mode" data-tip="끊는 단위" data-i18n-tip="card.tip.studyMode">${esc(studyModeLabel(card.mode))}</span>` +
+          `</span>` +
+          `<span class="card-hd-spacer"></span>` +
+          `<span class="card-x" data-act="close" data-tip="카드 닫기" data-i18n-tip="card.tip.close">✕</span>` +
+        `</div>`;
+      }
       // 원전 분해 카드만: 분석 소스 역본 선택 pill (개역한글S / KJV+ …).
       const sourcePill = card.type === "interlinear"
         ? `<span class="hd-pill dropdown" data-act="source" data-tip="원전 분해 소스 역본 선택" data-i18n-tip="card.tip.sourceSelect">${esc(lexSourceLabel(card.source))}</span>`
@@ -310,18 +334,11 @@
       const lexLangPill = card.type === "lexicon"
         ? `<span class="hd-pill dropdown" data-act="lexlang" data-tip="사전 표시 언어" data-i18n-tip="card.tip.lexLang">${lexLangLabel()}</span>`
         : "";
-      // 영한 끊어 읽기 카드만: 영어 · 한국어 역본, 끊는 단위(단어 / 구절).
-      const studyPills = card.type === "study"
-        ? `<span class="hd-pill dropdown" data-act="study-en" data-tip="영어 역본" data-i18n-tip="card.tip.studyEn">${esc(studyLabel("en", card.en))}</span>` +
-          `<span class="hd-pill dropdown" data-act="study-ko" data-tip="한국어 역본" data-i18n-tip="card.tip.studyKo">${esc(studyLabel("ko", card.ko))}</span>` +
-          `<span class="hd-pill dropdown" data-act="study-mode" data-tip="끊는 단위" data-i18n-tip="card.tip.studyMode">${esc(studyModeLabel(card.mode))}</span>`
-        : "";
       return `<div class="card-hd">${grip}<span class="card-title" data-i18n="card.type.${card.type}">${typeLabel(card.type)}</span>` +
         `<span class="card-hd-ctrls">` +
           `<span class="hd-pill dropdown" data-act="link" data-tip="연결할 성경 카드 선택" data-i18n-tip="card.tip.linkSelect">${esc(card.link || I18N.t("card.linkNone"))}</span>` +
           sourcePill +
           lexLangPill +
-          studyPills +
         `</span>` +
         `<span class="card-hd-spacer"></span>` +
         `<span class="card-x" data-act="close" data-tip="카드 닫기" data-i18n-tip="card.tip.close">✕</span>` +
@@ -771,24 +788,31 @@
     function studyModeLabel(mode) {
       return I18N.t(mode === "phrase" ? "card.studyPhrase" : "card.studyWord");
     }
+    async function updateStudyHeader(card) {
+      const s = sectionEl(card.id);
+      if (!s) return;
+      const navVer = state.viewer[0] || state.primary;
+      await booksFor(navVer);
+      const bp = s.querySelector('[data-act="book"]'); if (bp) bp.textContent = bookShortFor(navVer, card.book) || "…";
+      const cp = s.querySelector('[data-act="chapter"]'); if (cp) cp.textContent = I18N.t("card.chapterLabel", { n: card.chapter });
+      const pe = s.querySelector('[data-act="study-en"]'); if (pe) pe.textContent = studyLabel("en", card.en);
+      const pk = s.querySelector('[data-act="study-ko"]'); if (pk) pk.textContent = studyLabel("ko", card.ko);
+      const pm = s.querySelector('[data-act="study-mode"]'); if (pm) pm.textContent = studyModeLabel(card.mode);
+    }
+    // 영어공부 카드 = 단독 본문(자기 책 · 장). 연결 성경 카드를 따라가지 않는다.
     async function loadStudyCard(card) {
       const body = bodyEl(card.id);
       if (!body) return;
-      const src = linkedBible(card);
-      updateLinkHeader(card);
-      if (!src) {
-        body.innerHTML = `<div class="panel-loading">${I18N.t("card.noLinkedBible")}</div>`;
-        return;
-      }
+      updateStudyHeader(card);
       if (!studyList("en").length || !studyList("ko").length) {
         body.innerHTML = `<div class="panel-loading">${I18N.t("card.studyNoData")}</div>`;
         return;
       }
       body.innerHTML = `<div class="panel-loading">${I18N.t("card.loading")}</div>`;
-      const data = await api().get_study(src.book, src.chapter, card.en || null, card.ko || null,
+      const data = await api().get_study(card.book, card.chapter, card.en || null, card.ko || null,
                                          card.mode || "word");
       const b2 = bodyEl(card.id);
-      if (b2) renderStudyInto(b2, data);
+      if (b2) { renderStudyInto(b2, data); b2.scrollTop = 0; }
     }
 
     function loadLexiconCard(card) {
@@ -827,11 +851,7 @@
         const sp = s.querySelector('[data-act="source"]');
         if (sp) sp.textContent = lexSourceLabel(card.source);
       }
-      if (card.type === "study") {
-        const pe = s.querySelector('[data-act="study-en"]'); if (pe) pe.textContent = studyLabel("en", card.en);
-        const pk = s.querySelector('[data-act="study-ko"]'); if (pk) pk.textContent = studyLabel("ko", card.ko);
-        const pm = s.querySelector('[data-act="study-mode"]'); if (pm) pm.textContent = studyModeLabel(card.mode);
-      }
+
     }
 
     // Reload interlinear cards that follow the given bible card (its book/chapter
@@ -840,8 +860,8 @@
     // so callers can align them to the new position afterwards (BUG-01).
     function reloadDependents(card) {
       return Promise.all(
-        cards.filter((c) => (c.type === "interlinear" || c.type === "study") && linkedBible(c) === card)
-          .map(loadCard)
+        cards.filter((c) => c.type === "interlinear" && linkedBible(c) === card)
+          .map(loadInterlinearCard)
       );
     }
 
@@ -888,6 +908,10 @@
           locked: false, ...geom,
         };
         seedHistory(card);
+      } else if (type === "study") {
+        const base = firstBible();
+        card = { id, type: "study", book: base ? base.book : state.lastBook,
+          chapter: base ? base.chapter : state.lastChapter, mode: "word", ...geom };
       } else {
         card = { id, type, link: (firstBible() && firstBible().id) || null, ...geom };
       }
@@ -1027,6 +1051,7 @@
         card.book = step.book;
         card.chapter = step.chapter;
       }
+      if (card.type === "study") { loadStudyCard(card); saveLayout(); return; }
       await loadBibleCard(card);
       reloadDependents(card);
       recordHistory(card);
@@ -1125,6 +1150,7 @@
               card.book = num;
               const chs = await chaptersFor(navVer, num);
               card.chapter = chs[0] || 1;
+              if (card.type === "study") { loadStudyCard(card); saveLayout(); return; }
               await loadBibleCard(card);
               reloadDependents(card);
               recordHistory(card);
@@ -1139,6 +1165,7 @@
             chs.map((c) => ({ label: String(c), value: c, on: c === card.chapter })),
             async (c) => {
               card.chapter = c;
+              if (card.type === "study") { loadStudyCard(card); saveLayout(); return; }
               await loadBibleCard(card);
               reloadDependents(card);
               recordHistory(card);
@@ -1658,7 +1685,7 @@
     // 이 성경 카드에 연동된 원어 카드의 스크롤 바디들(원어는 단일 본문).
     function linkedInterlinScrollers(card) {
       return cards
-        .filter((c) => (c.type === "interlinear" || c.type === "study") && linkedBible(c) === card)
+        .filter((c) => c.type === "interlinear" && linkedBible(c) === card)
         .map((c) => bodyEl(c.id))
         .filter(Boolean);
     }
@@ -1942,13 +1969,19 @@
 
       // Hover an interlinear word → delayed preview tooltip.
       c.addEventListener("mouseover", (e) => {
+        const w = e.target.closest('.mcard[data-type="study"] .sw[data-code]');
+        if (w) {
+          const sc = cardById(w.closest(".mcard").dataset.id);
+          scheduleTip(w.dataset.code, w.dataset.v, sc && sc.book, sc && sc.chapter, e.clientX, e.clientY);
+          return;
+        }
         const s = e.target.closest('.mcard[data-type="interlinear"] .strong[data-code]');
         if (!s) return;
         const src = linkedBible(cardById(s.closest(".mcard").dataset.id));
         scheduleTip(s.dataset.code, s.dataset.v, src && src.book, src && src.chapter, e.clientX, e.clientY);
       });
       c.addEventListener("mouseout", (e) => {
-        if (e.target.closest(".strong[data-code]")) hideTip();
+        if (e.target.closest(".strong[data-code], .sw[data-code]")) hideTip();
       });
 
       // Scroll inside a scripture scroller → hide tooltips + sync(형제 컬럼 + 연동
@@ -2066,11 +2099,12 @@
       refreshLockStates();
       cards.forEach((card) => {
         if (card.type === "bible") updateBibleHeader(card);
+        else if (card.type === "study") updateStudyHeader(card);
         else updateLinkHeader(card);
       });
     }
 
-    return { init, addCard, addCardWithLink, goToRef, primaryVersion,
+    return { init, addCard, addCardWithLink, goToRef, primaryVersion, cardFor: cardById,
              primaryBible, bibleCards, lexiconCards, bodyEl, linkedBibleFor,
              chapStepPrimary, chapStepActive, reloadAllBible, relabel,
              presentToggle, ensureInterlinearFor, decorateNotesFor: decorateNotes,
@@ -2253,12 +2287,18 @@
       body.innerHTML = `<div class="panel-loading">${I18N.t("card.studyNoData")}</div>`;
       return;
     }
-    const line = (pairs, k) => pairs
-      .map((p, i) => `<span class="pk" data-i="${i}">${p[k] ? esc(p[k]) : "·"}</span>`)
+    // 낱말(영어 구절 · 한국어 Strong 조각)마다 번호 → 누르면 사전(원어), 올리면 미리보기.
+    const word = (t, code, v) => code
+      ? `<span class="sw" data-code="${esc(code)}" data-v="${v}">${esc(t)}</span>` : esc(t);
+    const enOf = (ch, v) => ch.en.map(([t, c]) => word(t, c, v)).join(" ");
+    const koOf = (ch, v) => ch.ko.length
+      ? ch.ko.map(([t, c, gap]) => (gap ? " " : "") + word(t, c, v)).join("") : "·";
+    const line = (row, f) => row.chunks
+      .map((ch, i) => `<span class="pk" data-i="${i}">${f(ch, row.n)}</span>`)
       .join(`<span class="sl"> / </span>`);
     body.innerHTML = data.map((row) =>
       `<div class="v" data-v="${row.n}"><span class="vnum">${row.n}</span>` +
-      `<div class="st-en">${line(row.pairs, 0)}</div><div class="st-ko">${line(row.pairs, 1)}</div></div>`
+      `<div class="st-en">${line(row, enOf)}</div><div class="st-ko">${line(row, koOf)}</div></div>`
     ).join("");
     // 짝 밝히기(한 번만 건다 — 본문은 다시 그려도 body 는 그대로).
     if (!body._studyHover) {
@@ -2367,6 +2407,10 @@
       // Interlinear click: resolve the linked bible for book/chapter + routing.
       const src = CardManager.linkedBibleFor(sec.dataset.id);
       if (src) { book = src.book; chapter = src.chapter; sourceBibleId = src.id; }
+    } else if (sec && sec.dataset.type === "study") {
+      // 영어공부 카드(단독): 자기 책 · 장. 사전 카드는 전부 갱신(없으면 하나 만든다).
+      const sc = CardManager.cardFor ? CardManager.cardFor(sec.dataset.id) : null;
+      if (sc) { book = sc.book; chapter = sc.chapter; }
     } else if (sec && sec.dataset.type === "lexicon") {
       // Lexicon cross-reference click: update only this card's bible link.
       const lb = CardManager.linkedBibleFor(sec.dataset.id);

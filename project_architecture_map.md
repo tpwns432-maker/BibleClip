@@ -167,17 +167,17 @@ BibleClip Project/
   - **설정**: `load_settings()` / `save_settings()`
   - **읽기 API**: `versions()` / `books(version)` / `primary_version()` / `book_aliases()`(캐시) / `get_chapters(version, book_num)` / `get_chapter(version, book_num, chapter)` / `search(version, keyword)`
   - **원어**: `lookup_strong(code, lang='ko')` / `search_strong(code)` / `interlinear(book_num, chapter, version=None)` / `morphology(code, book_num, chapter, verse)` — 한국어 Strong 역본은 `bethlehem_strongs`(개역한글S, 기본 '') · `bethlehem_strongs_nkrv`(개역개정S, 사용자가 넣었을 때만 — **저작권 자료, 동봉 금지**). `interlinear(version=NKRV_STRONGS='개역개정S')` 로 고른다(#31)
-  - **영한 끊어 읽기**(v1.2.4 예정): `study_sources()` → `{en:[BSB, KJV+…], ko:[NRKV(개역개정S), KRV(개역한글S)]}` (`STUDY_KO` = 본문 키 · Strong 속성 · 이름, 둘 다 있어야 후보) / `study_chapter(book, chapter, en=None, ko=None, fine=True)` → `[{n, pairs:[[영어, 한국어]…]}]` — 알고리즘은 `core/study.py`
+  - **영어공부(영한 끊어 읽기)**(v1.2.4 예정): `study_sources()` → `{en:[BSB, KJV+…], ko:[NRKV(개역개정S), KRV(개역한글S)]}` (`STUDY_KO` = 본문 키 · Strong 속성 · 이름, 둘 다 있어야 후보) / `study_chapter(book, chapter, en=None, ko=None, fine=True)` → `[{n, chunks:[{en:[[구절, code]…], ko:[[조각, code, 띄움]…]}…]}]` — 알고리즘은 `core/study.py`
   - **약칭 오버라이드**: `parse_reference(text)` / `load_alias_overrides()` / `list_alias_overrides()` / `add_alias_override(alias, book_num)` / `remove_alias_override(alias)`
   - **참조→출력**: `build_output(text)` → {kind:'reference'|'keyword',...} / `format_reference(book_num, chapter, verses, order=None)` → (text, n_parts) — 템플릿에 `{content2}`/`{version2}`가 있고 2개 이상 역본이면 `Formatter.format_parallel()`로 병렬 결합(FEAT-05), (text, 2) 반환
   - **모니터링**: `start_monitoring(read_fn, write_fn, on_reference, on_keyword)` / `stop_monitoring()` / `set_poll_interval(seconds)` / `notify_clipboard_written(text)`
   - 상태: `dbs`{name:BibleDB}, `bethlehem_strongs`/`bethlehem_wonjun`, `lexicon_ko`/`lexicon_en`, `settings`, `user_config`, `is_premium`, `notes`(Notes), `cart`(Cart, v1.1.4 설교 장바구니 영속성), `_monitor`
   - 상수: `DEFAULT_SETTINGS`(20+ 키)
 
-### core/study.py — 영한 끊어 읽기 엔진 (v1.2.4 예정, 순수 함수)
-- `align_verse(en_pairs, ko_text, ko_pieces, fine=True)` → `[(영어 덩어리, 한국어 덩어리)]` 영어 어순. 영어 = `parse_english_strongs`(BSB·KJV+), 한국어 = 실제 본문 + `parse_korean_strongs`(S 역본 조각)
-- `korean_words(text, pieces)` — S 조각을 본문 어절(띄어쓰기)에 얹어 `[(code, 어절 번호)]`. 규칙: 같은 번호는 나온 차례대로 짝, `FUNC`(관사·전치사) 는 짝 없음 → 다음 덩어리, 짝 없는 한국어 어절은 `CONJ_NEXT`(접속어·관형사)면 다음·아니면 앞. `fine=False` = 문장부호(`ends_clause`)에서만 끊음. KJV+ 식 앞 문장부호(`', that'`)는 앞 구절로 옮김
-- 성경 전체 BSB↔개역개정S: 한국어 빈 덩어리 1.06%, 장당 ~5ms
+### core/study.py — 영어공부(영한 끊어 읽기) 엔진 (v1.2.4 예정, 순수 함수)
+- `align_units(en_pairs, ko_text, ko_pieces, fine=True)` → 덩어리 `[{en:[[구절, code]], ko:[[조각, code, 띄움]]}]` 영어 어순. 영어 = `parse_english_strongs`(BSB·KJV+), 한국어 = 실제 본문 + `parse_korean_strongs`(S 역본 조각). `align_verse`/`chunk_text` = 글자 버전(테스트용)
+- 🔑 한국어는 **Strong 조각 단위**(`korean_units`: 조각을 본문 글자 위치에 얹고, 덮이지 않은 글자도 번호 없는 조각) — 어절 단위로 묶으면 `공허하며`(공허 H922 + 하며 H1961) 가 통째로 was 에 붙었다(창 1:2). 같은 번호 짝은 `_match`(개수 같으면 차례대로, 다르면 절 안 상대 위치 차이 최소 — DP). `FUNC`(관사·전치사) 는 짝 없음 → 다음 덩어리. 짝 없는 조각은 같은 어절 조각 쪽(앞 우선), 어절 전체가 없으면 `CONJ_NEXT`(접속어·관형사)면 다음·아니면 앞. `fine=False` = 문장부호(`ends_clause`)에서만 끊고 한 어절은 한 덩어리. KJV+ 식 앞 문장부호(`', that'`)는 앞 구절로
+- 성경 전체 BSB↔개역개정S: 한국어 빈 덩어리 0.01%(19/312,196), 장당 ~5ms
 
 ### core/installer.py — 업뎃 zip 다운/추출 + 업데이터 스크립트 (순수/테스트가능)
 - `download_file(url, dest, on_progress=None, timeout=30)` / `stage_payload(zip_path, extract_dir, payload_name)` / `write_windows_bat(bat_path, src_dir, install_dir, exe_name)` / `write_mac_sh(sh_path, src_dir, app_dst, pid, data_names=())`
@@ -386,7 +386,7 @@ BibleClip Project/
 - `state` 객체(versions/viewer/primary/monitoring/fontSize/lexSources/isPremium…), `window.pywebview.api` 브리지
 
 ### cards.js (~1765줄) — ★ CardManager (자유배치 카드 워크스페이스, IIFE)
-- **카드 타입**: `"bible"`/`"interlinear"`/`"lexicon"`/**`"study"`**(영한 끊어 읽기 — `card.en`·`card.ko`·`card.mode`('word'|'phrase'), 헤더 pill `study-en`/`study-ko`/`study-mode`, `loadStudyCard` → `api.get_study`, `renderStudyInto`(바깥 스코프, `.pk[data-i]` 짝 hover), 원전 분해처럼 연결 성경 카드의 장·스크롤을 따라감(`reloadDependents`·`linkedInterlinScrollers`), 추가 버튼 `#add-study`, 폰/안드로이드에선 숨김·restore 에서 버림) (※ v1.1.0에서 `"notes"` 카드 타입 **폐기** → 슬라이딩 레일 패널로 전환, search-notes.js로 이동)
+- **카드 타입**: `"bible"`/`"interlinear"`/`"lexicon"`/**`"study"`**(영어공부 — **단독 본문 카드**: 자기 `card.book`·`card.chapter`(연결 없음, 책·장 pill·‹ › 는 성경 카드 handleAction/cardChapStep 을 같이 씀) + `card.en`·`card.ko`·`card.mode`('word'|'phrase'), 헤더 pill `study-en`/`study-ko`/`study-mode`, `loadStudyCard`/`updateStudyHeader` → `api.get_study`, `renderStudyInto`(바깥 스코프): 덩어리 `.pk[data-i]`(짝 hover) 안에 낱말 `.sw[data-code][data-v]` — 누르면 `handleCodeClick`(study 분기: 자기 책·장, 사전 카드 전부/없으면 생성) → 원어 사전, 올리면 `scheduleTip` 미리보기. 추가 버튼 `#add-study`('＋ 영어공부'), 폰/안드로이드에선 숨김·restore 에서 버림. public `cardFor`=cardById) (※ v1.1.0에서 `"notes"` 카드 타입 **폐기** → 슬라이딩 레일 패널로 전환, search-notes.js로 이동)
 - **모듈 상태**: `cards[]`, `activeId`, `fsCardId`(F11 전체화면), `zTop`, `cascadeN`, `interacting`, `progScroll`(싱크가드)
 - **FEAT-04 대조(parallel) 필드**: `card.parallel`(bool), `card.parallelVersion`(str) — 카드별 대조 토글, 역본 쌍 고정
 - CRUD: `init(layout)`/`addCard(type)`/`addCardWithLink(type, linkId)`/`removeCard(id)`/`mountCard`/`unmountCard`/`renderAll()`/`serialize()`/`restore(layout)`

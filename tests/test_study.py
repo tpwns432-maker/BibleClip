@@ -10,7 +10,7 @@ import sys
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, ROOT)
 
-from bibleclip.core.study import align_verse, ends_clause, korean_words  # noqa: E402
+from bibleclip.core.study import _match, align_units, align_verse, chunk_text, ends_clause, korean_units, korean_words  # noqa: E402
 
 
 def unit():
@@ -27,10 +27,30 @@ def unit():
           ('the heavens', 'H8064'), ('and', 'H853'), ('the earth.', 'H776')]
     ko = '태초에 하나님이 천지를 창조하시니라'
     pieces = [('태초에', 'H7225'), ('하나님이', 'H430'), ('천', 'H8064'), ('지를', 'H776'), ('창조하시니라', 'H1254')]
+    # Strong 조각 단위: 천 / 지를 이 따로 짝.
     assert align_verse(en, ko, pieces) == [('In the beginning', '태초에'), ('God', '하나님이'),
-                                           ('created', '창조하시니라'), ('the heavens and the earth.', '천지를')]
+                                           ('created', '창조하시니라'), ('the heavens', '천'), ('and the earth.', '지를')]
+    # 덩어리에는 조각마다 번호(화면이 눌러 사전을 띄운다).
+    ch = align_units(en, ko, pieces)
+    assert ch[3] == {'en': [['the heavens', 'H8064']], 'ko': [['천', 'H8064', 0]]}, ch[3]
+    assert ch[4]['en'] == [['and', 'H853'], ['the earth.', 'H776']]
     assert align_verse(en, ko, pieces, fine=False) == [
         ('In the beginning God created the heavens and the earth.', '태초에 하나님이 천지를 창조하시니라')]
+
+    # 창 1:2 — 어절 '공허하며' 가 공허(H922) + 하며(H1961 = was) 로 나뉘어 각자 짝(어절로 묶으면 was 가 공허를 가져갔다).
+    en = [('Now the earth', 'H776'), ('was', 'H1961'), ('formless', 'H8414'), ('and void,', 'H922')]
+    ko = '땅이 혼돈하고 공허하며'
+    pieces = [('땅이', 'H776'), ('혼돈하고', 'H8414'), ('공허', 'H922'), ('하며', 'H1961')]
+    assert align_verse(en, ko, pieces) == [('Now the earth', '땅이'), ('was', '하며'), ('formless', '혼돈하고'),
+                                           ('and void,', '공허')]
+    assert align_verse(en, ko, pieces, fine=False) == [('Now the earth was formless and void,', '땅이 혼돈하고 공허하며')]
+
+    # 조각 · 띄어쓰기: 조각 안 띄어쓰기는 그대로, 덮이지 않은 글자도 조각.
+    us = korean_units('오만한 자들의 자리에', [('오만한 자', 'H3887'), ('자리에', 'H4186')])
+    assert [(u['t'], u['c']) for u in us] == [('오만한 자', 'H3887'), ('들의', None), ('자리에', 'H4186')], us
+    # 같은 번호 개수가 다르면 위치가 가까운 쪽(영어 'surface' 2번 ↔ 한국어 '면' 1번 → 뒤쪽).
+    assert _match([0.43, 0.86], [0.77]) == [(1, 0)] and _match([0.1], [0.2, 0.9]) == [(0, 0)]
+    assert _match([0.1, 0.5], [0.2, 0.6]) == [(0, 0), (1, 1)]
 
     # 같은 번호는 차례대로(말씀 3번).
     en = [('In the beginning', 'G746'), ('was', 'G1510'), ('the Word,', 'G3056'), ('and', 'G2532'),
@@ -73,32 +93,35 @@ def real():
     assert src['en'][0]['name'] == 'BSB' and 'KJV+' in [x['name'] for x in src['en']]
     assert 'KRV' in [x['name'] for x in src['ko']]
 
+    txt = lambda row: [list(chunk_text(c)) for c in row['chunks']]  # noqa: E731
     ch = lib.study_chapter(10, 1, ko='KRV')
-    assert ch[0] == {'n': 1, 'pairs': [['In the beginning', '태초에'], ['God', '하나님이'],
-                                      ['created', '창조하시니라'], ['the heavens and the earth.', '천지를']]}, ch[0]
+    assert ch[0]['n'] == 1 and txt(ch[0]) == [['In the beginning', '태초에'], ['God', '하나님이'],
+                                             ['created', '창조하시니라'], ['the heavens', '천'],
+                                             ['and the earth.', '지를']], ch[0]
+    assert txt(ch[1])[1] == ['was', '하고'] and txt(ch[1])[2] == ['formless', '혼돈']   # 개역한글S: 혼돈<H8414> 하고<H1961>
     john = lib.study_chapter(500, 3, ko='KRV', fine=False)[15]
-    assert john['pairs'] == [
+    assert txt(john) == [
         ['For God so loved the world that He gave His one and only Son,',
          '하나님이 세상을 이처럼 사랑하사 독생자를 주셨으니'],
         ['that everyone who believes in Him shall not perish but have eternal life.',
          '이는 저를 믿는 자마다 멸망치 않고 영생을 얻게 하려 하심이니라']], john
     # 없는 이름이면 첫 후보로.
-    assert lib.study_chapter(10, 1, en='없음', ko='없음')[0]['pairs'][0][0] == 'In the beginning'
+    assert txt(lib.study_chapter(10, 1, en='없음', ko='없음')[0])[0][0] == 'In the beginning'
 
     # 장 전체 품질: 한국어가 빈 덩어리가 드물어야 한다(측정값 ~1%).
     total = empty = 0
     for b, c in ((10, 1), (230, 23), (500, 3), (520, 8), (470, 5), (290, 53)):
         for row in lib.study_chapter(b, c, ko='KRV'):
-            total += len(row['pairs'])
-            empty += sum(1 for _, k in row['pairs'] if not k)
-    assert total > 200 and empty / total < 0.05, (empty, total)
+            total += len(row['chunks'])
+            empty += sum(1 for k in row['chunks'] if not k['ko'])
+    assert total > 200 and empty / total < 0.01, (empty, total)   # 성경 전체 측정값 0.01%
 
     api = Api(lib)
     init = api.get_initial()
     assert init['study_sources']['en'][0]['name'] == 'BSB'
     assert 'BSB' in [s['name'] for s in init['interlin_sources']]
     r = api.get_study(10, 1, 'BSB', 'KRV', 'phrase')
-    assert r[0]['pairs'] == [['In the beginning God created the heavens and the earth.', '태초에 하나님이 천지를 창조하시니라']]
+    assert txt(r[0]) == [['In the beginning God created the heavens and the earth.', '태초에 하나님이 천지를 창조하시니라']]
     # 웹판 허용 목록.
     from bibleclip.server.webapi import ALLOWED
     assert 'get_study' in ALLOWED
