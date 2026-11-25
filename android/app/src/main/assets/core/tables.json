@@ -1273,6 +1273,7 @@
   "lex_popup_size": "440x480",
   "web_geometry": null,
   "web_cards_layout": null,
-  "tour_done": false
+  "tour_done": false,
+  "whatsnew_seen": ""
  }
 }
