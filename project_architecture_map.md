@@ -109,7 +109,7 @@ BibleClip Project/
 │  └─ locales/ (ko.json, en.json)
 ├─ bibleclip_app.py                # 데스크톱(Tkinter) 진입점 shim
 ├─ bibleclip_web.py                # 웹뷰(pywebview) 진입점 shim
-├─ bible_versions/                 # 성경 SQLite DB 드롭 폴더(KRV.SQLite3 등)
+├─ bible_versions/                 # 성경 SQLite DB 드롭 폴더. 동봉(git 추적) = KRV · KJV+ · **BSB**(CC0, Strong 번호 — `tools/make_bsb.py` 가 BSB 대역표 tsv 에서 생성)
 ├─ original_lang/                  # 원어 데이터(HebGrkEn.dct, 개역한글S.sdb)
 ├─ tests/                          # test_core / test_webui_api / test_installer / test_killswitch
 ├─ deploy/                         # ★ 웹판 리눅스 설치(docs/WEB_SETUP.md): install.sh(사용자 bibleclip·/var/lib/bibleclip·.venv·systemd·계정) · tailscale.sh(serve + --allow-host/--behind-proxy/--secure-cookie) · update.sh · backup.sh · bibleclip-web.service(틀)
@@ -166,12 +166,18 @@ BibleClip Project/
   - **DB 로딩**: `load_databases()` / `load_bethlehem()` / `refresh_databases()`
   - **설정**: `load_settings()` / `save_settings()`
   - **읽기 API**: `versions()` / `books(version)` / `primary_version()` / `book_aliases()`(캐시) / `get_chapters(version, book_num)` / `get_chapter(version, book_num, chapter)` / `search(version, keyword)`
-  - **원어**: `lookup_strong(code, lang='ko')` / `search_strong(code)` / `interlinear(book_num, chapter, version=None)` / `morphology(code, book_num, chapter, verse)`
+  - **원어**: `lookup_strong(code, lang='ko')` / `search_strong(code)` / `interlinear(book_num, chapter, version=None)` / `morphology(code, book_num, chapter, verse)` — 한국어 Strong 역본은 `bethlehem_strongs`(개역한글S, 기본 '') · `bethlehem_strongs_nkrv`(개역개정S, 사용자가 넣었을 때만 — **저작권 자료, 동봉 금지**). `interlinear(version=NKRV_STRONGS='개역개정S')` 로 고른다(#31)
+  - **영한 끊어 읽기**(v1.2.4 예정): `study_sources()` → `{en:[BSB, KJV+…], ko:[NRKV(개역개정S), KRV(개역한글S)]}` (`STUDY_KO` = 본문 키 · Strong 속성 · 이름, 둘 다 있어야 후보) / `study_chapter(book, chapter, en=None, ko=None, fine=True)` → `[{n, pairs:[[영어, 한국어]…]}]` — 알고리즘은 `core/study.py`
   - **약칭 오버라이드**: `parse_reference(text)` / `load_alias_overrides()` / `list_alias_overrides()` / `add_alias_override(alias, book_num)` / `remove_alias_override(alias)`
   - **참조→출력**: `build_output(text)` → {kind:'reference'|'keyword',...} / `format_reference(book_num, chapter, verses, order=None)` → (text, n_parts) — 템플릿에 `{content2}`/`{version2}`가 있고 2개 이상 역본이면 `Formatter.format_parallel()`로 병렬 결합(FEAT-05), (text, 2) 반환
   - **모니터링**: `start_monitoring(read_fn, write_fn, on_reference, on_keyword)` / `stop_monitoring()` / `set_poll_interval(seconds)` / `notify_clipboard_written(text)`
   - 상태: `dbs`{name:BibleDB}, `bethlehem_strongs`/`bethlehem_wonjun`, `lexicon_ko`/`lexicon_en`, `settings`, `user_config`, `is_premium`, `notes`(Notes), `cart`(Cart, v1.1.4 설교 장바구니 영속성), `_monitor`
   - 상수: `DEFAULT_SETTINGS`(20+ 키)
+
+### core/study.py — 영한 끊어 읽기 엔진 (v1.2.4 예정, 순수 함수)
+- `align_verse(en_pairs, ko_text, ko_pieces, fine=True)` → `[(영어 덩어리, 한국어 덩어리)]` 영어 어순. 영어 = `parse_english_strongs`(BSB·KJV+), 한국어 = 실제 본문 + `parse_korean_strongs`(S 역본 조각)
+- `korean_words(text, pieces)` — S 조각을 본문 어절(띄어쓰기)에 얹어 `[(code, 어절 번호)]`. 규칙: 같은 번호는 나온 차례대로 짝, `FUNC`(관사·전치사) 는 짝 없음 → 다음 덩어리, 짝 없는 한국어 어절은 `CONJ_NEXT`(접속어·관형사)면 다음·아니면 앞. `fine=False` = 문장부호(`ends_clause`)에서만 끊음. KJV+ 식 앞 문장부호(`', that'`)는 앞 구절로 옮김
+- 성경 전체 BSB↔개역개정S: 한국어 빈 덩어리 1.06%, 장당 ~5ms
 
 ### core/installer.py — 업뎃 zip 다운/추출 + 업데이터 스크립트 (순수/테스트가능)
 - `download_file(url, dest, on_progress=None, timeout=30)` / `stage_payload(zip_path, extract_dir, payload_name)` / `write_windows_bat(bat_path, src_dir, install_dir, exe_name)` / `write_mac_sh(sh_path, src_dir, app_dst, pid, data_names=())`
@@ -282,6 +288,7 @@ BibleClip Project/
 | `get_chapters` | `(version, book)` | 책의 장 목록 |
 | `get_chapter` | `(version, book, chapter)` | {ref, verses:[{n,text}]} |
 | `get_interlinear` | `(book, chapter, version=None)` | [{n, words:[{w, code}]}] 원전분해 |
+| `get_study` | `(book, chapter, en=None, ko=None, mode='word')` | [{n, pairs:[[영어, 한국어]]}] 영한 끊어 읽기(`mode='phrase'` = 문장부호 단위). 웹판 허용 목록에도 있음 |
 | `resolve_reference` | `(text)` | "창 1:1" → {book_num,short,long,chapter,verses}|None |
 | `get_aliases` | `()` | [{alias, book_num, book_name}] 사용자 약칭 |
 | `add_alias` | `(alias, book_num)` | {ok}|{ok:False,error_code} |
@@ -379,7 +386,7 @@ BibleClip Project/
 - `state` 객체(versions/viewer/primary/monitoring/fontSize/lexSources/isPremium…), `window.pywebview.api` 브리지
 
 ### cards.js (~1765줄) — ★ CardManager (자유배치 카드 워크스페이스, IIFE)
-- **카드 타입**: `"bible"`/`"interlinear"`/`"lexicon"` (※ v1.1.0에서 `"notes"` 카드 타입 **폐기** → 슬라이딩 레일 패널로 전환, search-notes.js로 이동)
+- **카드 타입**: `"bible"`/`"interlinear"`/`"lexicon"`/**`"study"`**(영한 끊어 읽기 — `card.en`·`card.ko`·`card.mode`('word'|'phrase'), 헤더 pill `study-en`/`study-ko`/`study-mode`, `loadStudyCard` → `api.get_study`, `renderStudyInto`(바깥 스코프, `.pk[data-i]` 짝 hover), 원전 분해처럼 연결 성경 카드의 장·스크롤을 따라감(`reloadDependents`·`linkedInterlinScrollers`), 추가 버튼 `#add-study`, 폰/안드로이드에선 숨김·restore 에서 버림) (※ v1.1.0에서 `"notes"` 카드 타입 **폐기** → 슬라이딩 레일 패널로 전환, search-notes.js로 이동)
 - **모듈 상태**: `cards[]`, `activeId`, `fsCardId`(F11 전체화면), `zTop`, `cascadeN`, `interacting`, `progScroll`(싱크가드)
 - **FEAT-04 대조(parallel) 필드**: `card.parallel`(bool), `card.parallelVersion`(str) — 카드별 대조 토글, 역본 쌍 고정
 - CRUD: `init(layout)`/`addCard(type)`/`addCardWithLink(type, linkId)`/`removeCard(id)`/`mountCard`/`unmountCard`/`renderAll()`/`serialize()`/`restore(layout)`

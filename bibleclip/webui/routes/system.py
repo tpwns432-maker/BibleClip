@@ -74,6 +74,7 @@ class SystemRoutes:
             # = 기본)와 inline Strong's 영어 역본(KJV+ 등)을 나열한다. 프론트는 UI
             # 언어에 맞춰 기본을 고르고(영어→KJV+), 사용자가 자유롭게 바꿀 수 있다.
             'interlin_sources': self._interlin_sources(),
+            'study_sources': self.lib.study_sources(),   # 영한 끊어 읽기 {en, ko}
             # Business guard (Phase 1): premium unlocks multi-card, the chapter
             # shortcut, and notes/badge. Default True until a licensing backend
             # writes userdata/config.json with {"is_premium": false}.

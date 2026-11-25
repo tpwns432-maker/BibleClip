@@ -42,6 +42,11 @@ class BibleRoutes:
         return [{'n': n, 'words': [{'w': w, 'code': c} for (w, c) in words]}
                 for n, words in self.lib.interlinear(int(book), int(chapter), version)]
 
+    def get_study(self, book, chapter, en=None, ko=None, mode='word'):
+        """영한 끊어 읽기 한 장: [{n, pairs: [[영어, 한국어], ...]}]. mode 'word'(잘게) · 'phrase'(문장부호)."""
+        return self.lib.study_chapter(int(book), int(chapter), en or None, ko or None,
+                                      fine=(mode != 'phrase'))
+
     # ---- Reference + Strong's search ----
 
     def resolve_reference(self, text):
