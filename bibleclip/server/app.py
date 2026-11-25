@@ -10,6 +10,7 @@
     GET  /community             커뮤니티 — server/static/community.html
     POST /capi/<동작>            커뮤니티 {..} → {"value": ...} (server/community.py)
     GET  /tg/status · POST /tg/token · /tg/link · /tg/unlink · /tg/prefs   텔레그램 알림(server/telegram.py)
+    GET  /rc/status · /rc/day?date=   성경읽기 체크(server/readingcheck.py)
     GET  /<파일>                web/ 의 파일 그대로
     GET  /_web/<파일>           server/static/ (bridge.js · web.css)
     POST /api/<기능>            {"args": [...]} → {"value": ...}
@@ -77,7 +78,7 @@ def _host_name(host):
 
 def create_app(hub, accounts, secret_key, throttle, community=None,
                allowed_hosts=LOOPBACK_HOSTS, secure_cookie=False, extra_hosts=(),
-               behind_proxy=False, telegram=None):
+               behind_proxy=False, telegram=None, reading_check=None):
     """hub: WebHub(사람별 WebApi). accounts: Accounts. throttle: 로그인 실패 제한.
     community: Community(없으면 커뮤니티 기능 없음 — 시험용).
     allowed_hosts: 주소창에 올 수 있는 호스트 이름(None = 검사 안 함) — 다른 사이트가 이 서버
@@ -294,6 +295,23 @@ def create_app(hub, accounts, secret_key, throttle, community=None,
             abort(403)
         body = request.get_json(silent=True)
         return body if isinstance(body, dict) else {}
+
+    # ---- 성경읽기 체크 ----
+
+    @app.get('/rc/status')
+    def rc_status():
+        if reading_check is None:
+            abort(404)
+        return jsonify(reading_check.status(g.uid))
+
+    @app.get('/rc/day')
+    def rc_day():
+        if reading_check is None:
+            abort(404)
+        info = reading_check.info_iso(request.args.get('date', ''))
+        if not info:
+            abort(404)
+        return jsonify(info)
 
     @app.get('/tg/status')
     def tg_status():

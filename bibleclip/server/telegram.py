@@ -22,16 +22,29 @@ import threading
 import time
 import urllib.error
 import urllib.request
-from datetime import datetime
+from datetime import datetime, timedelta
 
 from bibleclip.server import readingplan as rp
 
 STATE_FILE = 'telegram.json'
+#: 웹판 패치 내역(새것이 앞). 배포 뒤 서버가 켜지면 아직 안 알린 것을 연결된 모두에게 한 번 보낸다.
+CHANGES_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'web_changes.json')
+MAX_TEXT = 3800             # 텔레그램 한 메시지 한도(4096) 안쪽
 CODE_TTL = 10 * 60          # 연결 코드 유효 시간
 BATCH = 60                  # 상대가 연달아 쓰면 1분 안의 것을 한 번에 알린다
-SLOTS = ((8, 'morning'), (19, 'evening'))   # 통독 알림 시각(한국 시간)
+SLOTS = ((8, 'morning'), (19, 'evening'), (22, 'late'))   # 성경읽기 알림 시각(한국 시간)
+SLOT_NAMES = {'morning': '아침', 'evening': '저녁', 'late': '밤 10시'}
 SLOT_WINDOW = 30 * 60       # 그 시각부터 30분 안에만 보낸다(서버가 꺼져 있다 켜져도 몰아서 안 보냄)
 API = 'https://api.telegram.org'
+
+
+def _load_changes():
+    try:
+        with open(CHANGES_FILE, encoding='utf-8') as f:
+            d = json.load(f)
+        return [c for c in d if isinstance(c, dict) and c.get('id')] if isinstance(d, list) else []
+    except (OSError, ValueError):
+        return []
 
 
 def _print_log(msg):
@@ -53,7 +66,7 @@ def _urllib_post(url, payload, timeout):
 
 class TelegramBot:
     def __init__(self, data_dir, names, site_url, books, start=rp.START,
-                 http=_urllib_post, clock=time.time, now=None, log=_print_log):
+                 http=_urllib_post, clock=time.time, now=None, log=_print_log, check=None, changes=None):
         """names(): {아이디: {'name': ...}} — 계정 목록. site_url: 링크 앞부분(https://….ts.net).
         books: [(책 번호, 짧은 이름, 장 수)] 성경 순서. http · clock · now 는 시험용으로 바꿔 끼운다."""
         self.path = os.path.join(data_dir, STATE_FILE)
@@ -65,6 +78,8 @@ class TelegramBot:
         self._clock = clock
         self._now = now or (lambda: datetime.now(rp.KST))
         self._log = log
+        self.check = check          # ReadingCheck — 누가 그날 성경읽기 체크를 했는지(없으면 모두에게 보냄)
+        self.changes = changes if changes is not None else _load_changes()
         self._poll_ok = True        # 접속 실패는 상태가 바뀔 때만 기록(실패가 이어질 때 기록이 넘치지 않게)
         self._lock = threading.RLock()
         self._codes = {}            # 코드 → (아이디, 만료 시각)
@@ -257,14 +272,21 @@ class TelegramBot:
         now = self._clock()
         to = []
         with self._lock:
+            # 성경읽기 체크 글은 '통독 알림' 설정을, 나머지 글 · 댓글은 '커뮤니티 알림' 설정을 따른다.
+            pref = 'reading' if event.get('reading_day') else 'community'
             for uid, link in self.state['links'].items():
-                if uid == event.get('author') or not link.get('community', True):
+                if uid == event.get('author') or not link.get(pref, True):
                     continue
-                p = self._pending.setdefault(uid, {'first': now, 'posts': 0, 'comments': 0, 'ids': set()})
-                p['posts' if event.get('kind') == 'post' else 'comments'] += 1
+                p = self._pending.setdefault(uid, {'first': now, 'posts': 0, 'comments': 0, 'ids': set(),
+                                                   'reading': []})
+                if event.get('reading_day'):      # 성경읽기 체크 글 → "○○님이 n일째 체크를 했어요"
+                    p['reading'].append((event.get('author'), event['reading_day'], event.get('post_id')))
+                else:
+                    p['posts' if event.get('kind') == 'post' else 'comments'] += 1
                 p['ids'].add(event.get('post_id'))
                 to.append(uid)
-        kind = '새 글' if event.get('kind') == 'post' else '새 댓글'
+        kind = ('성경읽기 체크' if event.get('reading_day') else
+                '새 글' if event.get('kind') == 'post' else '새 댓글')
         self._log(f"대기 {kind} 글 #{event.get('post_id')} (쓴 사람 {event.get('author')}) → "
                   + (', '.join(to) + f' ({BATCH}초 뒤 묶어 보냄)' if to else '받을 사람 없음(상대가 연결 안 했거나 알림 끔)'))
 
@@ -280,24 +302,37 @@ class TelegramBot:
                 continue
             ids = [i for i in p['ids'] if i]
             href = f'{self.site}/community#/p/{ids[0]}' if len(ids) == 1 else f'{self.site}/community'
-            if p['posts'] and not p['comments'] and p['posts'] == 1:
-                text = '📖 BibleClip · 커뮤니티에 새 글이 있어요'
-            elif p['comments'] and not p['posts'] and p['comments'] == 1:
-                text = '💬 BibleClip · 새 댓글이 있어요'
-            else:
-                bits = ([f"새 글 {p['posts']}"] if p['posts'] else []) + \
-                       ([f"새 댓글 {p['comments']}"] if p['comments'] else [])
-                text = '📖 BibleClip · ' + ' · '.join(bits)
-            what = '커뮤니티(' + ' · '.join(([f"새 글 {p['posts']}"] if p['posts'] else []) +
-                                            ([f"새 댓글 {p['comments']}"] if p['comments'] else [])) + \
-                   ', 글 ' + ', '.join(f'#{i}' for i in sorted(ids)) + ')'
-            self.send(link['chat_id'], f'{text}\n{href}', uid, what)
+            lines, whats = [], []
+            names = self.names()
+            for author, day, pid in p.get('reading', []):
+                r = rp.reading_for(self.chapters, datetime.strptime(day, '%Y-%m-%d').date(), self.start)
+                n = f"{r['day']}일째 " if r else ''
+                who = names.get(author, {}).get('name', author)
+                lines.append(f'✅ {who}님이 {n}성경읽기 체크를 했어요')
+                whats.append(f'성경읽기 체크 {author} {day}')
+            if p['posts'] or p['comments']:
+                if p['posts'] == 1 and not p['comments'] and not lines:
+                    lines.append('📖 BibleClip · 커뮤니티에 새 글이 있어요')
+                elif p['comments'] == 1 and not p['posts'] and not lines:
+                    lines.append('💬 BibleClip · 새 댓글이 있어요')
+                else:
+                    bits = ([f"새 글 {p['posts']}"] if p['posts'] else []) + \
+                           ([f"새 댓글 {p['comments']}"] if p['comments'] else [])
+                    lines.append('📖 BibleClip · ' + ' · '.join(bits))
+                whats.append(' · '.join(([f"새 글 {p['posts']}"] if p['posts'] else []) +
+                                        ([f"새 댓글 {p['comments']}"] if p['comments'] else [])))
+            what = '커뮤니티(' + ' · '.join(whats) + ', 글 ' + ', '.join(f'#{i}' for i in sorted(ids)) + ')'
+            self.send(link['chat_id'], '\n'.join(lines) + f'\n{href}', uid, what)
 
     # ---- 통독 알림 ----
 
     def _bible_href(self, r):
         book, chapter = r['first']
         return f'{self.site}/bible#go={book}.{chapter}'
+
+    def _check_href(self, day):
+        """그날 성경읽기 체크 글쓰기(커뮤니티 '성경읽기 체크', 범위가 미리 달림)."""
+        return f'{self.site}/community#/new?reading={day.isoformat()}'
 
     def tick_reading(self):
         now = self._now().astimezone(rp.KST)
@@ -313,17 +348,63 @@ class TelegramBot:
                 self.state['sent'][key] = True
                 self._save()
                 links = dict(self.state['links'])
-            r = rp.reading_for(self.chapters, now.date(), self.start)
+            today = now.date()
+            r = rp.reading_for(self.chapters, today, self.start)
             if not r:
                 continue
-            head = (f"☀️ 오늘의 통독 ({r['day']}일째)" if kind == 'morning'
-                    else '🌙 오늘의 통독 다 읽으셨나요?')
-            text = f"{head}\n{r['label']}\n{self._bible_href(r)}"
             to = [u for u, link in links.items() if link.get('reading', True)]
-            what = f"통독 {'아침' if kind == 'morning' else '저녁'}({r['day']}일째 {r['label']})"
-            self._log(f'{what} 시작 — 받을 사람 {len(to)}명')
+            done = self.check.done_on(today) if self.check else {}
+            skipped = []
+            if kind != 'morning':           # 저녁 · 밤 10시: 이미 체크한 사람에겐 안 보낸다
+                skipped = [u for u in to if u in done]
+                to = [u for u in to if u not in done]
+            # 아침: 어제 체크가 비었으면 한 줄(자정이 지나면 그날은 '안 읽음').
+            yesterday = today - timedelta(days=1)
+            ymiss = set()
+            if kind == 'morning' and self.check and yesterday >= self.start:
+                ydone = self.check.done_on(yesterday)
+                ymiss = {u for u in to if u not in ydone}
+            what = f"성경읽기 {SLOT_NAMES[kind]}({r['day']}일째 {r['label']})"
+            self._log(f'{what} 시작 — 받을 사람 {len(to)}명'
+                      + (f" (이미 체크해서 뺌: {', '.join(skipped)})" if skipped else '')
+                      + (f" (어제 체크 비어 있음: {', '.join(sorted(ymiss))})" if ymiss else ''))
+            check = f'✍️ 성경읽기 체크: {self._check_href(today)}'
             for uid in to:
+                if kind == 'morning':
+                    text = f"☀️ 오늘의 성경읽기 ({r['day']}일째)\n{r['label']}\n📖 {self._bible_href(r)}\n{check}"
+                    if uid in ymiss:
+                        yr = rp.reading_for(self.chapters, yesterday, self.start)
+                        text += (f"\n\n어제({yr['day']}일째 {yr['label']}) 성경읽기 체크가 비어 있어요."
+                                 f"\n✍️ {self._check_href(yesterday)}")
+                elif kind == 'evening':
+                    text = f"🌙 오늘의 성경읽기 하셨나요? ({r['day']}일째 {r['label']})\n{check}"
+                else:
+                    text = f"🔔 아직 오늘 성경읽기 체크를 안 하셨어요 ({r['day']}일째 {r['label']})\n{check}"
                 self.send(links[uid]['chat_id'], text, uid, what)
+
+    # ---- 패치 내역 알림 ----
+
+    def announce_changes(self):
+        """아직 안 알린 패치 내역을 연결된 모두에게 한 번(알림 켜고 끄기와 상관없이). 연결된 사람이
+        없거나 열쇠가 없으면 기다린다(나중에 연결되면 그때 보냄)."""
+        with self._lock:
+            done = set(self.state.get('announced', []))
+            new = [c for c in self.changes if c['id'] not in done]
+            links = dict(self.state['links'])
+            if not new or not links or not self.state.get('token'):
+                return
+            self.state['announced'] = sorted(done | {c['id'] for c in new})
+            self._save()
+        parts = ['📢 BibleClip 업데이트']
+        for c in new:                       # 새것부터
+            parts.append(f"\n[{c.get('title', '')}] {c.get('date', '')}".rstrip())
+            parts.extend('· ' + n for n in c.get('notes', []))
+        text = '\n'.join(parts)
+        if len(text) > MAX_TEXT:
+            text = text[:MAX_TEXT - 1] + '…'
+        what = '패치 안내(' + ', '.join(c['id'] for c in new) + ')'
+        for uid, link in links.items():
+            self.send(link['chat_id'], f'{text}\n\n{self.site}/', uid, what)
 
     # ---- 스레드 ----
 
@@ -331,6 +412,7 @@ class TelegramBot:
         backoff = 5
         while not (stop and stop.is_set()):
             try:
+                self.announce_changes()
                 self.tick_reading()
                 self.flush_community()
                 if self.state.get('token'):

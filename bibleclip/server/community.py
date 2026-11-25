@@ -13,6 +13,7 @@ import threading
 from datetime import datetime, timezone
 
 from bibleclip.core.engine import Engine
+from bibleclip.server import readingplan as rp
 
 DB_FILE = 'community.db'
 
@@ -24,6 +25,9 @@ SOURCE_FIELDS = {          # 감상 대상 칸과 최대 길이
     'book': {'title': 200, 'by': 60, 'part': 100},
 }
 SORTS = ('activity', 'new', 'likes')
+
+#: 성경읽기 체크(docs/TELEGRAM_PLAN.md): 그날 읽은 범위에 대한 짧은 생각을 이 주제에 쓰면 그날 읽음.
+READING_TOPIC = ('성경읽기 체크', '그날 읽은 범위에 대한 짧은 생각 — 쓰면 그날 성경읽기 체크가 됩니다')
 SNIPPET = 160
 
 #: 처음 만들어 두는 주제(사용자 결정 2026-11-24).
@@ -112,6 +116,19 @@ def clean_source(src):
     return out
 
 
+def clean_reading_day(v, today):
+    """성경읽기 체크 날짜 'YYYY-MM-DD' — 계획 시작일 ~ 오늘(한국)만. 없으면 None."""
+    if v is None or v == '':
+        return None
+    try:
+        d = datetime.strptime(str(v), '%Y-%m-%d').date()
+    except ValueError:
+        raise CommunityError('invalid', 'reading_day')
+    if d < rp.START or d > today:
+        raise CommunityError('invalid', 'reading_day')
+    return d.isoformat()
+
+
 def clean_verse(v):
     """글에 단 구절 범위 {book, chapter, verse, verse_end} — 한 장 안. 없으면 None.
     책 번호는 우리 번호(10..730)여야 하고, 보기 좋은 이름(label)을 붙여 돌려준다."""
@@ -172,7 +189,8 @@ def find_refs(text, parse):
 
 
 class Community:
-    def __init__(self, path, names=None, parse=None, verse_text=None, on_event=None):
+    def __init__(self, path, names=None, parse=None, verse_text=None, on_event=None, today=None,
+                 reading_info=None):
         """path: community.db. names(): {uid: 보이는 이름}. parse: 구절 인식기(없으면 링크 없음).
         verse_text(uid, verse) → {version, verses: [{n, text}]}: 글에 단 구절의 본문(읽는 사람의 역본)."""
         self._db = sqlite3.connect(path, check_same_thread=False)
@@ -182,6 +200,8 @@ class Community:
         self._parse = parse
         self._verse_text = verse_text
         self._on_event = on_event       # 새 글 · 댓글 알림(텔레그램 봇) — {'kind', 'author', 'post_id'}
+        self._today = today or (lambda: rp.today_kst())   # 성경읽기 체크 날짜 검사(한국 날짜)
+        self._reading_info = reading_info   # 'YYYY-MM-DD' → {'day', 'label', 'book', 'chapter'} (글 칩에 씀)
         with self._lock, self._db:
             self._db.execute('PRAGMA journal_mode=WAL')
             self._db.execute('PRAGMA foreign_keys=ON')
@@ -190,11 +210,19 @@ class Community:
             for table, col, decl in (('posts', 'activity_seq', 'INTEGER NOT NULL DEFAULT 0'),
                                      ('seen', 'last_cid', 'INTEGER NOT NULL DEFAULT 0'),
                                      ('posts', 'v_book', 'INTEGER'),
-                                     ('posts', 'v_chapter', 'INTEGER')):
+                                     ('posts', 'v_chapter', 'INTEGER'),
+                                     ('posts', 'reading_day', 'TEXT')):
                 cols = [r[1] for r in self._db.execute(f'PRAGMA table_info({table})')]
                 if col not in cols:
                     self._db.execute(f'ALTER TABLE {table} ADD COLUMN {col} {decl}')
             self._db.execute('CREATE INDEX IF NOT EXISTS posts_verse ON posts(v_book, v_chapter)')
+            self._db.execute('CREATE INDEX IF NOT EXISTS posts_reading ON posts(reading_day, author)')
+            if not self._db.execute("SELECT 1 FROM meta WHERE key='seeded_reading'").fetchone():
+                # 성경읽기 체크 주제(맨 앞). 이미 같은 이름이 있으면 그것을 쓴다.
+                self._db.execute(
+                    'INSERT OR IGNORE INTO topics(name, description, source_kind, position, created_by,'
+                    " created_at) VALUES(?,?,'',-1,'',?)", (*READING_TOPIC, _now()))
+                self._db.execute("INSERT INTO meta VALUES('seeded_reading', '1')")
             if not self._db.execute("SELECT 1 FROM meta WHERE key='seeded'").fetchone():
                 now = _now()
                 for pos, (name, desc, kind) in enumerate(SEED_TOPICS):
@@ -327,6 +355,9 @@ class Community:
             'snippet': snippet[:SNIPPET] + ('…' if len(snippet) > SNIPPET else ''),
             'source': None if p['deleted'] or not p['source'] else json.loads(p['source']),
             'verse': None if p['deleted'] or not p['verse'] else json.loads(p['verse']),
+            'reading_day': None if p['deleted'] else p['reading_day'],
+            'reading': (self._reading_info(p['reading_day'])
+                        if self._reading_info and p['reading_day'] and not p['deleted'] else None),
             'created_at': p['created_at'], 'edited_at': p['edited_at'],
             'activity_at': p['activity_at'], 'deleted': bool(p['deleted']),
             'comments': comments, 'is_new': is_new, 'new_comments': new_comments,
@@ -401,6 +432,8 @@ class Community:
         created = False
         has_verse = 'verse' in a
         verse = clean_verse(a.get('verse')) if has_verse else None
+        has_reading = 'reading_day' in a
+        reading = clean_reading_day(a.get('reading_day'), self._today()) if has_reading else None
         now = _now()
         with self._lock, self._db:
             if not self._one('SELECT 1 FROM topics WHERE id=?', (tid,)):
@@ -413,22 +446,24 @@ class Community:
                     raise CommunityError('notfound')
                 if not has_verse:      # 고칠 때 구절을 안 보내면 그대로 둔다
                     verse = json.loads(p['verse']) if p['verse'] else None
+                if not has_reading:
+                    reading = p['reading_day']
                 self._db.execute(
                     'UPDATE posts SET topic_id=?, title=?, body=?, source_kind=?, source_title=?,'
-                    ' source=?, verse=?, v_book=?, v_chapter=?, edited_at=? WHERE id=?',
-                    (tid, title, body, skind, stitle, sjson, *self._verse_cols(verse), now, p['id']))
+                    ' source=?, verse=?, v_book=?, v_chapter=?, reading_day=?, edited_at=? WHERE id=?',
+                    (tid, title, body, skind, stitle, sjson, *self._verse_cols(verse), reading, now, p['id']))
                 pid = p['id']
             else:
                 pid = self._db.execute(
                     'INSERT INTO posts(topic_id, author, title, body, source_kind, source_title,'
-                    ' source, verse, v_book, v_chapter, created_at, activity_at, activity_seq)'
-                    ' VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?)',
-                    (tid, uid, title, body, skind, stitle, sjson, *self._verse_cols(verse),
+                    ' source, verse, v_book, v_chapter, reading_day, created_at, activity_at, activity_seq)'
+                    ' VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?)',
+                    (tid, uid, title, body, skind, stitle, sjson, *self._verse_cols(verse), reading,
                      now, now, self._next_seq())).lastrowid
                 created = True
             self._mark_seen(uid, pid)
         if a.get('id') is None and created:
-            self._emit('post', uid, pid)
+            self._emit('post', uid, pid, reading)
         return {'id': pid}
 
     def post_delete(self, uid, a):
@@ -440,7 +475,7 @@ class Community:
                 # 댓글은 상대의 글이기도 하다 — 글만 비우고 자리는 남긴다.
                 self._db.execute("UPDATE posts SET deleted=1, title='', body='', source=NULL,"
                                  " source_kind='', source_title='', verse=NULL, v_book=NULL,"
-                                 " v_chapter=NULL WHERE id=?", (p['id'],))
+                                 " v_chapter=NULL, reading_day=NULL WHERE id=?", (p['id'],))
             else:
                 self._db.execute("DELETE FROM likes WHERE kind='post' AND target=?", (p['id'],))
                 self._db.execute('DELETE FROM seen WHERE post_id=?', (p['id'],))
@@ -530,10 +565,29 @@ class Community:
                 self._db.execute('DELETE FROM comments WHERE id=?', (c['id'],))
         return {'ok': True}
 
-    def _emit(self, kind, author, post_id):
+    def reading_posts(self, day_from, day_to):
+        """성경읽기 체크 기록: {'YYYY-MM-DD': {아이디: 그날 처음 쓴 글 번호}} (지운 글 빼고)."""
+        with self._lock:
+            rows = self._q('SELECT reading_day, author, MIN(id) AS pid FROM posts WHERE deleted=0'
+                           ' AND reading_day BETWEEN ? AND ? GROUP BY reading_day, author',
+                           (day_from, day_to))
+        out = {}
+        for r in rows:
+            out.setdefault(r['reading_day'], {})[r['author']] = r['pid']
+        return out
+
+    def reading_topic(self, uid=None):
+        with self._lock:
+            r = self._one('SELECT id FROM topics WHERE name=?', (READING_TOPIC[0],))
+        return {'id': r['id'] if r else None}
+
+    def _emit(self, kind, author, post_id, reading_day=None):
         if self._on_event:
             try:
-                self._on_event({'kind': kind, 'author': author, 'post_id': post_id})
+                ev = {'kind': kind, 'author': author, 'post_id': post_id}
+                if reading_day:
+                    ev['reading_day'] = reading_day
+                self._on_event(ev)
             except Exception:       # noqa: BLE001 — 알림이 실패해도 글쓰기는 된다
                 pass
 
@@ -560,7 +614,7 @@ class Community:
     #: 화면이 부를 수 있는 동작.
     ACTIONS = ('home', 'topics', 'topic_save', 'topic_delete', 'posts', 'post', 'post_save',
                'post_delete', 'comment_save', 'comment_delete', 'like', 'verse_posts',
-               'verse_preview', 'default_topic')
+               'verse_preview', 'default_topic', 'reading_topic')
 
     def call(self, uid, action, args):
         if action not in self.ACTIONS:
@@ -568,4 +622,4 @@ class Community:
         if not isinstance(args, dict):
             raise CommunityError('invalid', 'args')
         fn = getattr(self, action)
-        return fn(uid) if action in ('home', 'topics', 'default_topic') else fn(uid, args)
+        return fn(uid) if action in ('home', 'topics', 'default_topic', 'reading_topic') else fn(uid, args)
