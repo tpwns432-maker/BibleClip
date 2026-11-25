@@ -75,6 +75,14 @@ final class AppModel {
         return added
     }
 
+    /// [＋ 성경 파일 추가…]: 고른 파일을 데스크톱과 같은 검사로 bible_versions 에 복사한다.
+    /// 넣기는 부른 쪽이 scan 으로. (복사한 이름, 거절한 것)
+    func importBibles(_ sources: [ImportSource]) -> ([String], [ImportError]) {
+        let lib = library
+        let importer = BibleImporter(dest: bibleDir, tmp: FileManager.default.temporaryDirectory, text: lib.text)
+        return importer.import(sources, taken: Set(lib.order))
+    }
+
     func saveSettings() {
         let data = Data(JSON.string(library.settings.json, pretty: true).utf8)
         try? data.write(to: settingsFile, options: .atomic)

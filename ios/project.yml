@@ -22,6 +22,7 @@ targets:
         excludes:
           - Bundle
           - bridge.js
+          - ios.js
       # 폴더 그대로(구조 유지) 앱 안에 — Bundle/web/index.html 처럼 읽는다.
       - path: BibleClip/Bundle
         type: folder

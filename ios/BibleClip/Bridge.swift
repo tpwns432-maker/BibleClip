@@ -1,5 +1,6 @@
 import BibleClipCore
 import UIKit
+import UniformTypeIdentifiers
 import WebKit
 
 /// bridge.js 의 Swift 쪽 — 데스크톱 bibleclip/webui routes 와 같은 메서드 이름 · 인자 · 답 꼴이라
@@ -128,6 +129,7 @@ final class Bridge: NSObject, WKScriptMessageHandlerWithReply {
             model.highlights.clearVerse(try a.pyint(0), try a.pyint(1), try a.pyint(2), a.str(3))
             return ok(true)
         case "get_all_highlights": return model.highlights.all()
+        case "add_bible_files": return addBibleFiles()
         case "refresh_databases":
             return ["added": model.scan(model.bibleDir), "versions": versions()]
         case "note_position":
@@ -218,6 +220,31 @@ final class Bridge: NSObject, WKScriptMessageHandlerWithReply {
         clip(text)
         return ok(true, ["text": text, "n_parts": nParts,
                          "short_name": nn(lib.displayBookName(book, order) ?? lib.engine.canon(book)?.short)])
+    }
+
+    /// [＋ 성경 파일 추가…]: 파일 고르기 창 → 검사한 뒤 Documents/bible_versions 로 복사 → 넣기.
+    /// 답은 데스크톱 add_bible_files 와 같은 꼴이라 web/ 가 그대로 처리한다.
+    /// 엔진 줄([queue]) 위에서 고르기 창이 닫힐 때까지 기다린다(android 와 같다).
+    private func addBibleFiles() -> [String: Any] {
+        let done = DispatchSemaphore(value: 0)
+        var picked: [URL] = []
+        DispatchQueue.main.async {
+            FilePicker.shared.pick { urls in
+                picked = urls
+                done.signal()
+            }
+        }
+        done.wait()
+        if picked.isEmpty { return ok(false, ["error": "cancelled"]) }
+        let sources = picked.map { ImportSource(name: $0.lastPathComponent, url: $0) }
+        let (_, errors) = model.importBibles(sources)
+        for u in picked { try? FileManager.default.removeItem(at: u) }   // 고르기 창이 만든 사본
+        let added = model.scan(model.bibleDir)
+        return ok(true, [
+            "added": added.map { ["name": $0, "display": lib.dbs[$0]?.displayName ?? $0] },
+            "errors": errors.map { $0.json },
+            "versions": versions(),
+        ])
     }
 
     /// 장바구니 한꺼번에 → 클립보드. {ok, text, n_items} 또는 {ok:false}.
@@ -430,5 +457,39 @@ struct A {
         case let o as [String: Any]: return !o.isEmpty
         default: return true
         }
+    }
+}
+
+/// 시스템 파일 고르기 창("파일" 앱) — 아무 종류나: .SQLite3 은 제 형식 이름이 없어 거르면
+/// 찾는 파일이 숨는다. asCopy 라 앱의 임시 폴더에 사본이 와서 따로 권한을 쥘 일이 없다.
+final class FilePicker: NSObject, UIDocumentPickerDelegate {
+    static let shared = FilePicker()
+    private var done: (([URL]) -> Void)?
+
+    func pick(_ done: @escaping ([URL]) -> Void) {
+        self.done?([])
+        self.done = done
+        let p = UIDocumentPickerViewController(forOpeningContentTypes: [.item], asCopy: true)
+        p.allowsMultipleSelection = true
+        p.delegate = self
+        guard let top = Self.topController() else { finish([]); return }
+        top.present(p, animated: true)
+    }
+
+    func documentPicker(_ controller: UIDocumentPickerViewController, didPickDocumentsAt urls: [URL]) { finish(urls) }
+    func documentPickerWasCancelled(_ controller: UIDocumentPickerViewController) { finish([]) }
+
+    private func finish(_ urls: [URL]) {
+        let d = done
+        done = nil
+        d?(urls)
+    }
+
+    private static func topController() -> UIViewController? {
+        let scene = UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }
+            .first { $0.activationState == .foregroundActive } ?? UIApplication.shared.connectedScenes.first as? UIWindowScene
+        var c = scene?.windows.first { $0.isKeyWindow }?.rootViewController ?? scene?.windows.first?.rootViewController
+        while let next = c?.presentedViewController { c = next }
+        return c
     }
 }

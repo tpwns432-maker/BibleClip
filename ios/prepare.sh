@@ -13,7 +13,7 @@ mkdir -p "$out/web" "$out/android" "$out/ios" "$out/bible_versions" "$out/core"
 rsync -a --exclude 'fonts/Pretendard-*.otf' --exclude 'fonts/Pretendard-*.ttf' --exclude 'README.md' \
   "$root/web/" "$out/web/"
 cp "$root/android/app/src/main/assets/android/mobile.css" "$root/android/app/src/main/assets/android/mobile.js" "$out/android/"
-cp "$here/BibleClip/bridge.js" "$out/ios/"
+cp "$here/BibleClip/bridge.js" "$here/BibleClip/ios.js" "$out/ios/"
 cp "$root/android/app/src/main/assets/core/tables.json" "$out/core/"
 # 기본 역본 — 저작권 역본은 넣지 않는다.
 cp "$root/bible_versions/KRV.SQLite3" "$root/bible_versions/KJV+.SQLite3" "$out/bible_versions/"
