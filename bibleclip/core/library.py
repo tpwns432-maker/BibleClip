@@ -94,6 +94,7 @@ class Library:
         # v1.2.1 첫 실행 안내(web/js/tour.js)를 봤는지. False 면 시작할 때 자동으로 뜬다.
         # 이 키가 없는 기존 설정 파일 = 이미 쓰던 사람 → load_settings 가 True 로 둔다.
         'tour_done': False,
+        'whatsnew_seen': '',   # v1.2.4 새 기능 안내(tour.js WHATSNEW)를 본 마지막 버전
     }
 
     def __init__(self, user_dir=None, engine=None):

@@ -225,6 +225,8 @@
         `<ul class="patch-list">${p.notes.map((n) => `<li>${esc(n)}</li>`).join("")}</ul>` +
         `<label class="patch-dismiss"><input type="checkbox" class="patch-cb"> ${I18N.t("update.dontShowAgain")}</label>` +
         `<div class="note-modal-foot"><span class="note-modal-spacer"></span>` +
+          (window.Tour && Tour.hasWhatsNew(p.version)
+            ? `<button class="btn patch-tour">${I18N.t("update.whatsNewTour")}</button>` : "") +
           `<button class="btn primary patch-ok">${I18N.t("common.confirm")}</button></div>` +
       `</div>`;
     document.body.appendChild(back);
@@ -233,6 +235,8 @@
       back.remove();
     };
     back.querySelector(".patch-ok").addEventListener("click", close);
+    const tourBtn = back.querySelector(".patch-tour");
+    if (tourBtn) tourBtn.addEventListener("click", () => { close(); Tour.startWhatsNew(p.version); });
     back.addEventListener("mousedown", (e) => { if (e.target === back) close(); });
   }
 

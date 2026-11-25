@@ -401,6 +401,11 @@ BibleClip Project/
 - 이벤트 위임: `wireContainer()` (클릭/스크롤/드래그/contextmenu/hover 단일 핸들러). **드래그 mouseup = 걸친 절 복사(기존) + 형광펜 팔레트(v1.1.12) 동시**, **`.hl-mark` 클릭 = 절 복사 대신 팔레트**(색 변경/지우기)
 - public: `{init, addCard, addCardWithLink, goToRef, primaryVersion, primaryBible, bibleCards, lexiconCards, bodyEl, linkedBibleFor, chapStepPrimary, chapStepActive, reloadAllBible, relabel, presentToggle, ensureInterlinearFor, decorateNotesFor:decorateNotes, snapshotAnchors, realignAnchors, **jumpContext**}` — `jumpContext()`(v1.1.14)는 `jumpTarget()`(goToRef 의 대상 선정 로직 분리)이 고른 카드의 `{book, chapter}`
 
+### tour.js — 첫 실행 안내 + 버전별 새 기능 안내 (IIFE `window.Tour`)
+- 첫 실행 안내 `STEPS`(1부 기본 · 2부 활용, 설정 `tour_done`). v1.2.4 **새 기능 안내** `WHATSNEW[버전] = [단계]`(part "new"): 업데이트한 사람(tour_done=True)에게 지금 버전 안내가 있고 `whatsnew_seen`(설정, get_initial)과 다르면 업데이트 내역 창이 닫힌 뒤 한 번 자동, 내역 창의 [새 기능 둘러보기](`update.whatsNewTour`)로도. 끝내면 `whatsnew_seen`=버전(첫 실행 안내를 끝내도 같이 — 같은 내용이 2부에 있음).
+- 단계 필드: `prepare()`(그리기 전 화면 맞추기 — 영어공부 카드 열기, `CardManager` 는 window 속성이 아니라 `typeof` 로 확인) · `wait:"study"`(＋ 영어공부 직접 누르기) · `interact`(막 `.tour-back` 을 뚫어 카드를 직접 만지게). public `{start, finish, maybeAutoStart, wire, startWhatsNew, hasWhatsNew}`
+- 🔑 안내 문구 · 업데이트 내역에 개인 자료(개역개정S · ESV)는 적지 않는다(사용자: '조용한 잠수함 패치').
+
 ### search-sort.js — 검색 결과 정렬 · 필터 (IIFE `window.SearchSort`, docs/SEARCH_SORT_PLAN.md)
 - 검색은 걸린 절 **전부**(`SEARCH_CAP` 10,000 — '여호와' 6,192절·0.35초·515KB)를 정확도순으로 받고, 정렬·필터는 이 모듈이 화면에서 계산(다시 검색 안 함). 상위 200개만 받으면 '성경순'·'신약만'이 그 200개 안에서만의 결과가 되기 때문. DOM 무관 → node 테스트 `tests/test_search_sort.js`.
 - `analyze(res)` → 항목 `{rank, book, chapter, verse, short, text, len, terms, count, orig}`. 검색어 하나 = `matched_tokens[i]` + `expanded[그 토큰]` 묶음, 세는 규칙은 화면 강조(`highlightHtml`)와 같다(대소문자 무시·긴 단어 우선·비겹침). 강조할 단어가 없는 결과(붙여 친 구절 완전일치 폴백)는 전부 0 → 정확도 순서 유지.
