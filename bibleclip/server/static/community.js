@@ -4,11 +4,11 @@
 //   #/s/<종류>/<제목>  같은 설교 · 책 모아 보기
 //   #/p/<글>       글 + 댓글        #/new[/<주제>]  글쓰기   #/edit/<글>  글 고치기
 //   #/topic/new   주제 만들기      #/topic/<주제>  주제 고치기
-// 글은 Site.renderText 로만 그린다(HTML 해석 안 함 — 구절 · 웹 주소만 링크).
+// 글은 Site.renderRich 로만 그린다(HTML 해석 안 함 — 구절 · 웹 주소만 링크, 쓴 구절은 본문 카드).
 (function () {
   "use strict";
 
-  const { capi, esc, timeTag, renderText } = Site;
+  const { capi, esc, timeTag, renderRich } = Site;
   const $ = (id) => document.getElementById(id);
   const view = $("view");
 
@@ -200,7 +200,7 @@
       return `<div class="c" id="c${c.id}" data-cid="${c.id}">
         <div class="c-meta"><b>${esc(c.author.name)}</b> · ${timeTag(c.created_at)}
           ${c.edited_at && !c.deleted ? " · 고침" : ""}${c.is_new ? ' <span class="new">새</span>' : ""}</div>
-        <div class="c-body">${c.deleted ? '<span class="deleted">지운 댓글입니다</span>' : renderText(c.body, c.refs)}</div>
+        <div class="c-body">${c.deleted ? '<span class="deleted">지운 댓글입니다</span>' : renderRich(c.body, c.refs)}</div>
         ${c.deleted ? "" : `<div class="c-acts">
           <button class="heart${c.liked ? " on" : ""}" data-act="like-comment" data-id="${c.id}"
             title="${esc(c.likers.join(", ") || "공감")}">♥</button><span class="cnt">${c.likes || ""}</span>
@@ -236,7 +236,7 @@
         ${p.deleted ? '<h1 class="deleted">지운 글입니다</h1>' : `<h1>${esc(p.title)}</h1>${p.reading ? `<p>${readingChip(p.reading)}</p>` : ""}${p.verse ? `
         <div class="verse-quote"><a class="vq-label" href="${esc(verseHref(p.verse))}" title="성경에서 열기">📖 ${esc(p.verse.label)}</a>
           ${p.verse_text ? `<blockquote>${quoteHtml(p.verse_text)}</blockquote>` : ""}</div>` : ""}${src}${link}
-        <div class="body">${renderText(p.body, p.refs)}</div>
+        <div class="body">${renderRich(p.body, p.refs)}</div>
         <div class="post-acts">
           <button class="like-btn${p.liked ? " on" : ""}" data-act="like-post" data-id="${p.id}">♥ 공감 <span class="cnt">${p.likes || ""}</span></button>
           <span class="likers">${esc(p.likers.join(", "))}</span>
@@ -321,6 +321,10 @@
         ${shownReading ? `<div class="reading-box">${readingChip(shownReading)}
           <p class="hint">읽고 든 생각을 짧게 남기면 그날 성경읽기 체크가 됩니다.</p></div>` : ""}
         <div class="verse-box" id="vbox" hidden></div>
+        <div class="vb-attach" id="vattach" hidden>
+          <input type="text" id="va-text" maxlength="60" enterkeyhint="done" autocomplete="off"
+            placeholder="📖 구절 달기 — 예: 창 1:28, 요 3:16-18">
+          <button type="button" class="btn" id="va-go">달기</button></div>
         <label>제목<input type="text" name="title" maxlength="200" required></label>
         <fieldset><legend>무엇에 대한 감상인가요? (선택)</legend>
           <div class="seg" id="kind">${[["", "없음"], ["sermon", "🎤 설교"], ["book", "📘 책"]].map(([k, l]) =>
@@ -329,7 +333,7 @@
             `<label class="${wide || ""}">${l}<input type="${type}" name="${k}-${f}"></label>`).join("")}</div>`).join("")}
         </fieldset>
         <label>내용<textarea name="body" rows="12" maxlength="20000" required></textarea></label>
-        <p class="hint">"요 3:16", "요한복음 3장 16절"처럼 구절을 쓰면 성경으로 가는 링크가 됩니다.</p>
+        <p class="hint" id="ref-hint"></p>
         <div class="form-acts"><a class="btn" href="${editId ? "#/p/" + editId : "#/" + (tid ? "t/" + tid : "")}">취소</a>
           <button class="btn primary" type="submit">${editId ? "저장" : "올리기"}</button></div>
       </form>`;
@@ -376,6 +380,7 @@
     }
     function renderVerseBox() {
       const box = $("vbox");
+      $("vattach").hidden = !!verse;
       if (!verse) { box.hidden = true; box.innerHTML = ""; return; }
       box.hidden = false;
       box.innerHTML = `<div class="vb-head"><b id="vb-label">📖 ${esc(verse.label || "")}</b>
@@ -401,6 +406,43 @@
       previewVerse();
     }
     renderVerseBox();
+
+    // 구절 달기(성경 화면을 거치지 않고 — 휴대폰에서도): "창 1:28" 을 적으면 위 구절 상자로.
+    async function attachVerse() {
+      const inp = $("va-text");
+      const t = inp.value.trim();
+      if (!t) { inp.focus(); return; }
+      let r;
+      try { r = (await capi("refs_preview", { text: t })).refs[0]; } catch (e) { fail(e); return; }
+      if (!r) { toast("구절을 알아보지 못했어요. 예: 창 1:28, 요 3:16-18"); return; }
+      verse = { book: r.book, chapter: r.chapter, verse: r.verses[0], verse_end: r.verses[r.verses.length - 1], label: r.label };
+      inp.value = "";
+      renderVerseBox();
+      if (!editId) writeDraft(collect());
+    }
+    $("va-go").addEventListener("click", attachVerse);
+    $("va-text").addEventListener("keydown", (e) => {
+      if (e.key === "Enter" && !e.isComposing) { e.preventDefault(); attachVerse(); }
+    });
+
+    // 내용에 쓴 구절 알려 주기 — 올리면 그 줄 아래에 본문이 함께 보인다.
+    const HINT = '"창 1:28", "요한복음 3장 16절"처럼 구절을 쓰면 그 줄 아래에 본문이 함께 보이고, 누르면 성경으로 갑니다.';
+    let hintTimer = 0, hintFor = null;
+    async function refHint() {
+      const t = f.body.value;
+      if (t === hintFor) return;
+      hintFor = t;
+      let refs = [];
+      if (t.trim()) { try { refs = (await capi("refs_preview", { text: t })).refs; } catch (_) { refs = []; } }
+      if (t !== f.body.value) return;              // 그새 더 썼다
+      const labels = [...new Set(refs.map((r) => r.label))];
+      $("ref-hint").textContent = labels.length
+        ? "📖 " + labels.join(" · ") + " — 올리면 본문이 함께 보여요." : HINT;
+    }
+    $("ref-hint").textContent = HINT;
+    f.body.addEventListener("input", () => { clearTimeout(hintTimer); hintTimer = setTimeout(refHint, 500); });
+    if (f.body.value) refHint();
+
     if (!editId) f.addEventListener("input", () => writeDraft(collect()));
     f.addEventListener("submit", async (e) => {
       e.preventDefault();

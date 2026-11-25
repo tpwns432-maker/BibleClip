@@ -29,6 +29,8 @@ SORTS = ('activity', 'new', 'likes')
 #: 성경읽기 체크(docs/TELEGRAM_PLAN.md): 그날 읽은 범위에 대한 짧은 생각을 이 주제에 쓰면 그날 읽음.
 READING_TOPIC = ('성경읽기 체크', '그날 읽은 범위에 대한 짧은 생각 — 쓰면 그날 성경읽기 체크가 됩니다')
 SNIPPET = 160
+#: 글 · 댓글에 쓴 구절을 본문째 보여 줄 때의 한도(글 하나에 인용 몇 개, 인용 하나에 몇 절).
+QUOTE_MAX, QUOTE_VERSES = 10, 30
 
 #: 처음 만들어 두는 주제(사용자 결정 2026-11-24).
 SEED_TOPICS = (
@@ -181,7 +183,9 @@ def find_refs(text, parse):
                 book, short, _long, chapter, verses = hits[0]
                 vs = sorted(set(int(v) for v in verses))
                 start = m.start(1) + i
-                label = f'{short} {chapter}:{vs[0]}' + (f'-{vs[-1]}' if len(vs) > 1 else '')
+                span = (str(vs[0]) if len(vs) == 1 else f'{vs[0]}-{vs[-1]}'
+                        if vs[-1] - vs[0] == len(vs) - 1 else ','.join(map(str, vs)))
+                label = f'{short} {chapter}:{span}'
                 out.append({'s': _u16(text, start), 'e': _u16(text, m.end()), 'book': book,
                             'chapter': chapter, 'verses': vs, 'label': label})
                 break
@@ -248,6 +252,34 @@ class Community:
 
     def _refs(self, text):
         return find_refs(text, self._parse) if self._parse else []
+
+    def _quoted_refs(self, uid, text, chapters):
+        """_refs + 각 구절의 본문(quote = {version, verses, more}) — 읽는 사람의 역본으로.
+        같은 글에서 같은 구절을 또 쓰면 처음 것만, 글 하나에 QUOTE_MAX 개까지 인용한다.
+        chapters: (uid, 책, 장) → 본문 — 한 번 부를 동안 같은 장을 다시 읽지 않게."""
+        refs = self._refs(text)
+        if not self._verse_text:
+            return refs
+        done = set()
+        for r in refs:
+            key = (r['book'], r['chapter'], tuple(r['verses']))
+            if key in done or len(done) >= QUOTE_MAX:
+                continue
+            done.add(key)
+            ck = (uid, r['book'], r['chapter'])
+            if ck not in chapters:
+                try:
+                    chapters[ck] = self._verse_text(uid, {'book': r['book'], 'chapter': r['chapter'],
+                                                          'verse': 1, 'verse_end': 999})
+                except Exception:
+                    chapters[ck] = None
+            vt = chapters[ck]
+            want = set(r['verses'])
+            vs = [x for x in (vt or {}).get('verses', []) if x['n'] in want]
+            if vs:
+                r['quote'] = {'version': vt['version'], 'verses': vs[:QUOTE_VERSES],
+                              'more': len(vs) > QUOTE_VERSES}
+        return refs
 
     def _likes(self, kind, target, uid):
         users = [r['user'] for r in self._q(
@@ -397,7 +429,8 @@ class Community:
             names = {r['id']: r['name'] for r in self._q('SELECT id, name FROM topics')}
             out = self._post_summary(uid, p, names)
             out['body'] = '' if p['deleted'] else p['body']
-            out['refs'] = self._refs(out['body'])
+            chapters = {}
+            out['refs'] = self._quoted_refs(uid, out['body'], chapters)
             out['verse_text'] = None
             if out['verse'] and self._verse_text:
                 try:
@@ -411,7 +444,7 @@ class Community:
                 body = '' if c['deleted'] else c['body']
                 comments.append({
                     'id': c['id'], 'parent_id': c['parent_id'], 'author': self._who(c['author']),
-                    'body': body, 'refs': self._refs(body), 'created_at': c['created_at'],
+                    'body': body, 'refs': self._quoted_refs(uid, body, chapters), 'created_at': c['created_at'],
                     'edited_at': c['edited_at'], 'deleted': bool(c['deleted']),
                     'mine': c['author'] == uid,
                     'is_new': (c['author'] != uid and not c['deleted']
@@ -511,6 +544,10 @@ class Community:
             except Exception:
                 text = None
         return {'verse': v, 'verse_text': text}
+
+    def refs_preview(self, uid, a):
+        """글쓰기 화면: 쓰는 중인 글에서 알아본 구절(이름표만) — '구절 달기' 칸도 이것으로 읽는다."""
+        return {'refs': self._refs(_text(a.get('text'), BODY_MAX, 'text'))}
 
     def default_topic(self, uid=None):
         """'함께 쓰기'가 고를 주제: 이름이 '성경 묵상'인 주제, 없으면 첫 주제."""
@@ -614,7 +651,7 @@ class Community:
     #: 화면이 부를 수 있는 동작.
     ACTIONS = ('home', 'topics', 'topic_save', 'topic_delete', 'posts', 'post', 'post_save',
                'post_delete', 'comment_save', 'comment_delete', 'like', 'verse_posts',
-               'verse_preview', 'default_topic', 'reading_topic')
+               'verse_preview', 'refs_preview', 'default_topic', 'reading_topic')
 
     def call(self, uid, action, args):
         if action not in self.ACTIONS:
