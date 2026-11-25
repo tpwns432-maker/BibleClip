@@ -185,6 +185,7 @@ def parse_korean_strongs(text):
 ENGLISH_STRONG_TAG = re.compile(r'<S>(\d+)</S>')
 NT_FIRST_BOOK_NUM = 470
 _INLINE_MARKUP = re.compile(r'<[^>]+>')
+_NOTE_MARKUP = re.compile(r'<f>[^<]*</f>|<n>[^<]*</n>')
 
 
 def parse_english_strongs(text, book_num):
@@ -194,9 +195,12 @@ def parse_english_strongs(text, book_num):
     word, and the H/G prefix is derived from the testament (book_num >= 470 → G).
     """
     prefix = 'G' if (book_num or 0) >= NT_FIRST_BOOK_NUM else 'H'
+    # 각주 · 주석은 내용째 지운다(본문 표시 clean_text 와 같은 규칙) — 태그만 지우면 ESV+ 의
+    # <f>ⓑ</f> · <f>[2]</f>, KJV+ 의 <n>ungodly: or, wicked</n> 글자가 낱말에 남는다.
+    text = _NOTE_MARKUP.sub('', text or '')
     out = []
     last_end = 0
-    for m in ENGLISH_STRONG_TAG.finditer(text or ''):
+    for m in ENGLISH_STRONG_TAG.finditer(text):
         word = _INLINE_MARKUP.sub('', text[last_end:m.start()]).strip()
         if word:
             out.append((word, f"{prefix}{m.group(1)}"))
