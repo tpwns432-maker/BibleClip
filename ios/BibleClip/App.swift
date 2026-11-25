@@ -30,6 +30,7 @@ struct WebView: UIViewRepresentable {
         web.isInspectable = true  // 윈도우의 ios-webkit-debug-proxy 로 붙어 보기
         web.allowsBackForwardNavigationGestures = false
         web.scrollView.contentInsetAdjustmentBehavior = .never
+        web.scrollView.bouncesZoom = false
         web.navigationDelegate = context.coordinator
         web.isOpaque = false
         web.backgroundColor = .systemBackground
@@ -114,6 +115,14 @@ final class BundleSchemeHandler: NSObject, WKURLSchemeHandler {
     /// 휴대폰 스타일은 페이지 것 뒤에(이기게), bridge.js 는 첫 스크립트 앞에, mobile.js 는 마지막 뒤에.
     static func inject(_ html: String) -> String {
         var h = html
+        // 앱처럼: 손가락 벌리기 · 두 번 두드리기 확대, 입력칸 누를 때 자동 확대를 막는다
+        // (WKWebView 는 user-scalable=no 를 따른다). 글자 크기는 앱의 글자 크기 설정으로.
+        // 가로로 돌릴 때 사파리식 글자 키우기도 끈다.
+        if let r = h.range(of: #"<meta name="viewport"[^>]*>"#, options: .regularExpression) {
+            h.replaceSubrange(r, with: "<meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0, "
+                              + "maximum-scale=1.0, user-scalable=no\">")
+        }
+        h = insertBefore(h, "</head>", "<style>html{-webkit-text-size-adjust:100%;text-size-adjust:100%}</style>\n")
         h = insertBefore(h, "</head>", "<link rel=\"stylesheet\" href=\"../android/mobile.css\">\n")
         h = insertBefore(h, "<script", "<script src=\"../ios/bridge.js\"></script>\n")
         h = insertBefore(h, "</body>", "<script src=\"../android/mobile.js\"></script>\n")
