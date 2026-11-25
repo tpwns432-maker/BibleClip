@@ -107,6 +107,35 @@ def main():
     else:
         print("(개역한글S absent — skipping reverse Strong's search check)")
 
+    # 10-1) 개역개정S 원전 분해 소스: 저작권 자료라 저장소에 없으므로 같은 형식의 작은 DB 로 시험한다.
+    import shutil
+    import sqlite3
+    import tempfile
+    from bibleclip.data.original_lang import BethlehemDB
+    tmpdir = tempfile.mkdtemp(prefix='bc-nkrvs-')
+    sdb = os.path.join(tmpdir, '개역개정S.sdb')
+    con = sqlite3.connect(sdb)
+    con.execute('CREATE TABLE Bible (id INTEGER PRIMARY KEY, book INTEGER, chapter INTEGER, '
+                'verse INTEGER, btext VARCHAR)')
+    con.execute("INSERT INTO Bible (book, chapter, verse, btext) VALUES (43, 3, 16, '그<WG846> 를<WG1519>')")
+    con.commit()
+    con.close()
+    saved_nkrv, saved_krv = lib.bethlehem_strongs_nkrv, lib.bethlehem_strongs
+    try:
+        lib.bethlehem_strongs_nkrv = BethlehemDB(sdb)
+        john = dict(lib.interlinear(500, 3, Library.NKRV_STRONGS))
+        assert john[16] == [('그', 'G846'), ('를', 'G1519')], john
+        if saved_krv:   # 기본('')은 그대로 개역한글S
+            assert dict(lib.interlinear(500, 3))[16][0][0] == '하나님이'
+        lib.bethlehem_strongs = None   # 개역한글S 가 없으면 기본도 개역개정S 로
+        assert dict(lib.interlinear(500, 3))[16][0] == ('그', 'G846')
+        assert lib.search_strong('G846')[0]['text'] == '그 를'
+        lib.bethlehem_strongs_nkrv.conn.close()
+    finally:
+        lib.bethlehem_strongs_nkrv, lib.bethlehem_strongs = saved_nkrv, saved_krv
+        shutil.rmtree(tmpdir, ignore_errors=True)
+    print("개역개정S source: interlinear('개역개정S') uses it; default stays 개역한글S")
+
     # 11) business guard (Phase 1): user config defaults to permissive (premium),
     #     and the usage ping is fail-open (url=None → instant no-op, never raises).
     from bibleclip.userconfig import load_user_config, is_premium
@@ -341,6 +370,7 @@ def import_bibles_check():
     """v1.2.1 [성경 파일 추가…]: picked .SQLite3 files and the DBs inside zips are
     validated, copied into the data folder's bible_versions/ and loaded. Name
     clashes (case-insensitive), non-bibles and zip path tricks are refused."""
+    import shutil
     import shutil
     import sqlite3
     import tempfile
