@@ -284,6 +284,16 @@ window.Tour = (() => {
               "<b>A− / A+</b> change the text size." },
     },
     {
+      part: 2, target: "#add-study", side: "bottom", optional: true,
+      title: "영어공부",
+      body: "<b>＋ 영어공부</b> 카드는 영어 성경과 한국어 성경을 <b>짝지어 끊어 읽게</b> 해 줍니다.<br>" +
+            "<code>In the beginning / God / created</code> 밑에 <code>태초에 / 하나님이 / 창조하시니라</code> 처럼요. " +
+            "낱말을 누르면 원어 뜻도 볼 수 있어요.",
+      en: { title: "English Study",
+        body: "The <b>＋ English Study</b> card lines up an English Bible with a Korean one, <b>chunk by chunk</b>.<br>" +
+              "Click a word to see the original-language meaning." },
+    },
+    {
       part: 2, target: '.mcard[data-type="interlinear"]', side: "right", optional: true,
       title: "원어 공부",
       body: "원어 카드에는 단어마다 <b>H…</b>(히브리어) / <b>G…</b>(헬라어) 번호가 붙어 있어요(스트롱 번호).<br>" +
@@ -320,14 +330,96 @@ window.Tour = (() => {
     },
   ];
 
+  // ---- 버전별 새 기능 안내(업데이트한 사람에게 한 번) ----
+  // 업데이트 내역 창이 닫히면 자동으로 뜨고(이미 본 버전은 state.whatsNewSeen), 내역 창의
+  // [새 기능 둘러보기]로도 연다. 처음 쓰는 사람은 첫 실행 안내가 같은 내용을 보여 주므로 건너뛴다.
+  // prepare(): 그 단계를 그리기 전에 화면을 맞춘다(예: 영어공부 카드를 하나 열기).
+  const openStudyCard = () => {
+    // CardManager 는 cards.js 의 최상위 const(window 속성이 아님) — typeof 로 확인한다.
+    if (!document.querySelector('.mcard[data-type="study"]') && typeof CardManager !== "undefined") CardManager.addCard("study");
+  };
+  const WHATSNEW = {
+    "1.2.4": [
+      {
+        part: "new",
+        title: "새 기능: 영어공부 📖",
+        body: "영어 성경과 한국어 성경을 <b>짝지어 끊어 읽는</b> 카드가 생겼습니다.<br>" +
+              "<code>In the beginning / God / created / the heavens / and the earth.</code><br>" +
+              "<code>태초에 / 하나님이 / 창조하시니라 / 천 / 지를</code><br>" +
+              "1분이면 둘러볼 수 있어요. <b>[다음]</b>을 누르세요.",
+        en: { title: "New: English Study 📖",
+          body: "A new card lines up an English Bible with a Korean one, <b>chunk by chunk</b>.<br>" +
+                "Takes about a minute. Press <b>[Next]</b>." },
+      },
+      {
+        part: "new", target: "#add-study", side: "bottom", wait: "study",
+        title: "＋ 영어공부 버튼",
+        body: "위쪽에 빛나는 <b>＋ 영어공부</b>를 <b>직접 눌러 보세요</b>. 카드가 열립니다.<br>" +
+              "(그냥 [다음]을 눌러도 하나 열어 드려요.)",
+        done: "잘하셨어요! 영어공부 카드가 열렸습니다. <b>[다음]</b>을 누르세요.",
+        en: { title: "The ＋ English Study button",
+          body: "<b>Click the glowing ＋ English Study</b> at the top to open the card.<br>(Or just press [Next] and we'll open one.)",
+          done: "Well done! The English Study card is open. Press <b>[Next]</b>." },
+      },
+      {
+        part: "new", target: '.mcard[data-type="study"] .card-body', side: "right", prepare: openStudyCard, interact: true,
+        title: "짝지어 읽기",
+        body: "절마다 <b>위에 영어, 아래에 한국어</b>입니다. 같은 차례의 덩어리끼리 짝이에요.<br>" +
+              "덩어리에 마우스를 올리면 <b>짝이 함께 밝아집니다</b>.<br>" +
+              "한국어는 영어 어순을 따라 놓여서(직독직해) 영어 문장을 앞에서부터 이해하는 연습이 됩니다.",
+        en: { title: "Reading in pairs",
+          body: "Each verse shows <b>English on top, Korean below</b>; chunks in the same position belong together.<br>" +
+                "Rest the mouse on a chunk to <b>light up its partner</b>." },
+      },
+      {
+        part: "new", target: '.mcard[data-type="study"] .card-hd', side: "bottom", prepare: openStudyCard, interact: true,
+        title: "카드 위쪽 메뉴",
+        body: "<b>책 · 장</b>과 <b>‹ ›</b>로 이 카드만 따로 넘깁니다(성경 카드처럼 혼자 움직여요).<br>" +
+              "<b>영어 · 한국어 역본</b>: 영어는 BSB(현대 영어)가 기본이고 KJV+ 도 고를 수 있어요.<br>" +
+              "<b>단어 / 구절</b>: 잘게 끊기 / 쉼표 · 마침표에서 끊기<br>" +
+              "<b>미리보기</b>: 켜면 낱말에 마우스만 올려도 원어 뜻이 짧게 떠요.",
+        en: { title: "The card's top menu",
+          body: "<b>Book · chapter</b> and <b>‹ ›</b> move this card on its own.<br>" +
+                "<b>Versions</b>: English defaults to BSB (modern English); KJV+ is also available.<br>" +
+                "<b>Words / Phrases</b>: chunk size. <b>Preview</b>: hover to see the original word." },
+      },
+      {
+        part: "new", target: '.mcard[data-type="study"] .card-body', side: "right", prepare: openStudyCard, interact: true,
+        title: "원어까지 바로",
+        body: "영어 · 한국어 <b>낱말을 누르면</b> 사전 카드에 그 낱말의 <b>히브리어 · 헬라어</b> 뜻이 나옵니다.<br>" +
+              "영어로 읽다가 본래 뜻이 궁금할 때 바로 원전까지 갈 수 있어요. 지금 아무 낱말이나 눌러 보세요.",
+        en: { title: "Straight to the original",
+          body: "<b>Click any word</b> (English or Korean) to see its <b>Hebrew / Greek</b> entry in the Lexicon card." },
+      },
+      {
+        part: "new",
+        title: "단축키도 그대로",
+        body: "영어공부 카드를 한 번 누르면 성경 본문처럼 단축키가 이 카드에 작동합니다.<br>" +
+              "<kbd>←</kbd> <kbd>→</kbd> 장 넘기기 · {quick} 빠른 이동 · {present} 전체화면 발표",
+        en: { title: "Shortcuts work here too",
+          body: "Click the English Study card once and the usual shortcuts act on it:<br>" +
+                "<kbd>←</kbd> <kbd>→</kbd> chapters · {quick} quick jump · {present} full screen" },
+      },
+      {
+        part: "new", target: "#add-inter", side: "bottom",
+        title: "원전 분해에 BSB",
+        body: "<b>＋ 원어</b> 카드의 소스 메뉴에서 <b>BSB</b>를 고르면 현대 영어 낱말마다 원어 번호가 붙습니다.<br>" +
+              "다 보셨습니다! 🎉",
+        en: { title: "BSB in the interlinear card",
+          body: "In the <b>＋ Original</b> card's source menu, pick <b>BSB</b> to tag modern English words with Strong's numbers. " +
+                "That's it! 🎉" },
+      },
+    ],
+  };
+
   // 화면 언어(설정 ▸ 표시 언어)를 따라간다. 단계 문구는 en 이 있으면 영어, 없으면 한국어.
   const UI = {
-    ko: { skip: "건너뛰기", prev: "이전", next: "다음", done: "시작하기", part1: "기본 사용법", part2: "활용 기능",
+    ko: { skip: "건너뛰기", prev: "이전", next: "다음", done: "시작하기", part1: "기본 사용법", part2: "활용 기능", partnew: "새 기능",
           finish: "여기서 마치기", more: "활용 기능 보기 →", toPart2: "활용 기능부터 보기 →",
           copyFallback: "잘 안 되면 여기를 눌러 대신 복사하기", pastePh: "여기를 클릭하고 " + (I18N.IS_MAC ? "⌘ + V" : "Ctrl + V"),
           waitMonitor: "※ 먼저 앞 단계에서 <b>모니터링 시작</b>을 눌러야 해요. [이전]으로 돌아가 켜 주세요.",
           practice: "요 3:16" },
-    en: { skip: "Skip", prev: "Back", next: "Next", done: "Get started", part1: "Basics", part2: "Advanced features",
+    en: { skip: "Skip", prev: "Back", next: "Next", done: "Get started", part1: "Basics", part2: "Advanced features", partnew: "What's new",
           finish: "Finish here", more: "See advanced features →", toPart2: "Jump to advanced features →",
           copyFallback: "Not working? Click here to copy it for you", pastePh: "Click here, then " + (I18N.IS_MAC ? "⌘ + V" : "Ctrl + V"),
           waitMonitor: "※ <b>Start Monitoring</b> must be on first. Go [Back] and turn it on.",
@@ -397,7 +489,11 @@ window.Tour = (() => {
   function startWait(step) {
     stopWait();
     doneFlag = false;
-    if (step.wait === "monitor") {
+    if (step.wait === "study") {
+      const has = () => !!document.querySelector('.mcard[data-type="study"]');
+      if (has()) { doneFlag = true; return; }
+      poll = setInterval(() => { if (has()) markDone(); }, 250);
+    } else if (step.wait === "monitor") {
       if (state.monitoring) { doneFlag = true; return; }
       poll = setInterval(() => { if (state.monitoring) markDone(); }, 250);
     } else if (step.wait === "reference") {
@@ -450,7 +546,7 @@ window.Tour = (() => {
     const keepPaste = prevPaste ? prevPaste.value : "";
 
     tip.innerHTML =
-      `<div class="tour-count">${step.part === 1 ? u.part1 : u.part2} · ${pos} / ${partSteps.length}</div>` +
+      `<div class="tour-count">${step.part === 1 ? u.part1 : step.part === "new" ? u.partnew : u.part2} · ${pos} / ${partSteps.length}</div>` +
       `<div class="tour-title">${t.title}</div>` +
       `<div class="tour-body">${fill(t.body)}</div>` +
       practice + doneHtml +
@@ -460,7 +556,8 @@ window.Tour = (() => {
     if (pa && keepPaste) pa.value = keepPaste;
 
     // 직접 해 보기(모니터링 버튼 누르기) 단계는 강조된 버튼을 실제로 누를 수 있어야 한다.
-    back.style.pointerEvents = step.wait === "monitor" ? "none" : "";
+    // 영어공부 카드 단계(interact)도 카드를 직접 만져 볼 수 있게 막을 뚫는다.
+    back.style.pointerEvents = (step.wait === "monitor" || step.wait === "study" || step.interact) ? "none" : "";
 
     // 대상 없음 → 어둡게 깐 배경 + 가운데 말풍선. 대상 있음 → 구멍 뚫린 스포트라이트.
     // 대상이 화면을 거의 다 차지하면(성경 카드를 가득 채운 배치) 말풍선이 대상 위에 겹친다.
@@ -512,7 +609,14 @@ window.Tour = (() => {
   function show(n) {
     idx = n;
     startWait(active[idx]);
-    render();
+    const prep = active[idx].prepare;
+    if (prep) {
+      prep();
+      setTimeout(() => { if (els && active[idx] && active[idx].prepare === prep) render(); }, 350);
+      render();
+    } else {
+      render();
+    }
   }
 
   function go(d) {
@@ -540,15 +644,17 @@ window.Tour = (() => {
   }
   const onResize = () => { if (els) render(); };
 
-  function start() {
+  let mode = "tour";
+  function start(list) {
     if (els) return;
+    mode = Array.isArray(list) ? "new" : "tour";
     // 투어는 성경 보기 화면 기준으로 설명한다.
     const viewer = document.getElementById("nav-viewer");
     if (viewer && !viewer.classList.contains("on")) viewer.click();
     if (typeof closeMenus === "function") closeMenus();
     // 카드를 닫는 등 hover 대상이 사라지면 앱 말풍선이 남아 투어 위에 겹친다.
     if (typeof hideTooltip === "function") hideTooltip();
-    active = STEPS.filter((s) => !s.optional || rectOf(s.target));
+    active = (Array.isArray(list) ? list : STEPS).filter((s) => !s.optional || rectOf(s.target));
     els = build();
     // capture 단계에서 키를 먼저 잡아 카드의 ←/→ 장 넘김과 겹치지 않게 한다.
     window.addEventListener("keydown", onKey, true);
@@ -563,18 +669,33 @@ window.Tour = (() => {
     els = null;
     window.removeEventListener("keydown", onKey, true);
     window.removeEventListener("resize", onResize);
-    if (!state.tourDone) {
+    if (mode === "tour" && !state.tourDone) {
       state.tourDone = true;
       try { api().set_app_setting("tour_done", true); } catch (_) {}
     }
+    // 첫 실행 안내도 지금 버전의 새 기능을 이미 담고 있으므로 둘 다 '봤음'.
+    const v = state.appVersion;
+    if (v && state.whatsNewSeen !== v) {
+      state.whatsNewSeen = v;
+      try { api().set_app_setting("whatsnew_seen", v); } catch (_) {}
+    }
+  }
+  const hasWhatsNew = (v) => !!WHATSNEW[v || state.appVersion];
+  function startWhatsNew(v) {
+    const list = WHATSNEW[v || state.appVersion];
+    if (list) start(list);
   }
 
   // 첫 실행이면 자동 시작. 업데이트 안내 창(patch notes)이 떠 있으면 닫힐 때까지 기다린다.
   function maybeAutoStart() {
-    if (state.tourDone) return;
+    let go;
+    if (!state.tourDone) go = () => start();
+    else if (hasWhatsNew() && state.whatsNewSeen !== state.appVersion) go = () => startWhatsNew();
+    else return;
     const wait = () => {
+      if (els) return;                                   // 내역 창의 [새 기능 둘러보기]로 이미 시작함
       if (document.querySelector(".note-modal-back")) setTimeout(wait, 500);
-      else start();
+      else go();
     };
     setTimeout(wait, 600);
   }
@@ -584,5 +705,5 @@ window.Tour = (() => {
     if (btn) btn.addEventListener("click", start);
   }
 
-  return { start, finish, maybeAutoStart, wire };
+  return { start, finish, maybeAutoStart, wire, startWhatsNew, hasWhatsNew };
 })();

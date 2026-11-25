@@ -92,6 +92,8 @@ class SystemRoutes:
             'web_cards_layout': s.get('web_cards_layout'),
             # v1.2.1 첫 실행 안내(tour.js) — False 면 부팅 시 자동 시작.
             'tour_done': bool(s.get('tour_done')),
+            # v1.2.4 새 기능 안내를 본 버전 — 지금 버전과 다르고 안내가 있으면 업데이트 뒤 한 번 뜬다.
+            'whatsnew_seen': str(s.get('whatsnew_seen') or ''),
             # 설교 장바구니 — restored on boot (FEAT-08). Backend-persisted so it
             # survives the random loopback port that orphaned localStorage.
             'cart': self.lib.cart.all(),
@@ -317,6 +319,7 @@ class SystemRoutes:
         # no server-side validation. None clears it back to the default.
         'web_cards_layout': 'any',
         'tour_done': None,       # v1.2.1 첫 실행 안내를 끝까지 보거나 건너뛰면 True
+        'whatsnew_seen': 'any',  # v1.2.4 새 기능 안내를 본 버전 문자열
         'theme': _THEMES,        # 색 테마 — 저장하면 dark_mode 도 바탕에 맞춘다
         'custom_theme': 'theme_colors',
     }

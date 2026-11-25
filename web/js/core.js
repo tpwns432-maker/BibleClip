@@ -389,6 +389,8 @@ window.BC = window.BC || {};
     state.viewMode = init.view_mode === "split" ? "split" : "interleave";
     state.subtitlePreset = init.subtitle_preset || "green";
     state.tourDone = !!init.tour_done;
+    state.whatsNewSeen = init.whatsnew_seen || "";   // 새 기능 안내를 본 버전(tour.js)
+    state.appVersion = init.version || "";
     const verLabel = $("app-ver");
     if (verLabel && init.version) verLabel.textContent = "v" + init.version;
 
