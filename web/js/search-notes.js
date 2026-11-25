@@ -2359,7 +2359,7 @@
       if (e.target.closest("input, textarea")) return;
       if ($("viewer-view").hidden) return;
       if (!state.isPremium) return;  // free tier: chapter shortcut locked (Phase 1)
-      if (!CardManager.primaryBible()) return;
+      if (!CardManager.primaryBible() && !CardManager.activeStudyCard()) return;
       if (e.key === "ArrowLeft") { e.preventDefault(); CardManager.chapStepActive(-1); }
       else if (e.key === "ArrowRight") { e.preventDefault(); CardManager.chapStepActive(1); }
     });

@@ -821,6 +821,24 @@
                                          card.mode || "word");
       const b2 = bodyEl(card.id);
       if (b2) { renderStudyInto(b2, data); b2.scrollTop = 0; }
+      updatePresentBanner(card);   // F11 틀고정 헤더 — 장 이동 시 위치 동기화
+    }
+    // F2 빠른 이동이 영어공부 카드로: 그 장을 띄우고 절로 스크롤 · 잠깐 표시.
+    async function goToStudy(card, book, chapter, verses) {
+      card.book = book;
+      const chs = await chaptersFor(state.viewer[0] || state.primary, book);
+      card.chapter = chs.includes(chapter) ? chapter : (chs[0] || chapter);
+      await loadStudyCard(card);
+      saveLayout();
+      const n = verses && verses.length ? verses[0] : null;
+      const body = bodyEl(card.id);
+      if (!n || !body) return;
+      requestAnimationFrame(() => {
+        scrollElToVerse(body, n, false, 0.15);
+        (verses || []).forEach((v) => body.querySelectorAll(`.v[data-v="${v}"]`).forEach((el) => {
+          el.classList.add("copied"); setTimeout(() => el.classList.remove("copied"), 900);
+        }));
+      });
     }
 
     function loadLexiconCard(card) {
@@ -1072,7 +1090,7 @@
     }
     // Keyboard ←/→ targets the ACTIVE card (falls back to the primary card).
     function chapStepActive(delta) {
-      const card = activeBibleCard();
+      const card = activeStudyCard() || activeBibleCard();
       if (card) cardChapStep(card, delta);
     }
     function linkedBibleFor(id) {
@@ -1109,11 +1127,15 @@
 
     // F2 단축 입력이 "지금 보고 있는 곳"을 묻는 창구 → {book, chapter} 또는 null.
     function jumpContext() {
-      const c = jumpTarget();
+      const c = activeStudyCard() || jumpTarget();
       return c ? { book: c.book, chapter: c.chapter } : null;
     }
 
     async function goToRef(book, chapter, verses) {
+      // 선택된 카드가 영어공부 카드면 그 카드가 받는다(본문처럼). 발표 중인 성경 카드는 예외.
+      const st = activeStudyCard();
+      const fsBible = fsCardId && document.fullscreenElement && fsCardId !== (st && st.id);
+      if (st && !fsBible) return goToStudy(st, book, chapter, verses);
       const fsCard = (fsCardId && document.fullscreenElement)
         ? bibleCards().find((c) => c.id === fsCardId) : null;
       const target = jumpTarget(book, chapter);
@@ -1291,6 +1313,19 @@
       const c = activeId && cardById(activeId);
       return (c && c.type === "bible") ? c : primaryBible();
     }
+    // 선택된(마지막으로 누른) 카드가 영어공부 카드면 그 카드 — 단축키(←/→ · F2 · F11)가 본문처럼 작동.
+    // 영어공부 카드 본문에서 지금 맨 위에 보이는 절 번호(전체화면 들고 날 때 읽던 자리 유지).
+    function studyTopVerse(card) {
+      const body = bodyEl(card.id);
+      if (!body) return null;
+      const top = body.getBoundingClientRect().top;
+      const v = [...body.querySelectorAll(".v[data-v]")].find((el) => el.getBoundingClientRect().bottom > top + 4);
+      return v ? Number(v.dataset.v) : null;
+    }
+    function activeStudyCard() {
+      const c = activeId && cardById(activeId);
+      return (c && c.type === "study") ? c : null;
+    }
 
     // ---- F11 presentation: fullscreen the active bible card (성구만 가득) ----
     // F11 "틀고정" 헤더: 현재 위치를 "{book_full} {chap}장"(예: "창세기 3장")으로 상단에
@@ -1319,11 +1354,12 @@
     }
     function presentToggle() {
       if (document.fullscreenElement) { document.exitFullscreen().catch(() => {}); return; }
-      const card = activeBibleCard();
+      const card = activeStudyCard() || activeBibleCard();
       if (!card) return;
       const el = sectionEl(card.id);
       if (!el || !el.requestFullscreen) return;
       fsCardId = card.id;
+      if (card.type === "study") card.fsVerse = studyTopVerse(card);
       // 전체화면 진입 시 글자가 커지며 본문이 reflow → px 기준 스크롤이 다른(앞쪽) 절에
       // 떨어진다(예: 26절 보다가 3절로 튐). 진입 전 읽던 절 앵커를 캡처해 전환(reflow)
       // 후 같은 절로 복원(폰트/역본 변경과 동일 BUG-01 패턴).
@@ -1342,6 +1378,13 @@
         updatePresentBanner(card);   // 틀고정 위치 헤더
         // 전체화면 reflow가 끝난 뒤(realignAnchors 내부 rAF + 한 프레임 더 대기) 복원.
         requestAnimationFrame(() => realignAnchors(anchors));
+        if (card.type === "study" && card.fsVerse) {
+          // 창이 OS 전체화면으로 커지는 것은 조금 뒤에 끝난다 — 자리를 잡을 때까지 몇 번 맞춘다.
+          const n = card.fsVerse;
+          [0, 150, 400, 800].forEach((ms) => setTimeout(() => {
+            if (document.fullscreenElement === sectionEl(card.id)) scrollElToVerse(bodyEl(card.id), n, true, 0);
+          }, ms));
+        }
       }).catch(() => {
         fsCardId = null;
         // 카드 전체화면에 실패했으면 창만 전체화면으로 남는 어정쩡한 상태가 되므로 되돌린다.
@@ -1360,6 +1403,12 @@
         const exitedId = fsCardId;
         fsCardId = null;
         const card = exitedId && cardById(exitedId);
+        if (card && card.type === "study" && card.fsVerse) {
+          const n = card.fsVerse;
+          [0, 150, 400, 800].forEach((ms) => setTimeout(() => {
+            if (!document.fullscreenElement) scrollElToVerse(bodyEl(card.id), n, true, 0);
+          }, ms));
+        }
         if (card && card.type === "bible" && card.verse) {
           requestAnimationFrame(() => requestAnimationFrame(() => {
             scriptureScrollers(card).forEach((el) => scrollElToVerse(el, card.verse, true, 0));
@@ -2120,7 +2169,7 @@
 
     return { init, addCard, addCardWithLink, goToRef, primaryVersion, cardFor: cardById,
              primaryBible, bibleCards, lexiconCards, bodyEl, linkedBibleFor,
-             chapStepPrimary, chapStepActive, reloadAllBible, relabel,
+             chapStepPrimary, chapStepActive, activeStudyCard, reloadAllBible, relabel,
              presentToggle, ensureInterlinearFor, decorateNotesFor: decorateNotes,
              snapshotAnchors, realignAnchors, jumpContext };
   })();
@@ -2317,6 +2366,15 @@
     // 짝 밝히기(한 번만 건다 — 본문은 다시 그려도 body 는 그대로).
     if (!body._studyHover) {
       body._studyHover = true;
+      // 전체화면(F11)에서 스크롤하면 읽던 절을 기억 — 나올 때 그 절로 돌아간다.
+      body.addEventListener("scroll", () => {
+        const sec = body.closest(".mcard");
+        if (!sec || document.fullscreenElement !== sec) return;
+        const card = CardManager.cardFor(sec.dataset.id);
+        const top = body.getBoundingClientRect().top;
+        const v = [...body.querySelectorAll(".v[data-v]")].find((el) => el.getBoundingClientRect().bottom > top + 4);
+        if (card && v) card.fsVerse = Number(v.dataset.v);
+      }, { passive: true });
       const mark = (e, on) => {
         const pk = e.target.closest && e.target.closest(".pk");
         if (!pk) return;
