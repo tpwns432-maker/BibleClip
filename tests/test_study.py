@@ -71,6 +71,12 @@ def unit():
     assert ends_clause('Son,') and ends_clause('light,”') and not ends_clause('Son')
     # 빈 입력.
     assert align_verse([], '가', []) == []
+    # 각주 · 주석은 내용째 빠진다(ESV+ <f>ⓑ</f> · <f>[2]</f>, KJV+ <n>…</n>).
+    from bibleclip.data.original_lang import parse_english_strongs
+    raw = ('The earth<S>776</S> was<S>1961</S><f>ⓑ</f> without form<S>8414</S> and<f>[2]</f> void<S>922</S>.'
+           '<n>void: or, empty</n>')
+    assert parse_english_strongs(raw, 10) == [('The earth', 'H776'), ('was', 'H1961'), ('without form', 'H8414'),
+                                              ('and void', 'H922'), ('.', None)], parse_english_strongs(raw, 10)
     print('unit: ok')
 
 
