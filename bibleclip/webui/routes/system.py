@@ -75,6 +75,8 @@ class SystemRoutes:
             # 언어에 맞춰 기본을 고르고(영어→KJV+), 사용자가 자유롭게 바꿀 수 있다.
             'interlin_sources': self._interlin_sources(),
             'study_sources': self.lib.study_sources(),   # 영한 끊어 읽기 {en, ko}
+            # 영어공부 영한 뜻풀이(original_lang/enko_dict.sqlite)가 있으면 사전 카드에 '성경 속 번역 · 일반 뜻'
+            'enko': bool(getattr(self.lib, 'enko', None) is not None and self.lib.enko.available),
             # Business guard (Phase 1): premium unlocks multi-card, the chapter
             # shortcut, and notes/badge. Default True until a licensing backend
             # writes userdata/config.json with {"is_premium": false}.

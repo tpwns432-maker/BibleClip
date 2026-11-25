@@ -369,6 +369,7 @@ window.BC = window.BC || {};
     state.primaryBooks = init.books || [];
     state.lexSources = init.interlin_sources || [];  // 원전 분해 소스 후보(개역한글S + KJV+ 등)
     state.studySources = init.study_sources || { en: [], ko: [] };
+    state.enko = !!init.enko;   // 영한 뜻풀이 자료가 있음(영어공부 카드 → 사전 카드)
     // Restore persisted UI prefs (shared with the desktop app).
     state.customTheme = init.custom_theme ? Theme.cleanCustom(init.custom_theme) : null;
     state.theme = Theme.fromSettings(init.theme, init.dark_mode);

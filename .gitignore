@@ -53,6 +53,7 @@ bible_versions/*
 original_lang/*
 !original_lang/개역한글S.sdb
 !original_lang/HebGrkEn.dct
+!original_lang/enko_dict.sqlite
 
 # 사용자 읽기 글꼴 폴더 — 사용자가 넣는 .ttf/.otf 는 추적하지 않고 안내만 동봉
 fonts/*

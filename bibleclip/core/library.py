@@ -110,6 +110,7 @@ class Library:
         self.bethlehem_wonjun = None   # 원전분해 — kept for potential future use
         self.lexicon_ko = None
         self.lexicon_en = None
+        self.enko = None   # 영한 뜻풀이(영어공부 카드) — original_lang/enko_dict.sqlite (core/enko.py)
         self.settings = dict(self.DEFAULT_SETTINGS)
         self._monitor = None
 
@@ -140,6 +141,7 @@ class Library:
             self.bethlehem_wonjun = engine.bethlehem_wonjun
             self.lexicon_ko = engine.lexicon_ko
             self.lexicon_en = engine.lexicon_en
+            self.enko = engine.enko
         else:
             self.load_databases()
             self.load_bethlehem()
@@ -210,6 +212,13 @@ class Library:
                     setattr(self, attr, Lexicon(p))
                 except Exception as e:
                     print(f"{fname} load error: {e}")
+        enko_path = find_original_lang_file('enko_dict.sqlite')
+        if enko_path:
+            try:
+                from bibleclip.core.enko import EnKoDict
+                self.enko = EnKoDict(enko_path)
+            except Exception as e:
+                print(f"enko_dict load error: {e}")
 
     def bethlehem_ready(self):
         return bool((self.bethlehem_strongs or self.bethlehem_strongs_nkrv)
@@ -613,6 +622,13 @@ class Library:
     def search(self, version, keyword):
         db = self.dbs.get(version)
         return db.search(keyword) if db else []
+
+    def lookup_english(self, phrase):
+        """영어공부 카드에서 누른 영어 구절의 영한 뜻풀이 — {'query', 'word', 'bible': [[한국어, 횟수]…],
+        'general': [한국어…], 'source'} 또는 None(자료가 없거나 못 찾음). core/enko.py."""
+        if self.enko is None or not self.enko.available:
+            return None
+        return self.enko.lookup(phrase)
 
     def lookup_strong(self, code, lang='ko'):
         """Raw lexicon entry (pseudo-HTML markup) for a Strong's code, or None.

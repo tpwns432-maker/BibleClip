@@ -21,7 +21,7 @@ ALLOWED = frozenset({
     'get_initial', 'get_locale', 'list_fonts', 'get_font',
     # 성경 본문 · 참조 · 검색 · 원어
     'get_books', 'get_chapters', 'get_chapter', 'get_interlinear', 'get_study', 'resolve_reference',
-    'search', 'search_strong', 'lookup_strong', 'hover_summary', 'open_dict_window',
+    'search', 'search_strong', 'lookup_strong', 'lookup_english', 'hover_summary', 'open_dict_window',
     # 설정
     'get_settings', 'set_setting', 'get_preview', 'set_output_order',
     'get_app_settings', 'set_app_setting', 'reset_settings',

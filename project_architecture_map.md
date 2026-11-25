@@ -179,6 +179,11 @@ BibleClip Project/
 - 🔑 한국어는 **Strong 조각 단위**(`korean_units`: 조각을 본문 글자 위치에 얹고, 덮이지 않은 글자도 번호 없는 조각) — 어절 단위로 묶으면 `공허하며`(공허 H922 + 하며 H1961) 가 통째로 was 에 붙었다(창 1:2). 같은 번호 짝: 개수 같으면 차례대로(기준점), 다르면 `_match`(DP) 로 — 기대 위치 = 가장 가까운 기준점 이웃의 한국어 자리 −0.6(한국어는 목적어·꾸밈말이 앞, 창 1:7 궁창). S 조각이 본문과 판이 달라 안 맞으면 두 글자까지 앞부분만 맞춤(나뉘게↔나뉘라). 짝 없는 맨 명사(`_ENDINGS` 로 안 끝남)는 다음 덩어리. **전수조사 규칙(#37)**: 어절 전체가 짝 없으면 ① 대명사 주어·목적어 `_pron_class` → 같은 인칭·격 영어 대명사 덩어리(뒤 우선, 앞 +10) ② `_pron_stem` 대명사·지시어 → 다음 ③ `_VERB_END`(되매늘까즉) → 앞. `korean_units` 는 오탈자 근사(같은 길이 ¼)·뒷부분 맞춤·놓친 만큼 탐색 창(slack). 짝 찾기 키는 `FOLD_LEX`(이형 번호 22쌍). 같은 어절 판정은 앞 `we`·뒤 `w`. 오류율 11.0→6.0%(`_local/bsb/audit/REPORT.md`). `FUNC`(관사·전치사) 는 짝 없음 → 다음 덩어리. 짝 없는 조각은 같은 어절 조각 쪽(앞 우선), 어절 전체가 없으면 `CONJ_NEXT`(접속어·관형사)면 다음·아니면 앞. `fine=False` = 문장부호(`ends_clause`)에서만 끊고 한 어절은 한 덩어리. KJV+ 식 앞 문장부호(`', that'`)는 앞 구절로
 - 성경 전체 BSB↔개역개정S: 한국어 빈 덩어리 0.01%(19/312,196), 장당 ~5ms
 
+### core/enko.py — 영한 뜻풀이 (영어공부 카드 → 사전 카드, v1.2.5 예정)
+- `EnKoDict(path).lookup(phrase)` → `{query, word, bible: [[한국어, 횟수]…], general: [한국어…], source}` | None. 파일 = `original_lang/enko_dict.sqlite`(`tools/make_enko.py` 가 생성, git 추적 · 릴리스 4경로 동봉): 표 `bible`(성경 영한 낱말장 — BSB ↔ 개역한글S 를 Strong 번호로 짝지어 성경 전체에서 센 것, CC0/PD 재료) · `general`(kengdic 한→영을 영→한으로 뒤집음, **MPL 2.0** — info 표에 출처) · `info`.
+- `lemmas(word)` 원형 후보 차례: 불규칙(was→be) → 복수(heavens→heaven) → 그대로 → 과거(cried→cry; wicked 는 안 깎임) → -ing/-er 등(offering·blessing 은 그대로 먼저). 깎은 원형은 3글자 이상. `content_words` = 작은 낱말 빼고 뒤에서부터(머리말).
+- 빌더 한국어 정리: 마지막 어절 · 조사 떼기(`KEEP` 아들·여호와 등은 그대로) · '…하사/하시고' → '…하다' · 잡음(`GENERIC` 자·그·중…) 거름 · be/have/do 는 낱말장 없음(`NO_BIBLE`).
+
 ### core/installer.py — 업뎃 zip 다운/추출 + 업데이터 스크립트 (순수/테스트가능)
 - `download_file(url, dest, on_progress=None, timeout=30)` / `stage_payload(zip_path, extract_dir, payload_name)` / `write_windows_bat(bat_path, src_dir, install_dir, exe_name)` / `write_mac_sh(sh_path, src_dir, app_dst, pid, data_names=())`
 - 의존: `urllib.request`, `zipfile`, `update.urlopen_resilient`
@@ -288,6 +293,7 @@ BibleClip Project/
 | `get_chapters` | `(version, book)` | 책의 장 목록 |
 | `get_chapter` | `(version, book, chapter)` | {ref, verses:[{n,text}]} |
 | `get_interlinear` | `(book, chapter, version=None)` | [{n, words:[{w, code}]}] 원전분해 |
+| `lookup_english` | `(phrase)` | 영한 뜻풀이 {query, word, bible, general, source} | None (`Library.lookup_english` → core/enko.py). 웹판 허용 목록에도 있음 |
 | `get_study` | `(book, chapter, en=None, ko=None, mode='word')` | [{n, pairs:[[영어, 한국어]]}] 영한 끊어 읽기(`mode='phrase'` = 문장부호 단위). 웹판 허용 목록에도 있음 |
 | `resolve_reference` | `(text)` | "창 1:1" → {book_num,short,long,chapter,verses}|None |
 | `get_aliases` | `()` | [{alias, book_num, book_name}] 사용자 약칭 |
@@ -386,7 +392,7 @@ BibleClip Project/
 - `state` 객체(versions/viewer/primary/monitoring/fontSize/lexSources/isPremium…), `window.pywebview.api` 브리지
 
 ### cards.js (~1765줄) — ★ CardManager (자유배치 카드 워크스페이스, IIFE)
-- **카드 타입**: `"bible"`/`"interlinear"`/`"lexicon"`/**`"study"`**(영어공부 — **단독 본문 카드**: 자기 `card.book`·`card.chapter`·`card.tip`(낱말 미리보기, 기본 꺼짐 — 헤더 `study-tip` 단추)(연결 없음, 책·장 pill·‹ › 는 성경 카드 handleAction/cardChapStep 을 같이 씀) + `card.en`·`card.ko`·`card.mode`('word'|'phrase'), 헤더 pill `study-en`/`study-ko`/`study-mode`, `loadStudyCard`/`updateStudyHeader` → `api.get_study`, `renderStudyInto`(바깥 스코프): 덩어리 `.pk[data-i]`(짝 hover) 안에 낱말 `.sw[data-code][data-v]` — 누르면 `handleCodeClick`(study 분기: 자기 책·장, 사전 카드 전부/없으면 생성) → 원어 사전, 올리면 `scheduleTip` 미리보기. **단축키**: 선택된 카드(`activeStudyCard()` = activeId 가 study)면 ←/→ `chapStepActive`·F2 `goToRef`→`goToStudy`(그 카드로 장 이동 + 절 스크롤·표시, `jumpContext` 도 그 카드)·F11 `presentToggle`(그 카드 전체화면, 읽던 절 `card.fsVerse` 를 들고 날 때 복원 — OS 창 커짐이 늦어 0/150/400/800ms 재정렬). 추가 버튼 `#add-study`('＋ 영어공부'), 폰/안드로이드에선 숨김·restore 에서 버림. public `cardFor`=cardById) (※ v1.1.0에서 `"notes"` 카드 타입 **폐기** → 슬라이딩 레일 패널로 전환, search-notes.js로 이동)
+- **카드 타입**: `"bible"`/`"interlinear"`/`"lexicon"`/**`"study"`**(영어공부 — **단독 본문 카드**: 자기 `card.book`·`card.chapter`·`card.tip`(낱말 미리보기, 기본 꺼짐 — 헤더 `study-tip` 단추)(연결 없음, 책·장 pill·‹ › 는 성경 카드 handleAction/cardChapStep 을 같이 씀) + `card.en`·`card.ko`·`card.mode`('word'|'phrase'), 헤더 pill `study-en`/`study-ko`/`study-mode`, `loadStudyCard`/`updateStudyHeader` → `api.get_study`, `renderStudyInto`(바깥 스코프): 덩어리 `.pk[data-i]`(짝 hover) 안에 낱말 `.sw[data-code][data-v]` — 누르면 `handleCodeClick`(study 분기: 자기 책·장, 사전 카드 전부/없으면 생성) → 원어 사전, 올리면 `scheduleTip` 미리보기. **단축키**: 선택된 카드(`activeStudyCard()` = activeId 가 study)면 ←/→ `chapStepActive`·F2 `goToRef`→`goToStudy`(그 카드로 장 이동 + 절 스크롤·표시, `jumpContext` 도 그 카드)·F11 `presentToggle`(그 카드 전체화면, 읽던 절 `card.fsVerse` 를 들고 날 때 복원 — OS 창 커짐이 늦어 0/150/400/800ms 재정렬). 추가 버튼 `#add-study`('＋ 영어공부'), 폰/안드로이드에선 숨김·restore 에서 버림. public `cardFor`=cardById). 영어 낱말은 `.sw[data-en]`(번호 없어도 누름) → `handleCodeClick` → `showStrong(code, …, en)` → `fillLexCard`: 사전 카드 맨 위에 `enkoHTML`(① 성경 속 번역 ② 일반 뜻 + kengdic 출처, `state.enko` = get_initial.enko) 다음 원어 사전. `loadLexiconCard` 도 `fillLexCard` 로(언어 바꿔도 영한 뜻풀이 유지) (※ v1.1.0에서 `"notes"` 카드 타입 **폐기** → 슬라이딩 레일 패널로 전환, search-notes.js로 이동)
 - **모듈 상태**: `cards[]`, `activeId`, `fsCardId`(F11 전체화면), `zTop`, `cascadeN`, `interacting`, `progScroll`(싱크가드)
 - **FEAT-04 대조(parallel) 필드**: `card.parallel`(bool), `card.parallelVersion`(str) — 카드별 대조 토글, 역본 쌍 고정
 - CRUD: `init(layout)`/`addCard(type)`/`addCardWithLink(type, linkId)`/`removeCard(id)`/`mountCard`/`unmountCard`/`renderAll()`/`serialize()`/`restore(layout)`
