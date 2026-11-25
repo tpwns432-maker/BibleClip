@@ -149,18 +149,38 @@
   // 맨 아래 메뉴가 주소창에 가려진다. 사파리는 position:fixed 의 bottom:0 을 주소창 위에 두므로,
   // 보이지 않는 fixed 막대(top:0 ~ bottom:0)의 높이를 재서 --bc-vh 로 쓴다(web.css 의 .app).
   // PC · 안드로이드에선 이 값이 창 높이와 같아 달라지는 것이 없다.
+  // 아이폰 사파리 26+ 의 폰 화면에선 주소창 아래 빈 띠가 생겨 메뉴가 붕 떠 보이므로, 메뉴 바탕을
+  // 주소창 뒤(화면 바닥)까지 늘린다(--bc-under = 100vh − 보이는 높이). 단추는 주소창 위에 그대로.
   (function fitHeight() {
-    const probe = document.createElement("div");
-    probe.setAttribute("aria-hidden", "true");
-    probe.style.cssText = "position:fixed;top:0;bottom:0;left:0;width:0;visibility:hidden;pointer-events:none";
-    let last = 0;
+    const root = document.documentElement;
+    const m = /Version\/(\d+)[\d.]* Mobile\/\S+ Safari\//.exec(navigator.userAgent);
+    const IOS_FLOAT = PHONE && !!m && +m[1] >= 26 && /iPhone|iPod/.test(navigator.userAgent);
+    if (IOS_FLOAT) root.classList.add("ios-float");
+    function mk(css) {
+      const d = document.createElement("div");
+      d.setAttribute("aria-hidden", "true");
+      d.style.cssText = css + ";left:0;width:0;visibility:hidden;pointer-events:none";
+      return d;
+    }
+    const probe = mk("position:fixed;top:0;bottom:0");
+    const full = mk("position:absolute;top:0;height:100vh");
+    let last = "";
     function measure() {
-      if (!probe.isConnected) (document.body || document.documentElement).appendChild(probe);
+      const host = document.body || root;
+      if (!probe.isConnected) host.appendChild(probe);
+      if (IOS_FLOAT && !full.isConnected) host.appendChild(full);
       const h = Math.round(probe.getBoundingClientRect().height);
-      if (h > 100 && h !== last) {
-        last = h;
-        document.documentElement.style.setProperty("--bc-vh", h + "px");
+      if (h <= 100) return;
+      let under = 0;
+      if (IOS_FLOAT) {
+        under = Math.round(full.getBoundingClientRect().height) - h;
+        if (under < 0 || under > 200) under = 0;     // 이상한 값이면 늘리지 않는다
       }
+      const key = h + "/" + under;
+      if (key === last) return;
+      last = key;
+      root.style.setProperty("--bc-vh", h + "px");
+      root.style.setProperty("--bc-under", under + "px");
     }
     let raf = 0;
     function later() { cancelAnimationFrame(raf); raf = requestAnimationFrame(measure); }
