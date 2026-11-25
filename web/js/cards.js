@@ -62,6 +62,7 @@
           // 영어공부: 성경 카드처럼 단독(자기 책 · 장) — 다른 카드에 연결하지 않는다.
           o.book = c.book; o.chapter = c.chapter;
           o.en = c.en || null; o.ko = c.ko || null; o.mode = c.mode || "word";
+          o.tip = !!c.tip;
         } else {
           o.link = c.link || null;
           if (c.type === "interlinear" && typeof c.source === "string") o.source = c.source;
@@ -134,6 +135,7 @@
             en: typeof raw.en === "string" ? raw.en : undefined,
             ko: typeof raw.ko === "string" ? raw.ko : undefined,
             mode: raw.mode === "phrase" ? "phrase" : "word",
+            tip: raw.tip === true,          // 낱말 미리보기 — 기본 꺼짐
             x: raw.x, y: raw.y, w: raw.w, h: raw.h, z: raw.z,
           });
         } else if (!IS_ANDROID && (raw.type === "interlinear" || raw.type === "lexicon")) {
@@ -320,6 +322,7 @@
             `<span class="hd-pill dropdown" data-act="study-en" data-tip="영어 역본" data-i18n-tip="card.tip.studyEn">${esc(studyLabel("en", card.en))}</span>` +
             `<span class="hd-pill dropdown" data-act="study-ko" data-tip="한국어 역본" data-i18n-tip="card.tip.studyKo">${esc(studyLabel("ko", card.ko))}</span>` +
             `<span class="hd-pill dropdown" data-act="study-mode" data-tip="끊는 단위" data-i18n-tip="card.tip.studyMode">${esc(studyModeLabel(card.mode))}</span>` +
+            `<span class="hd-pill study-tip${card.tip ? " on" : ""}" data-act="study-tip" data-tip="낱말에 마우스를 올리면 원어 미리보기" data-i18n-tip="card.tip.studyTip">${esc(studyTipLabel(card.tip))}</span>` +
           `</span>` +
           `<span class="card-hd-spacer"></span>` +
           `<span class="card-x" data-act="close" data-tip="카드 닫기" data-i18n-tip="card.tip.close">✕</span>` +
@@ -785,6 +788,9 @@
       const hit = list.find((x) => x.name === name) || list[0];
       return hit ? hit.display : "—";
     }
+    function studyTipLabel(on) {
+      return I18N.t(on ? "card.studyTipOn" : "card.studyTipOff");
+    }
     function studyModeLabel(mode) {
       return I18N.t(mode === "phrase" ? "card.studyPhrase" : "card.studyWord");
     }
@@ -798,6 +804,8 @@
       const pe = s.querySelector('[data-act="study-en"]'); if (pe) pe.textContent = studyLabel("en", card.en);
       const pk = s.querySelector('[data-act="study-ko"]'); if (pk) pk.textContent = studyLabel("ko", card.ko);
       const pm = s.querySelector('[data-act="study-mode"]'); if (pm) pm.textContent = studyModeLabel(card.mode);
+      const pt = s.querySelector('[data-act="study-tip"]');
+      if (pt) { pt.textContent = studyTipLabel(card.tip); pt.classList.toggle("on", !!card.tip); }
     }
     // 영어공부 카드 = 단독 본문(자기 책 · 장). 연결 성경 카드를 따라가지 않는다.
     async function loadStudyCard(card) {
@@ -911,7 +919,7 @@
       } else if (type === "study") {
         const base = firstBible();
         card = { id, type: "study", book: base ? base.book : state.lastBook,
-          chapter: base ? base.chapter : state.lastChapter, mode: "word", ...geom };
+          chapter: base ? base.chapter : state.lastChapter, mode: "word", tip: false, ...geom };
       } else {
         card = { id, type, link: (firstBible() && firstBible().id) || null, ...geom };
       }
@@ -1205,6 +1213,12 @@
             (name) => { card[side] = name; loadStudyCard(card); saveLayout(); });
           break;
         }
+        case "study-tip":
+          card.tip = !card.tip;
+          if (!card.tip) hideTip();
+          updateStudyHeader(card);
+          saveLayout();
+          break;
         case "study-mode":
           openMenu(actEl, [
             { label: I18N.t("card.studyWord"), value: "word", on: card.mode !== "phrase" },
@@ -1972,7 +1986,7 @@
         const w = e.target.closest('.mcard[data-type="study"] .sw[data-code]');
         if (w) {
           const sc = cardById(w.closest(".mcard").dataset.id);
-          scheduleTip(w.dataset.code, w.dataset.v, sc && sc.book, sc && sc.chapter, e.clientX, e.clientY);
+          if (sc && sc.tip) scheduleTip(w.dataset.code, w.dataset.v, sc.book, sc.chapter, e.clientX, e.clientY);
           return;
         }
         const s = e.target.closest('.mcard[data-type="interlinear"] .strong[data-code]');
