@@ -23,7 +23,7 @@ jobs:
         run: python -m compileall -q bibleclip tests
       - name: 웹판 · 코어 테스트
         run: |
-          for t in test_server test_community test_telegram test_readingplan test_webui_api test_core test_highlights test_killswitch; do
+          for t in test_server test_community test_telegram test_readingplan test_readingcheck test_webui_api test_core test_highlights test_killswitch; do
             echo "== $t"; python -X utf8 tests/$t.py || exit 1
           done
       - name: 설치 스크립트 문법

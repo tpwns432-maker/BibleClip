@@ -39,13 +39,16 @@ def check_store():
 
     # 처음 주제 4개(사용자 결정), 순서 · 감상 종류.
     ts = c.topics(A)
-    assert [t['name'] for t in ts] == [n for n, _, _ in SEED_TOPICS] == ['말씀', '모임 서적', '성경 묵상', '자유']
-    assert [t['source_kind'] for t in ts] == ['sermon', 'book', '', '']
-    sermon, book, medit, free = (t['id'] for t in ts)
+    # 맨 앞은 성경읽기 체크(2026-11-25), 그 뒤로 처음 주제 4개.
+    assert [t['name'] for t in ts] == ['성경읽기 체크'] + [n for n, _, _ in SEED_TOPICS]
+    assert [n for n, _, _ in SEED_TOPICS] == ['말씀', '모임 서적', '성경 묵상', '자유']
+    assert [t['source_kind'] for t in ts] == ['', 'sermon', 'book', '', '']
+    assert c.reading_topic()['id'] == ts[0]['id']
+    sermon, book, medit, free = (t['id'] for t in ts[1:])
     # 다시 열어도 주제가 또 생기지 않는다.
     c.close()
     c = Community(os.path.join(DATA, 'c.db'), names=lambda: NAMES, parse=Engine.parse_reference)
-    assert len(c.topics(A)) == 4
+    assert len(c.topics(A)) == 5
 
     # 주제: 만들기 · 이름 겹침 · 고치기 · 글 있으면 못 지움.
     tid = c.topic_save(B, {'name': '찬양', 'description': '좋은 찬양'})['id']

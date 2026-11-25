@@ -82,14 +82,24 @@ def main(argv=None):
     kr = engine.primary_version() if 'KRV' not in engine.dbs else 'KRV'
     books = [(b['num'], (Engine._canon(b['num']) or (0, b['short']))[1], len(engine.get_chapters(kr, b['num'])))
              for b in engine.books(kr)] if kr else []
+    from bibleclip.server import readingplan
+    from bibleclip.server.readingcheck import ReadingCheck
     bot = TelegramBot(data, accounts.users, site, books)
+    chapters = readingplan.chapter_list(books)
+    check_box = {}              # Community 와 ReadingCheck 가 서로를 쓴다 — 만든 뒤 이어 준다
+
+    def reading_info(iso):
+        return check_box['c'].info_iso(iso)
     community = Community(os.path.join(data, DB_FILE), names=accounts.users, parse=parse,
-                          verse_text=hub.verse_text, on_event=bot.on_community)
+                          verse_text=hub.verse_text, on_event=bot.on_community, reading_info=reading_info)
+    check = ReadingCheck(community, accounts.users, chapters)
+    check_box['c'] = check
+    bot.check = check
     bot.start_thread()
 
     app = create_app(hub, accounts, secret_key(data), Throttle(), community,
                      secure_cookie=a.secure_cookie, extra_hosts=a.allow_host,
-                     behind_proxy=a.behind_proxy, telegram=bot)
+                     behind_proxy=a.behind_proxy, telegram=bot, reading_check=check)
     print(f'BibleClip 웹판: http://127.0.0.1:{a.port}/   (데이터: {data})', flush=True)
     serve(app, host=a.host, port=a.port, threads=8)   # 첫 화면이 파일을 한꺼번에 받는다
 

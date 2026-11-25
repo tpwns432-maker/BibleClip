@@ -145,7 +145,14 @@ def run():
     assert '커뮤니티에 새 글이 있어요' not in joined                       # 메시지 내용은 안 남김
     del LOG[:]
 
-    # ---- 통독 알림: 한국 시간 8시 · 19시, 30분 안에만, 한 번씩 ----
+    # ---- 성경읽기 알림: 한국 시간 8 · 19 · 22시, 30분 안에만, 한 번씩, 체크한 사람은 저녁부터 뺌 ----
+    class FakeCheck:                    # 그날 성경읽기 체크한 사람(ReadingCheck.done_on 흉내)
+        done = {}
+
+        def done_on(self, day):
+            return self.done.get(day.isoformat(), {})
+    bot.check = FakeCheck()
+    CHK = SITE + '/community#/new?reading='
     now['v'] = datetime(2026, 11, 25, 7, 59, tzinfo=rp.KST)
     bot.tick_reading()
     assert tg.take() == []
@@ -153,16 +160,37 @@ def run():
     bot.tick_reading()
     out = tg.take()
     assert sorted(c for c, _ in out) == [111, 222]
-    assert out[0][1] == '☀️ 오늘의 통독 (1일째)\n창 1–4장\n' + SITE + '/bible#go=10.1', out[0][1]
-    assert '통독 아침(1일째 창 1–4장) 시작 — 받을 사람 2명' in LOG
-    assert '보냄 통독 아침(1일째 창 1–4장) → alice' in LOG and '보냄 통독 아침(1일째 창 1–4장) → bob' in LOG
+    assert out[0][1] == ('☀️ 오늘의 성경읽기 (1일째)\n창 1–4장\n📖 ' + SITE + '/bible#go=10.1\n'
+                         '✍️ 성경읽기 체크: ' + CHK + '2026-11-25'), out[0][1]
+    assert '성경읽기 아침(1일째 창 1–4장) 시작 — 받을 사람 2명' in LOG
+    assert '보냄 성경읽기 아침(1일째 창 1–4장) → alice' in LOG and '보냄 성경읽기 아침(1일째 창 1–4장) → bob' in LOG
     bot.tick_reading()
     assert tg.take() == []                                      # 같은 시각엔 한 번만
-    assert bot.set_prefs('alice', {'reading': False})['ok']
+    # 저녁 7시: 이미 체크한 앨리스는 빼고 밥에게만.
+    FakeCheck.done = {'2026-11-25': {'alice': 5}}
     now['v'] = datetime(2026, 11, 25, 19, 10, tzinfo=rp.KST)
     bot.tick_reading()
-    assert tg.take() == [(222, '🌙 오늘의 통독 다 읽으셨나요?\n창 1–4장\n' + SITE + '/bible#go=10.1')]
-    now['v'] = datetime(2026, 11, 26, 8, 40, tzinfo=rp.KST)       # 30분 지나 켜짐 → 건너뜀
+    assert tg.take() == [(222, '🌙 오늘의 성경읽기 하셨나요? (1일째 창 1–4장)\n✍️ 성경읽기 체크: ' + CHK + '2026-11-25')]
+    assert any('이미 체크해서 뺌: alice' in m for m in LOG)
+    # 밤 10시: 아직 안 한 밥에게만 한 번 더.
+    now['v'] = datetime(2026, 11, 25, 22, 1, tzinfo=rp.KST)
+    bot.tick_reading()
+    assert tg.take() == [(222, '🔔 아직 오늘 성경읽기 체크를 안 하셨어요 (1일째 창 1–4장)\n✍️ 성경읽기 체크: '
+                          + CHK + '2026-11-25')]
+    # 다음 날 아침: 어제 체크가 빈 밥에게만 한 줄 더.
+    now['v'] = datetime(2026, 11, 26, 8, 0, tzinfo=rp.KST)
+    bot.tick_reading()
+    out = dict(tg.take())
+    assert '어제' not in out[111]
+    assert out[222].endswith('\n\n어제(1일째 창 1–4장) 성경읽기 체크가 비어 있어요.\n✍️ ' + CHK + '2026-11-25'), out[222]
+    assert out[222].startswith('☀️ 오늘의 성경읽기 (2일째)')
+    assert any('어제 체크 비어 있음: bob' in m for m in LOG)
+    # 통독 알림을 끈 사람은 아무것도 안 받는다.
+    assert bot.set_prefs('alice', {'reading': False})['ok']
+    now['v'] = datetime(2026, 11, 26, 19, 0, tzinfo=rp.KST)
+    bot.tick_reading()
+    assert [c for c, _ in tg.take()] == [222]
+    now['v'] = datetime(2026, 11, 27, 8, 40, tzinfo=rp.KST)       # 30분 지나 켜짐 → 건너뜀
     bot.tick_reading()
     assert tg.take() == []
     now['v'] = datetime(2026, 11, 24, 8, 0, tzinfo=rp.KST)        # 시작 전날
@@ -172,9 +200,44 @@ def run():
 
     # 다시 켜도(새 봇) 연결 · 보낸 기록 · 열쇠가 남는다.
     assert bot2.state['links']['bob']['chat_id'] == 222 and bot2.state['token'] == GOOD
-    now['v'] = datetime(2026, 11, 25, 19, 15, tzinfo=rp.KST)
+    now['v'] = datetime(2026, 11, 26, 19, 15, tzinfo=rp.KST)
     bot2.tick_reading()
     assert tg.take() == []                                      # 19시는 이미 보냄
+
+    # 상대의 성경읽기 체크 글 → 이름과 몇째 날로 알림(일반 '새 글' 알림 대신).
+    bot.on_community({'kind': 'post', 'author': 'alice', 'post_id': 12, 'reading_day': '2026-11-25'})
+    bot.flush_community(force=True)
+    assert tg.take() == [(222, '✅ 앨리스님이 1일째 성경읽기 체크를 했어요\n' + SITE + '/community#/p/12')]
+    assert any('대기 성경읽기 체크 글 #12' in m for m in LOG)
+    assert bot.set_prefs('bob', {'community': True})['ok']      # (위에서 껐던 커뮤니티 알림을 다시 켬)
+    bot.on_community({'kind': 'post', 'author': 'alice', 'post_id': 13, 'reading_day': '2026-11-26'})
+    bot.on_community({'kind': 'comment', 'author': 'alice', 'post_id': 7})
+    bot.flush_community(force=True)
+    assert tg.take() == [(222, '✅ 앨리스님이 2일째 성경읽기 체크를 했어요\n📖 BibleClip · 새 댓글 1\n'
+                          + SITE + '/community')]
+
+    # ---- 패치 내역: 연결된 모두에게 한 번, 다시 켜도 또 안 보냄, 새 내역만 ----
+    CH = [{'id': 'c2', 'date': '2026-11-25', 'title': '둘째', 'notes': ['나', '다']},
+          {'id': 'c1', 'date': '2026-11-24', 'title': '첫째', 'notes': ['가']}]
+    assert bot.set_prefs('bob', {'reading': False, 'community': False})['ok']     # 알림 꺼도 패치 안내는 감
+    bot.changes = CH
+    bot.announce_changes()
+    out = tg.take()
+    assert sorted(c for c, _ in out) == [111, 222]   # 연결된 모두에게(알림을 끈 밥도)
+    assert out[0][1] == ('📢 BibleClip 업데이트\n\n[둘째] 2026-11-25\n· 나\n· 다\n\n[첫째] 2026-11-24\n· 가'
+                         '\n\n' + SITE + '/'), out[0][1]
+    assert any('패치 안내(c2, c1)' in m for m in LOG)
+    bot.announce_changes()
+    assert tg.take() == []
+    bot3 = TelegramBot(DATA, lambda: NAMES, SITE, BOOKS, http=tg, clock=clock, changes=CH + [], log=LOG.append)
+    bot3.announce_changes()
+    assert tg.take() == []                       # 다시 켜도 같은 내역은 안 보냄
+    bot3.changes = [{'id': 'c3', 'title': '셋째', 'notes': ['라']}] + CH
+    bot3.announce_changes()
+    assert sorted(tg.take()) == [(c, '📢 BibleClip 업데이트\n\n[셋째]\n· 라\n\n' + SITE + '/') for c in (111, 222)]
+    from bibleclip.server.telegram import _load_changes
+    real = _load_changes()
+    assert real and all(c.get('id') and c.get('title') and c.get('notes') for c in real)   # 실제 내역 파일
 
     # 실패도 이유와 함께 남기고, 접속 실패는 상태가 바뀔 때만.
     del LOG[:]

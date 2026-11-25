@@ -71,6 +71,17 @@
     return vt.verses.map((x) => `<sup>${x.n}</sup>${esc(x.text)}`).join(" ") +
       `<cite>${esc(vt.version)}</cite>`;
   }
+  async function getJson(path) {
+    const r = await fetch(path, { credentials: "same-origin" });
+    if (r.status === 401) { Site.toLogin(); throw new Error("login"); }
+    if (!r.ok) { const e = new Error("HTTP " + r.status); e.code = "notfound"; throw e; }
+    return r.json();
+  }
+  // 성경읽기 체크 글의 칩: "✅ 1일째 · 창 1–3장" — 누르면 그 범위의 성경으로.
+  function readingChip(rd) {
+    return rd ? `<a class="src-chip reading" href="bible#go=${rd.book}.${rd.chapter}" title="성경에서 읽기">✅ 성경읽기 ${rd.day}일째 · ${esc(rd.label)}</a>` : "";
+  }
+
   function parseVerseParam(q) {
     const m = /^(\d+)\.(\d+)\.(\d+)(?:-(\d+))?$/.exec(q || "");
     if (!m) return null;
@@ -93,7 +104,8 @@
     $("topics").innerHTML = "<h2>주제</h2>" +
       link("#/", "전체 글", total, activeId === "all") +
       topics.map((t) => link("#/t/" + t.id, t.name, t.unread, activeId === t.id)).join("") +
-      `<a class="topic-add" href="#/topic/new">+ 주제 만들기</a>`;
+      `<a class="topic-add" href="#/topic/new">+ 주제 만들기</a>` +
+      `<a class="topic-link${activeId === "reading" ? " on" : ""}" href="#/reading">📅 성경읽기 기록</a>`;
   }
 
   // ---- 글 목록 ----
@@ -110,6 +122,7 @@
         <div class="pi-meta"><a class="topic" href="#/t/${p.topic.id}">${esc(p.topic.name)}</a>
           · ${esc(p.author.name)} · ${timeTag(p.created_at)}${p.is_new ? ' <span class="new">새</span>' : ""}</div>
         <a class="pi-title" href="#/p/${p.id}">${title}</a>
+        ${readingChip(p.reading)}
         ${p.verse ? `<a class="src-chip verse" href="${esc(verseHref(p.verse))}" title="성경에서 열기">📖 ${esc(p.verse.label)}</a>` : ""}
         ${p.source ? `<a class="src-chip" href="${sourceHref(p.source)}" title="같은 ${SOURCE[p.source.kind].label}의 글 모아 보기">${sourceLine(p.source)}</a>` : ""}
         ${p.snippet ? `<p class="pi-snippet">${esc(p.snippet)}</p>` : ""}
@@ -220,7 +233,7 @@
       <article class="post-full">
         <div class="pi-meta"><span class="topic">${esc(p.topic.name)}</span> · ${esc(p.author.name)} ·
           ${timeTag(p.created_at)}${p.edited_at ? " · 고침" : ""}</div>
-        ${p.deleted ? '<h1 class="deleted">지운 글입니다</h1>' : `<h1>${esc(p.title)}</h1>${p.verse ? `
+        ${p.deleted ? '<h1 class="deleted">지운 글입니다</h1>' : `<h1>${esc(p.title)}</h1>${p.reading ? `<p>${readingChip(p.reading)}</p>` : ""}${p.verse ? `
         <div class="verse-quote"><a class="vq-label" href="${esc(verseHref(p.verse))}" title="성경에서 열기">📖 ${esc(p.verse.label)}</a>
           ${p.verse_text ? `<blockquote>${quoteHtml(p.verse_text)}</blockquote>` : ""}</div>` : ""}${src}${link}
         <div class="body">${renderText(p.body, p.refs)}</div>
@@ -275,14 +288,22 @@
   function readDraft() { try { return JSON.parse(localStorage.getItem(DRAFT) || "null"); } catch (_) { return null; } }
   function writeDraft(d) { try { d ? localStorage.setItem(DRAFT, JSON.stringify(d)) : localStorage.removeItem(DRAFT); } catch (_) {} }
 
-  async function showCompose(topicId, editId, verseParam) {
+  async function showCompose(topicId, editId, verseParam, readingParam) {
     let post = null;
     if (editId) {
       try { post = await capi("post", { id: editId }); } catch (e) { fail(e); return; }
       if (!post.mine || post.deleted) { view.innerHTML = `<div class="empty">${ERR.forbidden}</div>`; return; }
     }
+    // 성경읽기 체크(홈 · 텔레그램 · 기록 화면에서 "✍️ 성경읽기 체크"): 그날 범위가 달린 글쓰기.
+    let reading = null;
+    if (!editId && /^\d{4}-\d{2}-\d{2}$/.test(readingParam || "")) {
+      try { reading = await getJson("rc/day?date=" + readingParam); } catch (_) { reading = null; }
+      if (!reading) { toast("그날은 성경읽기 계획에 없어요."); }
+      else if (!topicId) { try { topicId = (await capi("reading_topic")).id; } catch (_) {} }
+    }
+    const shownReading = reading || (post && post.reading) || null;
     const fromBible = parseVerseParam(verseParam);       // 성경 화면에서 "함께 쓰기"로 왔다
-    const draft = editId || fromBible ? null : readDraft();
+    const draft = editId || fromBible || reading ? null : readDraft();
     const v = post || draft || {};
     let verse = post ? post.verse : (fromBible || (draft && draft.verse) || null);
     if (fromBible && !topicId) {
@@ -297,6 +318,8 @@
       <form class="form" id="compose">
         <label>주제<select name="topic">${topics.map((t) =>
           `<option value="${t.id}"${t.id === tid ? " selected" : ""}>${esc(t.name)}</option>`).join("")}</select></label>
+        ${shownReading ? `<div class="reading-box">${readingChip(shownReading)}
+          <p class="hint">읽고 든 생각을 짧게 남기면 그날 성경읽기 체크가 됩니다.</p></div>` : ""}
         <div class="verse-box" id="vbox" hidden></div>
         <label>제목<input type="text" name="title" maxlength="200" required></label>
         <fieldset><legend>무엇에 대한 감상인가요? (선택)</legend>
@@ -311,8 +334,9 @@
           <button class="btn primary" type="submit">${editId ? "저장" : "올리기"}</button></div>
       </form>`;
     const f = $("compose");
-    f.title.value = v.title || "";
+    f.title.value = v.title || (reading ? `${reading.day}일째 · ${reading.label}` : "");
     f.body.value = v.body || "";
+    if (shownReading) f.body.placeholder = "오늘 읽은 부분에서 마음에 남은 것을 짧게 적어 주세요.";
     if (src) for (const [fld] of SOURCE[src.kind].fields) f[src.kind + "-" + fld].value = src[fld] || "";
     const showKind = () => {
       f.querySelectorAll("#kind button").forEach((b) => b.classList.toggle("on", b.dataset.kind === kind));
@@ -333,7 +357,8 @@
       const s = kind ? Object.fromEntries(SOURCE[kind].fields.map(([fld]) => [fld, f[kind + "-" + fld].value.trim()])) : null;
       return { topic_id: +f.topic.value, title: f.title.value, body: f.body.value,
                source: s && s.title ? Object.assign({ kind }, s) : null,
-               verse: verse ? { book: verse.book, chapter: verse.chapter, verse: verse.verse, verse_end: verse.verse_end } : null };
+               verse: verse ? { book: verse.book, chapter: verse.chapter, verse: verse.verse, verse_end: verse.verse_end } : null,
+               ...(reading ? { reading_day: reading.date } : {}) };
     };
     // 구절 상자: 절 범위를 고치면 이름표와 본문을 다시 받아 보여 준다.
     let previewTimer = 0;
@@ -469,6 +494,35 @@
     }
   });
 
+  // ---- 성경읽기 기록: 날짜별로 두 분의 체크 ----
+
+  async function showReadingLog() {
+    renderTopics("reading");
+    let st;
+    try { st = await getJson("rc/status"); } catch (e) { fail(e); return; }
+    if (!st.started) {
+      view.innerHTML = `<div class="view-head"><div><h1>📅 성경읽기 기록</h1></div></div>
+        <div class="empty">성경읽기는 ${esc(st.start)}에 시작해요.</div>`;
+      return;
+    }
+    const users = st.users;
+    const WD = "일월화수목금토";
+    const dayCell = (iso) => { const d = new Date(iso + "T00:00:00"); return `${d.getMonth() + 1}/${d.getDate()} (${WD[d.getDay()]})`; };
+    const cell = (h, u) => {
+      const pid = h.done[u.id];
+      if (pid) return `<a class="rc-ok" href="#/p/${pid}" title="글 보기">✅</a>`;
+      return u.me ? `<a class="rc-write" href="#/new?reading=${h.date}">✍️ 체크</a>` : `<span class="rc-miss">—</span>`;
+    };
+    view.innerHTML = `<div class="view-head"><div><h1>📅 성경읽기 기록</h1>
+        <p class="muted">1년 1독 · ${esc(st.start)} 시작 · 오늘 ${st.today.day}일째. 그날 범위에 대한 짧은 생각을 쓰면 체크예요(지난 날도 나중에 쓸 수 있어요).</p></div>
+        <div class="acts">${st.today.done[users[0].id] ? "" : `<a class="btn primary" href="#/new?reading=${st.today.date}">✍️ 오늘 성경읽기 체크</a>`}</div></div>
+      <div class="rc-users">${users.map((u) => `<div class="rc-user"><b>${esc(u.name)}${u.me ? " (나)" : ""}</b>
+        <span>${u.today ? "✅ 오늘 체크" : "오늘 아직"}</span><span>연속 ${u.streak}일 · ${u.done}/${u.elapsed}일</span></div>`).join("")}</div>
+      <table class="rc-table"><thead><tr><th>날짜</th><th>범위</th>${users.map((u) => `<th>${esc(u.name)}</th>`).join("")}</tr></thead>
+        <tbody>${st.history.map((h) => `<tr><td>${dayCell(h.date)}<br><small class="muted">${h.day}일째</small></td>
+          <td><a href="bible#go=${h.book}.${h.chapter}">${esc(h.label)}</a></td>${users.map((u) => `<td>${cell(h, u)}</td>`).join("")}</tr>`).join("")}</tbody></table>`;
+  }
+
   // ---- 주소(#) → 화면 ----
 
   async function route() {
@@ -481,7 +535,8 @@
     if (parts[0] === "s" && SOURCE[parts[1]] && parts[2])
       return showList({ source_kind: parts[1], source_title: decodeURIComponent(parts.slice(2).join("/")) });
     if (parts[0] === "p" && parts[1]) return showPost(+parts[1]);
-    if (parts[0] === "new") return showCompose(parts[1] ? +parts[1] : null, null, q.get("verse"));
+    if (parts[0] === "new") return showCompose(parts[1] ? +parts[1] : null, null, q.get("verse"), q.get("reading"));
+    if (parts[0] === "reading") return showReadingLog();
     if (parts[0] === "edit" && parts[1]) return showCompose(null, +parts[1]);
     if (parts[0] === "topic") return showTopicForm(parts[1] === "new" ? null : +parts[1]);
     return showList({});

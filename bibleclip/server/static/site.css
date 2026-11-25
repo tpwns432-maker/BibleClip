@@ -283,3 +283,28 @@ textarea:focus, input:focus, select:focus { outline: 2px solid var(--accent); ou
 .tg-opt { display: flex; gap: 8px; align-items: center; font-size: 14px; }
 .tg-today { color: var(--text); }
 .tg-msg { font-size: 13px; color: var(--accent-text); }
+
+/* ---- 성경읽기 체크(홈 · 커뮤니티) ---- */
+.rc { margin-top: 28px; }
+.rc h2 { font-size: 15px; color: var(--text-muted); font-weight: 600; margin: 0 0 8px; }
+.rc-box { background: var(--card-bg); border: 1px solid var(--card-border); border-radius: 14px; padding: 14px 16px;
+          display: flex; flex-direction: column; gap: 10px; }
+.rc-head { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; justify-content: space-between; }
+.rc-people { display: flex; flex-direction: column; gap: 4px; }
+.rc-person { display: flex; gap: 8px; align-items: baseline; font-size: 14px; }
+.rc-person .muted { font-size: 13px; }
+.rc-more { font-size: 13px; }
+.src-chip.reading { background: color-mix(in srgb, var(--accent) 14%, transparent); }
+.reading-box { margin: -4px 0 0; display: flex; flex-direction: column; gap: 4px; }
+.reading-box .hint { margin: 0; }
+.rc-users { display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 14px; }
+.rc-user { flex: 1 1 200px; background: var(--card-bg); border: 1px solid var(--card-border); border-radius: 12px;
+           padding: 10px 14px; display: flex; flex-direction: column; gap: 2px; font-size: 14px; }
+.rc-user span { color: var(--text-muted); font-size: 13px; }
+.rc-table { width: 100%; border-collapse: collapse; background: var(--card-bg); border: 1px solid var(--card-border);
+            border-radius: 12px; overflow: hidden; font-size: 14px; }
+.rc-table th, .rc-table td { padding: 8px 10px; border-top: 1px solid var(--hairline); text-align: left; vertical-align: top; }
+.rc-table thead th { border-top: 0; color: var(--text-muted); font-weight: 600; font-size: 13px; background: var(--chip-bg); }
+.rc-table td:nth-child(n+3), .rc-table th:nth-child(n+3) { text-align: center; white-space: nowrap; }
+.rc-miss { color: var(--text-dim); }
+.rc-write { font-size: 13px; }

@@ -42,6 +42,11 @@
     </a>
   </div>
 
+  <section class="rc" id="rc" hidden>
+    <h2>오늘의 성경읽기</h2>
+    <div class="rc-box" id="rc-box"></div>
+  </section>
+
   <section class="recent" id="recent" hidden>
     <h2>최근 글</h2>
     <div class="recent-list" id="recent-list"></div>
@@ -92,7 +97,7 @@
     const s = await r.json();
     const box = $("tg-box");
     $("tg").hidden = false;
-    const today = s.today ? `<p class="tg-today">오늘의 통독 (${s.today.day}일째) · <a href="${Site.esc(s.today.href.replace(/^https?:\/\/[^/]+\//, ""))}">${Site.esc(s.today.label)}</a></p>` : "";
+    const today = "";                         // 오늘 범위는 위 '오늘의 성경읽기' 칸에
     if (!s.configured) {
       box.innerHTML = `<p class="muted">봇이 아직 없습니다. 텔레그램에서 <b>@BotFather</b> → <b>/newbot</b> 으로 봇을 만들고
         받은 열쇠(토큰)를 넣어 주세요. 한 번만 넣으면 두 분 모두 씁니다.</p>
@@ -109,7 +114,7 @@
     }
     if (!s.linked) {
       box.innerHTML = `<p class="muted">@${Site.esc(s.bot)} 봇과 내 텔레그램을 연결하면, 새 글 · 댓글과
-        아침 8시 · 저녁 7시 통독을 알려 드려요.</p>${today}
+        아침 8시 · 저녁 7시 · 밤 10시 성경읽기를 알려 드려요.</p>${today}
         <div class="tg-row"><button class="btn primary" id="tg-link" type="button">텔레그램 연결</button></div>
         <p class="tg-msg" id="tg-msg"></p>`;
       $("tg-link").addEventListener("click", async () => {
@@ -129,7 +134,7 @@
     }
     box.innerHTML = `<p class="muted">@${Site.esc(s.bot)} 로 받고 있어요.</p>${today}
       <label class="tg-opt"><input type="checkbox" id="tg-c" ${s.community ? "checked" : ""}> 커뮤니티 새 글 · 댓글</label>
-      <label class="tg-opt"><input type="checkbox" id="tg-r" ${s.reading ? "checked" : ""}> 통독 알림(아침 8시 · 저녁 7시)</label>
+      <label class="tg-opt"><input type="checkbox" id="tg-r" ${s.reading ? "checked" : ""}> 성경읽기 알림(아침 8시 · 저녁 7시 · 밤 10시, 상대의 체크)</label>
       <div class="tg-row"><button class="link-btn" id="tg-unlink" type="button">연결 끊기</button></div>`;
     const prefs = () => tgPost("tg/prefs", { community: $("tg-c").checked, reading: $("tg-r").checked });
     $("tg-c").addEventListener("change", prefs);
@@ -141,6 +146,30 @@
     });
   }
   tgRender();
+
+  // 오늘의 성경읽기(docs/TELEGRAM_PLAN.md): 그날 범위에 대한 짧은 생각을 쓰면 체크.
+  async function rcRender() {
+    const r = await fetch("rc/status", { credentials: "same-origin" });
+    if (!r.ok) return;
+    const s = await r.json();
+    $("rc").hidden = false;
+    const esc = Site.esc;
+    if (!s.started) {
+      $("rc-box").innerHTML = `<p class="muted">성경읽기(1년 1독)는 ${esc(s.start)}에 시작해요.</p>`;
+      return;
+    }
+    const t = s.today, me = s.users.find((u) => u.me) || s.users[0];
+    const mine = me && me.today
+      ? `<a class="btn" href="community#/p/${me.today}">✅ 오늘 체크했어요 · 글 보기</a>`
+      : `<a class="btn primary" href="community#/new?reading=${t.date}">✍️ 성경읽기 체크</a>`;
+    $("rc-box").innerHTML = `<div class="rc-head"><div><b>${t.day}일째</b> ·
+        <a href="bible#go=${t.book}.${t.chapter}">📖 ${esc(t.label)}</a></div>${mine}</div>
+      <div class="rc-people">${s.users.map((u) => `<div class="rc-person${u.today ? " ok" : ""}">
+        <span class="rc-dot">${u.today ? "✅" : "○"}</span><b>${esc(u.name)}</b>
+        <span class="muted">${u.today ? "체크" : "아직"} · 연속 ${u.streak}일 · ${u.done}/${u.elapsed}일</span></div>`).join("")}</div>
+      <a class="rc-more" href="community#/reading">📅 성경읽기 기록 보기</a>`;
+  }
+  rcRender();
 
   // 이름 바꾸기(화면에 보이는 이름 — 아이디는 그대로).
   const nf = $("name-form"), nmsg = $("name-msg");
