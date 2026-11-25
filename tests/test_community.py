@@ -237,6 +237,34 @@ def check_verse():
     c.close()
 
 
+def check_quotes():
+    """글 · 댓글에 쓴 구절("창 1:28")은 본문을 함께 보낸다 — 읽는 사람 역본, 같은 구절은 한 번."""
+    calls = []
+
+    def quote(uid, v):
+        calls.append((v['book'], v['chapter']))
+        return {'version': uid, 'verses': [{'n': n, 'text': f't{n}'} for n in range(1, 41)]}
+    c = Community(os.path.join(DATA, 'q.db'), names=lambda: NAMES, parse=Engine.parse_reference,
+                  verse_text=quote)
+    med = c.default_topic()['id']
+    body = '창 1:28 을 읽고\n요 3:16, 18 그리고 다시 창 1:28\n시 119:1-40 · 창1:29'
+    p = c.post_save(A, {'topic_id': med, 'title': '인용', 'body': body})['id']
+    c.comment_save(B, {'post_id': p, 'body': '저는 창 1:27 이요'})
+    view = c.post(B, {'id': p})
+    refs = view['refs']
+    assert [r['label'] for r in refs] == ['창 1:28', '요 3:16,18', '창 1:28', '시 119:1-40', '창 1:29']
+    assert refs[0]['quote']['version'] == B and [x['n'] for x in refs[0]['quote']['verses']] == [28]
+    assert [x['n'] for x in refs[1]['quote']['verses']] == [16, 18]      # 쉼표는 그 절만
+    assert 'quote' not in refs[2]                                        # 같은 구절은 처음 것만
+    assert len(refs[3]['quote']['verses']) == 30 and refs[3]['quote']['more']
+    assert view['comment_list'][0]['refs'][0]['quote']['verses'][0]['text'] == 't27'
+    assert sorted(set(calls)) == sorted(calls)                           # 같은 장은 한 번만 읽는다
+    assert [r['label'] for r in c.refs_preview(A, {'text': '구절 달기 롬8:28'})['refs']] == ['롬 8:28']
+    assert c.refs_preview(A, {'text': '그냥 글'})['refs'] == []
+    assert c.call(A, 'refs_preview', {'text': '요 1:1'})['refs'][0]['book'] == 500
+    c.close()
+
+
 def check_routes():
     from bibleclip.core.library import Library
     from bibleclip.server.accounts import Accounts, Throttle
@@ -283,6 +311,7 @@ if __name__ == '__main__':
         check_refs()
         check_store()
         check_verse()
+        check_quotes()
         check_routes()
         print('test_community: ok')
     except Exception:

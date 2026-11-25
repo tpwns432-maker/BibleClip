@@ -91,6 +91,41 @@
     return out + linkify(text.slice(i));
   }
 
+  // 글에 쓴 구절의 본문 카드 — 서버가 r.quote = {version, verses: [{n, text}], more} 를 붙여 준다.
+  // 글(.body)은 pre-wrap 이라 카드 HTML 에는 줄바꿈 · 들여쓰기를 넣지 않는다.
+  function quoteCard(r) {
+    const q = r.quote;
+    return `<div class="ref-quote"><a class="vq-label" href="${esc(goHref(r))}" title="성경에서 열기">📖 ${esc(r.label)}</a>` +
+      `<blockquote>${q.verses.map((x) => `<sup>${x.n}</sup>${esc(x.text)}`).join(" ")}${q.more ? " …" : ""}` +
+      `<cite>${esc(q.version)}</cite></blockquote></div>`;
+  }
+
+  // renderText + 구절 카드: 구절이 나온 줄 바로 아래에 본문을 보여 준다(그 줄의 줄바꿈은 카드가 대신).
+  function renderRich(text, refs) {
+    text = String(text || "");
+    refs = (refs || []).filter((r) => r.s >= 0 && r.e <= text.length).sort((a, b) => a.s - b.s);
+    const cuts = new Map();          // 줄 끝 위치 → 그 줄에 나온 구절들
+    for (const r of refs) {
+      if (!r.quote || !r.quote.verses || !r.quote.verses.length) continue;
+      let k = text.indexOf("\n", r.e);
+      if (k < 0) k = text.length;
+      if (!cuts.has(k)) cuts.set(k, []);
+      cuts.get(k).push(r);
+    }
+    if (!cuts.size) return renderText(text, refs);
+    let out = "", i = 0;
+    for (const k of [...cuts.keys()].sort((a, b) => a - b)) {
+      const seg = refs.filter((r) => r.s >= i && r.e <= k).map((r) => Object.assign({}, r, { s: r.s - i, e: r.e - i }));
+      out += renderText(text.slice(i, k), seg) + cuts.get(k).map(quoteCard).join("");
+      i = k + 1;                     // 줄바꿈 하나는 카드가 대신한다
+    }
+    if (i <= text.length) {
+      const seg = refs.filter((r) => r.s >= i).map((r) => Object.assign({}, r, { s: r.s - i, e: r.e - i }));
+      out += renderText(text.slice(i), seg);
+    }
+    return out;
+  }
+
   // ---- 테마 단추(홈 · 커뮤니티 위 막대) ----
   // 성경 화면 ⚙ 설정의 테마와 같은 값(theme · custom_theme)을 같은 저장 기능으로 바꾼다.
 
@@ -183,5 +218,5 @@
     document.addEventListener("keydown", (e) => { if (e.key === "Escape") close(); });
   }
 
-  window.Site = { capi, me, logout, esc, ago, timeTag, renderText, goHref, toLogin, themeMenu };
+  window.Site = { capi, me, logout, esc, ago, timeTag, renderText, renderRich, goHref, toLogin, themeMenu };
 })();
