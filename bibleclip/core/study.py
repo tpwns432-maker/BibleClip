@@ -30,6 +30,8 @@ CONJ_NEXT = frozenset({
     '이는', '그러므로', '그러나', '또', '곧', '그런데', '그리하여', '이에', '그래서', '그러면', '및', '혹은', '오직',
     '이', '그', '저', '그의', '저의', '이제', '또한',
 })
+# 한국어 어절 끝 글자가 이것이면 조사 · 어미로 끝난 말(앞 덩어리에 붙는다). 아니면 맨 명사로 본다.
+_ENDINGS = frozenset('은는이가을를의에와과로도만서고며니사라여요다게지면데든나냐랴께처럼아어오우시')
 _PUNCT_END = re.compile(r'[,;:.?!—]["”’\')\]]*$')
 _LEAD_PUNCT = re.compile(r'^([,;:.?!]+)\s*(.*)$', re.S)
 _PLAIN = re.compile(r"[\[\]“”‘’\"'.,;:!?()—]")
@@ -72,7 +74,16 @@ def korean_units(text, pieces):
             continue
         k = flat.find(s, p)
         if k < 0 or k - p > 12:
-            continue
+            # S 역본과 본문의 판이 조금 다르다(개역개정S '나뉘게 하라' ↔ 본문 '나뉘라') — 앞부분만 맞춰 본다.
+            k, cut = -1, len(s) - 1
+            while cut >= 2:                     # 두 글자까지(한 글자는 엉뚱한 곳에 맞기 쉽다)
+                k = flat.find(s[:cut], p)
+                if 0 <= k and k - p <= 12:
+                    s = s[:cut]
+                    break
+                k, cut = -1, cut - 1
+            if k < 0:
+                continue
         spans.append((k, k + len(s), code if code not in ('H0', 'G0') else None))
         p = k + len(s)
     # 덮이지 않은 글자 → 어절별 번호 없는 조각.
@@ -152,12 +163,36 @@ def align_units(en_pairs, ko_text, ko_pieces, fine=True):
     for ui, u in enumerate(units):
         if u['c']:
             ko_at.setdefault(u['c'], []).append(ui)
+    # 1) 양쪽 개수가 같은 번호 = 차례대로(기준점).
+    anchor = {}                                   # 영어 줄 → 한국어 조각
+    for code, ris in en_at.items():
+        uis = ko_at.get(code)
+        if uis and len(uis) == len(ris):
+            for r, u in zip(ris, uis):
+                anchor[r] = u
+    # 2) 개수가 다른 번호(창 1:7 히브리어 '궁창' 3번 ↔ BSB 'the expanse' 1번 ↔ 개역개정 '궁창' 3번):
+    #    영어 줄마다 가장 가까운 기준점 이웃의 한국어 자리를 기대 위치로 삼아 짝짓는다. 한국어는
+    #    목적어 · 꾸밈말이 앞에 오므로(made the expanse ↔ 궁창을 만드사) 기대 위치를 앞쪽으로 당긴다.
     nr, nu0 = max(len(rows) - 1, 1), max(len(units) - 1, 1)
+    def expect(ri):
+        best = None
+        for d in range(1, len(rows)):
+            for rj in (ri - d, ri + d):          # 같은 거리면 앞 이웃
+                if rj in anchor:
+                    best = anchor[rj]
+                    break
+            if best is not None:
+                break
+        return (best - 0.6) if best is not None else ri / nr * nu0
     for code, ris in en_at.items():
         uis = ko_at.get(code)
         if not uis:
             continue
-        for a, b in _match([r / nr for r in ris], [u / nu0 for u in uis]):
+        if len(uis) == len(ris):
+            pairs = list(zip(range(len(ris)), range(len(uis))))
+        else:
+            pairs = _match([expect(r) for r in ris], [float(u) for u in uis])
+        for a, b in pairs:
             rows[ris[a]]['u'].add(uis[b])
     chunks, pending = [], []
     for r in rows:
@@ -208,7 +243,9 @@ def align_units(en_pairs, ko_text, ko_pieces, fine=True):
         nxt = next((owner[k] for k in range(i + 1, nu) if k in owner), None)
         w = units[i]['w']
         word = words[w] if 0 <= w < len(words) else units[i]['t']
-        if word.rstrip(',.') in CONJ_NEXT or prev is None:
+        bare = word.rstrip(',.')
+        # 조사 · 어미 없이 끝난 맨 명사(궁창 아래의, 땅 위)는 뒤 낱말을 꾸민다 → 다음 덩어리.
+        if bare in CONJ_NEXT or prev is None or (bare and bare[-1] not in _ENDINGS):
             owner[i] = nxt if nxt is not None else prev
         else:
             owner[i] = prev

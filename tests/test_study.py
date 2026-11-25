@@ -99,6 +99,10 @@ def real():
                                              ['created', '창조하시니라'], ['the heavens', '천'],
                                              ['and the earth.', '지를']], ch[0]
     assert txt(ch[1])[1] == ['was', '하고'] and txt(ch[1])[2] == ['formless', '혼돈']   # 개역한글S: 혼돈<H8414> 하고<H1961>
+    # 창 1:7 — 히브리어 '궁창' 3번 ↔ BSB 'the expanse' 1번: 기준점(made ↔ 만드사) 곁의 앞쪽 '궁창을'과 짝,
+    # 남는 맨 명사 '궁창'은 뒤 낱말(아래의 · 위의)과 함께.
+    v7 = dict(txt(ch[6]))
+    assert v7['the expanse'] == '궁창을' and v7['beneath'] == '궁창 아래의', v7
     john = lib.study_chapter(500, 3, ko='KRV', fine=False)[15]
     assert txt(john) == [
         ['For God so loved the world that He gave His one and only Son,',
