@@ -50,7 +50,7 @@ jobs:
 
       - name: Generate project
         working-directory: ios
-        run: brew install xcodegen && xcodegen generate
+        run: bash prepare.sh && brew install xcodegen && xcodegen generate
 
       - name: Build (unsigned)
         working-directory: ios

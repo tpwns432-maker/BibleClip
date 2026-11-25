@@ -69,3 +69,9 @@ cardnews/
 
 # 웹판 서버 가상환경(deploy/install.sh)
 .venv/
+
+# 아이폰 — ios/prepare.sh 가 채우는 앱 묶음, xcodegen 이 만드는 프로젝트
+ios/BibleClip/Bundle/
+ios/BibleClip.xcodeproj/
+ios/build/
+ios/BibleClipCore/.build/
