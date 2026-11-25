@@ -33,13 +33,44 @@ struct WebView: UIViewRepresentable {
         web.navigationDelegate = context.coordinator
         web.isOpaque = false
         web.backgroundColor = .systemBackground
+        context.coordinator.attachLongHold(to: web)
         web.load(URLRequest(url: Self.start))
         return web
     }
 
     func updateUIView(_ uiView: WKWebView, context: Context) {}
 
-    final class Coordinator: NSObject, WKNavigationDelegate {
+    final class Coordinator: NSObject, WKNavigationDelegate, UIGestureRecognizerDelegate {
+        private weak var web: WKWebView?
+
+        // ---- 2초 길게 누르기 → 절 메뉴 (android MainActivity 와 같은 일) ----
+        // 글자 선택이 시작되면(~0.5초) 페이지는 터치를 잃어 2초 누르기를 알 수 없다.
+        // 웹 보기 위의 제스처는 끝까지 보므로, 손가락이 2초 가만히 있으면 그 자리의
+        // CSS 좌표로 페이지(cards.js BibleClipLongHold)에 절 메뉴를 연다.
+        func attachLongHold(to web: WKWebView) {
+            self.web = web
+            let g = UILongPressGestureRecognizer(target: self, action: #selector(longHold(_:)))
+            g.minimumPressDuration = 2.0
+            g.allowableMovement = 20
+            g.cancelsTouchesInView = false
+            g.delaysTouchesBegan = false
+            g.delegate = self
+            web.addGestureRecognizer(g)
+        }
+
+        @objc private func longHold(_ g: UILongPressGestureRecognizer) {
+            guard g.state == .began, let web = web else { return }
+            let p = g.location(in: web)
+            let js = "window.BibleClipLongHold ? window.BibleClipLongHold(\(p.x), \(p.y)) : false"
+            web.evaluateJavaScript(js) { r, _ in
+                if r as? Bool == true { UIImpactFeedbackGenerator(style: .medium).impactOccurred() }
+            }
+        }
+
+        /// 글자 선택 · 스크롤 제스처와 함께 돈다(빼앗지 않는다).
+        func gestureRecognizer(_ g: UIGestureRecognizer,
+                               shouldRecognizeSimultaneouslyWith other: UIGestureRecognizer) -> Bool { true }
+
         /// 바깥 링크(GitHub · 릴리스)는 사파리로.
         func webView(_ webView: WKWebView, decidePolicyFor action: WKNavigationAction,
                      decisionHandler: @escaping (WKNavigationActionPolicy) -> Void) {
