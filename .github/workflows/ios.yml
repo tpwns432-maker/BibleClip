@@ -1,0 +1,66 @@
+name: iOS
+
+# 서명 안 된 BibleClip.ipa 를 맥 러너에서 빌드한다(docs/IOS_PLAN.md — 맥이 없는 프로젝트).
+# 서명은 윈도우에서 Sideloadly/AltStore 가 사용자의 Apple ID로 한다.
+# - ios/ 를 고친 push: Actions 아티팩트 'ios' 로 .ipa
+# - ios-v<버전> 태그: Release 에 prerelease 로 붙인다(make_latest: false —
+#   데스크톱 업데이트 확인이 releases/latest 를 본다)
+on:
+  push:
+    branches-ignore: [main]
+    paths:
+      - 'ios/**'
+      - '.github/workflows/ios.yml'
+    tags:
+      - 'ios-v*'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Xcode
+        run: xcodebuild -version && xcrun --sdk iphoneos --show-sdk-version
+
+      - name: Generate project
+        working-directory: ios
+        run: brew install xcodegen && xcodegen generate
+
+      - name: Build (unsigned)
+        working-directory: ios
+        run: |
+          xcodebuild -project BibleClip.xcodeproj -scheme BibleClip \
+            -configuration Release -sdk iphoneos -destination 'generic/platform=iOS' \
+            -derivedDataPath build \
+            CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY="" \
+            build
+
+      - name: Package .ipa
+        id: ipa
+        run: |
+          ver="${GITHUB_REF_NAME#ios-v}"
+          [[ "$GITHUB_REF" == refs/tags/* ]] || ver="dev-${GITHUB_SHA::7}"
+          mkdir -p out/Payload
+          cp -R ios/build/Build/Products/Release-iphoneos/BibleClip.app out/Payload/
+          (cd out && zip -qry "BibleClip-ios-${ver}.ipa" Payload && rm -rf Payload)
+          echo "ver=${ver}" >> "$GITHUB_OUTPUT"
+          ls -la out
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ios
+          path: out/*.ipa
+
+      - name: Attach .ipa to the release
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: softprops/action-gh-release@v2
+        with:
+          name: BibleClip 아이폰 ${{ steps.ipa.outputs.ver }}
+          prerelease: true
+          make_latest: false
+          files: out/*.ipa
