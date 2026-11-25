@@ -671,6 +671,45 @@ class Library:
                  'pos': w['pos'], 'gloss': w['gloss']}
                 for w in parse_wonjun_verse(btext) if w['code'] == code]
 
+    # ---- 영한 끊어 읽기 (bibleclip/core/study.py) ----
+
+    # 한국어 쪽: (본문 역본 키, Strong 역본 속성, 화면 이름). 본문과 Strong 역본이 둘 다 있어야 쓴다.
+    STUDY_KO = (('NRKV', 'bethlehem_strongs_nkrv', '개역개정'),
+                ('KRV', 'bethlehem_strongs', '개역한글'))
+
+    def study_sources(self):
+        """{'en': [{name, display}], 'ko': [{name, display}]} — 영어는 Strong 번호가 붙은 영어 역본
+        (BSB 를 앞에), 한국어는 본문 + Strong 역본이 함께 있는 것(개역개정 → 개역한글)."""
+        en = [n for n, db in self.dbs.items()
+              if getattr(db, 'has_strongs', False) and getattr(db, 'language', '') == 'en']
+        en.sort(key=lambda n: (n != 'BSB', n))
+        ko = [{'name': key, 'display': label} for key, attr, label in self.STUDY_KO
+              if key in self.dbs and getattr(self, attr, None) is not None]
+        return {'en': [{'name': n, 'display': n} for n in en], 'ko': ko}
+
+    def study_chapter(self, book_num, chapter, en=None, ko=None, fine=True):
+        """한 장의 끊어 읽기: [{'n': 절, 'pairs': [[영어 덩어리, 한국어 덩어리], ...]}].
+        en/ko 를 안 주거나 없는 이름이면 study_sources 의 첫 것. 쓸 수 있는 짝이 없으면 []."""
+        from bibleclip.core.study import align_verse
+        from bibleclip.data.original_lang import parse_english_strongs, parse_korean_strongs
+        src = self.study_sources()
+        en_names = [x['name'] for x in src['en']]
+        ko_names = [x['name'] for x in src['ko']]
+        if not en_names or not ko_names:
+            return []
+        en = en if en in en_names else en_names[0]
+        ko = ko if ko in ko_names else ko_names[0]
+        attr = next(a for k, a, _ in self.STUDY_KO if k == ko)
+        sdb = getattr(self, attr)
+        ko_text = dict(self.dbs[ko].get_verses(book_num, chapter))
+        ko_pieces = {v: parse_korean_strongs(t) for v, t in sdb.get_chapter_verses(book_num, chapter)}
+        out = []
+        for v, raw in self.dbs[en].get_chapter_raw(book_num, chapter):
+            pairs = align_verse(parse_english_strongs(raw, book_num), ko_text.get(v, ''),
+                                ko_pieces.get(v, []), fine=fine)
+            out.append({'n': v, 'pairs': [list(p) for p in pairs]})
+        return out
+
     # ---- Reference → output pipeline ----
 
     def build_output(self, text):

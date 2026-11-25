@@ -48,6 +48,7 @@ BethlehemWin/
 bible_versions/*
 !bible_versions/KRV.SQLite3
 !bible_versions/KJV+.SQLite3
+!bible_versions/BSB.SQLite3
 !bible_versions/aliases_override.example.json
 original_lang/*
 !original_lang/개역한글S.sdb

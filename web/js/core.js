@@ -266,6 +266,7 @@ window.BC = window.BC || {};
     primaryBooks: [],       // primary version's book list (for search autocomplete)
     lexAvail: { ko: false, en: false },  // installed dictionary modules (original_lang/)
     lexSources: [],         // 원전 분해 소스 후보 [{name, display, lang}] (name=''=개역한글S)
+    studySources: { en: [], ko: [] },  // 영한 끊어 읽기 역본 후보(Library.study_sources)
     isPremium: true,        // business guard (Phase 1): false → free-tier limits
   };
 
@@ -367,6 +368,7 @@ window.BC = window.BC || {};
     state.lastChapter = init.last.chapter;
     state.primaryBooks = init.books || [];
     state.lexSources = init.interlin_sources || [];  // 원전 분해 소스 후보(개역한글S + KJV+ 등)
+    state.studySources = init.study_sources || { en: [], ko: [] };
     // Restore persisted UI prefs (shared with the desktop app).
     state.customTheme = init.custom_theme ? Theme.cleanCustom(init.custom_theme) : null;
     state.theme = Theme.fromSettings(init.theme, init.dark_mode);
@@ -431,12 +433,12 @@ window.BC = window.BC || {};
   // 카드 타입 라벨. TYPE_LABEL은 ko 베이스(= i18n 폴백), typeLabel()은 렌더 시점의
   // 현재 언어 문자열을 돌려준다. card-title span은 data-i18n도 달아 언어 전환 시
   // apply() 재스윕으로 즉시 갱신된다(카드 재렌더 불필요).
-  const TYPE_LABEL = { bible: "성경 본문", interlinear: "원전 분해", lexicon: "사전" };
+  const TYPE_LABEL = { bible: "성경 본문", interlinear: "원전 분해", lexicon: "사전", study: "영한 끊어 읽기" };
   function typeLabel(type) {
     return window.I18N ? I18N.t("card.type." + type, TYPE_LABEL[type]) : TYPE_LABEL[type];
   }
-  const ID_PREFIX = { bible: "bible", interlinear: "inter", lexicon: "lex" };
-  const BODY_CLASS = { bible: "scripture", interlinear: "interlin", lexicon: "lex" };
+  const ID_PREFIX = { bible: "bible", interlinear: "inter", lexicon: "lex", study: "study" };
+  const BODY_CLASS = { bible: "scripture", interlinear: "interlin", lexicon: "lex", study: "study" };
 
   const LOCK_CLOSED = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>';
   const LOCK_OPEN = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 9.9-1"/></svg>';

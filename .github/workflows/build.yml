@@ -84,6 +84,8 @@ jobs:
           Copy-Item bible_versions/KRV.SQLite3 dist/BibleClipWeb/bible_versions/ -Force
           # KJV+(King James 1769 + Strong's, public domain) — 영어권 원전 분해 기본 소스
           Copy-Item "bible_versions/KJV+.SQLite3" dist/BibleClipWeb/bible_versions/ -Force
+          # BSB(Berean Standard Bible, CC0) + Strong's — 원전 분해 · 사전 · 영한 끊어 읽기(tools/make_bsb.py)
+          Copy-Item "bible_versions/BSB.SQLite3" dist/BibleClipWeb/bible_versions/ -Force
           New-Item -ItemType Directory -Force dist/BibleClipWeb/original_lang | Out-Null
           # Copyright guard: ship only the copyright-clean 개역한글S (KRV+Strong tags).
           # English/Korean lexicons are user-supplied modules (not redistributed).
@@ -146,6 +148,8 @@ jobs:
           mkdir -p "$RES/bible_versions" && cp bible_versions/KRV.SQLite3 "$RES/bible_versions/"
           # KJV+(King James 1769 + Strong's, public domain) — 영어권 원전 분해 기본 소스
           cp "bible_versions/KJV+.SQLite3" "$RES/bible_versions/"
+          # BSB(Berean Standard Bible, CC0) + Strong's — 원전 분해 · 사전 · 영한 끊어 읽기
+          cp "bible_versions/BSB.SQLite3" "$RES/bible_versions/"
           # Copyright guard: only the copyright-clean 개역한글S (lexicons are user modules).
           # Shipped as KRV_S.sdb — see the ASCII-name check below.
           mkdir -p "$RES/original_lang" && cp "original_lang/개역한글S.sdb" "$RES/original_lang/KRV_S.sdb"

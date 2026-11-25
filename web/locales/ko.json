@@ -174,6 +174,15 @@
 
   "card.type.bible": "성경 본문",
   "card.type.interlinear": "원전 분해",
+  "ctrl.addStudy": "＋ 영한",
+  "ctrl.addStudyTitle": "영한 끊어 읽기 카드 추가(영어 공부)",
+  "card.type.study": "영한 끊어 읽기",
+  "card.studyWord": "단어",
+  "card.studyPhrase": "구절",
+  "card.studyNoData": "영한 끊어 읽기 자료가 없습니다 — 영어 Strong 역본(BSB · KJV+)과 개역한글S 또는 개역개정S가 필요합니다.",
+  "card.tip.studyEn": "영어 역본",
+  "card.tip.studyKo": "한국어 역본",
+  "card.tip.studyMode": "끊는 단위(단어 / 쉼표 · 마침표 구절)",
   "card.type.lexicon": "사전",
 
   "card.tip.move": "드래그하여 이동",

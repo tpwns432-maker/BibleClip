@@ -65,6 +65,7 @@ if [ -d "bible_versions" ]; then
   mkdir -p "$RES/bible_versions"
   cp bible_versions/KRV.SQLite3 "$RES/bible_versions/" 2>/dev/null || true
   cp "bible_versions/KJV+.SQLite3" "$RES/bible_versions/" 2>/dev/null || true
+  cp "bible_versions/BSB.SQLite3" "$RES/bible_versions/" 2>/dev/null || true   # BSB(CC0) + Strong's
 fi
 if [ -d "original_lang" ]; then
   mkdir -p "$RES/original_lang"

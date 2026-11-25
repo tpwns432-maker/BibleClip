@@ -19,7 +19,7 @@ body {
      to the reading panels so UI chrome can't be accidentally selected. */
   user-select: none; -webkit-user-select: none;
 }
-.scripture, .interlin, .lex, #search-results, .preview {
+.scripture, .interlin, .lex, .study, #search-results, .preview {
   user-select: text; -webkit-user-select: text;
 }
 
@@ -708,6 +708,16 @@ body {
 .lex-tip .tip-rom { font-size: 13px; font-weight: 700; color: var(--accent-text); }
 .lex-tip .tip-code { font-size: 11px; font-weight: 700; color: var(--accent-text); }
 .interlin .strong { cursor: pointer; }
+
+/* 영한 끊어 읽기 카드 — 절마다 영어 줄 위, 한국어 줄 아래. 같은 차례 덩어리가 짝(.pk[data-i]). */
+.study { font-size: calc(14px * var(--reading-scale)); line-height: 1.65; color: var(--text); }
+.study .v { margin-bottom: 14px; padding: 2px 0 2px 2px; }
+.study .vnum { color: var(--vtag); font-weight: 800; margin-right: 6px; float: left; }
+.study .st-en { font-family: Georgia, "Times New Roman", serif; letter-spacing: .1px; }
+.study .st-ko { color: var(--text-dim); margin-top: 2px; }
+.study .sl { color: var(--accent); opacity: .55; font-weight: 700; }
+.study .pk { border-radius: 4px; transition: background-color .12s; }
+.study .pk.on { background: color-mix(in srgb, var(--accent) 18%, transparent); color: var(--text); }
 
 /* ===== Search view (검색) ===== */
 .search-view {
