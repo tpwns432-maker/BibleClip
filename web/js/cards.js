@@ -61,7 +61,7 @@
         } else if (c.type === "study") {
           // 영어공부: 성경 카드처럼 단독(자기 책 · 장) — 다른 카드에 연결하지 않는다.
           o.book = c.book; o.chapter = c.chapter;
-          o.en = c.en || null; o.ko = c.ko || null; o.mode = c.mode || "word";
+          o.en = c.en || null; o.ko = c.ko || null;
           o.tip = !!c.tip;
         } else {
           o.link = c.link || null;
@@ -128,13 +128,12 @@
           });
           bibleN++;
         } else if (!IS_ANDROID && raw.type === "study") {
-          // 영어공부: 단독 카드 — 자기 책 · 장, 영어 · 한국어 역본, 끊는 단위(word | phrase).
+          // 영어공부: 단독 카드 — 자기 책 · 장, 영어 · 한국어 역본. 끊는 단위는 의미 덩어리 하나(옛 mode 는 버림).
           out.push({
             rawId: raw.id, id: "", type: "study",
             book: raw.book || state.lastBook, chapter: raw.chapter || state.lastChapter,
             en: typeof raw.en === "string" ? raw.en : undefined,
             ko: typeof raw.ko === "string" ? raw.ko : undefined,
-            mode: raw.mode === "phrase" ? "phrase" : "word",
             tip: raw.tip === true,          // 낱말 미리보기 — 기본 꺼짐
             x: raw.x, y: raw.y, w: raw.w, h: raw.h, z: raw.z,
           });
@@ -321,7 +320,6 @@
             `<span class="hd-mini" data-act="next" data-tip="다음 장" data-i18n-tip="card.tip.nextChapter">›</span>` +
             `<span class="hd-pill dropdown" data-act="study-en" data-tip="영어 역본" data-i18n-tip="card.tip.studyEn">${esc(studyLabel("en", card.en))}</span>` +
             `<span class="hd-pill dropdown" data-act="study-ko" data-tip="한국어 역본" data-i18n-tip="card.tip.studyKo">${esc(studyLabel("ko", card.ko))}</span>` +
-            `<span class="hd-pill dropdown" data-act="study-mode" data-tip="끊는 단위" data-i18n-tip="card.tip.studyMode">${esc(studyModeLabel(card.mode))}</span>` +
             `<span class="hd-pill study-tip${card.tip ? " on" : ""}" data-act="study-tip" data-tip="낱말에 마우스를 올리면 원어 미리보기" data-i18n-tip="card.tip.studyTip">${esc(studyTipLabel(card.tip))}</span>` +
           `</span>` +
           `<span class="card-hd-spacer"></span>` +
@@ -791,9 +789,6 @@
     function studyTipLabel(on) {
       return I18N.t(on ? "card.studyTipOn" : "card.studyTipOff");
     }
-    function studyModeLabel(mode) {
-      return I18N.t(mode === "phrase" ? "card.studyPhrase" : "card.studyWord");
-    }
     async function updateStudyHeader(card) {
       const s = sectionEl(card.id);
       if (!s) return;
@@ -803,7 +798,6 @@
       const cp = s.querySelector('[data-act="chapter"]'); if (cp) cp.textContent = I18N.t("card.chapterLabel", { n: card.chapter });
       const pe = s.querySelector('[data-act="study-en"]'); if (pe) pe.textContent = studyLabel("en", card.en);
       const pk = s.querySelector('[data-act="study-ko"]'); if (pk) pk.textContent = studyLabel("ko", card.ko);
-      const pm = s.querySelector('[data-act="study-mode"]'); if (pm) pm.textContent = studyModeLabel(card.mode);
       const pt = s.querySelector('[data-act="study-tip"]');
       if (pt) { pt.textContent = studyTipLabel(card.tip); pt.classList.toggle("on", !!card.tip); }
     }
@@ -817,8 +811,8 @@
         return;
       }
       body.innerHTML = `<div class="panel-loading">${I18N.t("card.loading")}</div>`;
-      const data = await api().get_study(card.book, card.chapter, card.en || null, card.ko || null,
-                                         card.mode || "word");
+      // 의미 덩어리(미리 계산한 표). 표가 없는 역본 짝이면 서버가 낱말 단위로 대신 준다.
+      const data = await api().get_study(card.book, card.chapter, card.en || null, card.ko || null, "chunk");
       const b2 = bodyEl(card.id);
       if (b2) { renderStudyInto(b2, data); b2.scrollTop = 0; }
       updatePresentBanner(card);   // F11 틀고정 헤더 — 장 이동 시 위치 동기화
@@ -936,7 +930,7 @@
       } else if (type === "study") {
         const base = firstBible();
         card = { id, type: "study", book: base ? base.book : state.lastBook,
-          chapter: base ? base.chapter : state.lastChapter, mode: "word", tip: false, ...geom };
+          chapter: base ? base.chapter : state.lastChapter, tip: false, ...geom };
       } else {
         card = { id, type, link: (firstBible() && firstBible().id) || null, ...geom };
       }
@@ -1239,12 +1233,6 @@
           if (!card.tip) hideTip();
           updateStudyHeader(card);
           saveLayout();
-          break;
-        case "study-mode":
-          openMenu(actEl, [
-            { label: I18N.t("card.studyWord"), value: "word", on: card.mode !== "phrase" },
-            { label: I18N.t("card.studyPhrase"), value: "phrase", on: card.mode === "phrase" },
-          ], (mode) => { card.mode = mode; loadStudyCard(card); saveLayout(); });
           break;
         case "lexlang":
           // 사전 표시 언어(한/영) 선택 — 전역 lexLang 전환(사전 카드 공유).

@@ -72,6 +72,7 @@ if [ -d "original_lang" ]; then
   # ASCII name: a Korean one breaks the signature once Finder copies the app.
   cp "original_lang/개역한글S.sdb" "$RES/original_lang/KRV_S.sdb" 2>/dev/null || true
   cp "original_lang/enko_dict.sqlite" "$RES/original_lang/" 2>/dev/null || true   # 영한 뜻풀이(kengdic MPL 2.0)
+  cp "original_lang/study_chunks_BSB_KRV.sqlite" "$RES/original_lang/" 2>/dev/null || true   # 의미 덩어리(BSB × 개역한글만)
 fi
 
 # Stamp the real version into Info.plist (PyInstaller leaves 0.0.0)

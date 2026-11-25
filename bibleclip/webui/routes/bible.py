@@ -42,11 +42,11 @@ class BibleRoutes:
         return [{'n': n, 'words': [{'w': w, 'code': c} for (w, c) in words]}
                 for n, words in self.lib.interlinear(int(book), int(chapter), version)]
 
-    def get_study(self, book, chapter, en=None, ko=None, mode='word'):
-        """영어공부(영한 끊어 읽기) 한 장: [{n, chunks: [{en: [[구절, code]], ko: [[조각, code, 띄움]]}]}].
-        mode 'word'(Strong 조각 단위) · 'phrase'(문장부호 단위)."""
+    def get_study(self, book, chapter, en=None, ko=None, mode='chunk'):
+        """영어공부(영한 끊어 읽기) 한 장: [{n, chunks: [{en: [[낱말, code]], ko: [[조각, code, 띄움]]}]}].
+        mode 'chunk'(의미 덩어리 표, 없으면 낱말 단위) · 'word'(Strong 조각 단위) · 'phrase'(문장부호 단위)."""
         return self.lib.study_chapter(int(book), int(chapter), en or None, ko or None,
-                                      fine=(mode != 'phrase'))
+                                      fine=(mode != 'phrase'), chunk=(mode == 'chunk'))
 
     # ---- Reference + Strong's search ----
 
