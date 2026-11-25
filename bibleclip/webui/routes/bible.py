@@ -43,7 +43,8 @@ class BibleRoutes:
                 for n, words in self.lib.interlinear(int(book), int(chapter), version)]
 
     def get_study(self, book, chapter, en=None, ko=None, mode='word'):
-        """영한 끊어 읽기 한 장: [{n, pairs: [[영어, 한국어], ...]}]. mode 'word'(잘게) · 'phrase'(문장부호)."""
+        """영어공부(영한 끊어 읽기) 한 장: [{n, chunks: [{en: [[구절, code]], ko: [[조각, code, 띄움]]}]}].
+        mode 'word'(Strong 조각 단위) · 'phrase'(문장부호 단위)."""
         return self.lib.study_chapter(int(book), int(chapter), en or None, ko or None,
                                       fine=(mode != 'phrase'))
 
