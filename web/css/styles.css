@@ -720,6 +720,9 @@ body {
 .study .pk { border-radius: 4px; transition: background-color .12s; }
 .study .pk.on { background: color-mix(in srgb, var(--accent) 18%, transparent); color: var(--text); }
 .study .sw { cursor: pointer; border-radius: 3px; }
+.study .v.copied { background: color-mix(in srgb, var(--accent) 14%, transparent); border-radius: 6px; }
+/* F11 발표: 한국어 줄도 읽기 좋게, 짝 표시는 조용히 */
+.mcard:is(:fullscreen, .pseudo-fs) .study .st-ko { font-size: .82em; }
 .hd-pill.study-tip { opacity: .6; }
 .hd-pill.study-tip.on { opacity: 1; color: var(--accent-text); border-color: var(--accent); }
 .study .sw:hover { text-decoration: underline; text-decoration-color: var(--accent); text-underline-offset: 3px; }
