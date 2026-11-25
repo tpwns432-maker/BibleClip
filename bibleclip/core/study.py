@@ -14,6 +14,10 @@
 4. 짝 없는 한국어 조각: 같은 어절에 짝 있는 조각이 있으면 그 앞 조각(없으면 뒤 조각)에 붙는다(어미 · 조사).
    어절 전체가 짝이 없으면 접속어 · 관형사(이는 · 그 …)는 다음 덩어리, 아니면 앞 덩어리.
 5. 구절 모드(fine=False)는 문장부호(쉼표 · 마침표 …)에서만 끊고, 한 어절은 한 덩어리에 둔다.
+6. (2026-11-25 전수조사, _local/bsb/audit/REPORT.md) 어절 전체가 짝 없을 때: 대명사 주어 · 목적어(내가 ·
+   너희에게 …)는 같은 인칭 · 격의 영어 대명사 덩어리로(뒤쪽 우선), 단서 없는 대명사 · 지시어는 다음, 동사 어미
+   (이르되 · 하매 …)는 앞. S 오탈자는 근사 · 뒷부분 맞춤, 이형 번호 22쌍은 같은 번호로 본다(FOLD_LEX).
+   표본 덩어리 오류율 11.0% → 6.0%, 표본 밖 새 25절 중 23절 개선 · 악화 0.
 
 결과 덩어리: {'en': [[구절, code], ...], 'ko': [[조각, code, 앞에 띄어쓰기 0/1], ...]} — 화면이 조각마다
 번호를 달아 누르면 사전(원어)이 뜬다.
@@ -67,25 +71,43 @@ def korean_units(text, pieces):
         word_of.append(w)
     n = len(flat_to_real)
     flat = ''.join(text[i] for i in flat_to_real)
-    spans, p = [], 0
+    spans, p, slack = [], 0, 0
     for piece, code in pieces or []:
         s = (piece or '').replace(' ', '')
         if not s:
             continue
+        win = 12 + slack                       # 앞 조각을 놓쳤으면 그만큼 더 멀리 찾는다(연쇄 놓침 막기)
         k = flat.find(s, p)
-        if k < 0 or k - p > 12:
+        if k < 0 or k - p > win:
             # S 역본과 본문의 판이 조금 다르다(개역개정S '나뉘게 하라' ↔ 본문 '나뉘라') — 앞부분만 맞춰 본다.
             k, cut = -1, len(s) - 1
             while cut >= 2:                     # 두 글자까지(한 글자는 엉뚱한 곳에 맞기 쉽다)
                 k = flat.find(s[:cut], p)
-                if 0 <= k and k - p <= 12:
+                if 0 <= k and k - p <= win:
                     s = s[:cut]
                     break
                 k, cut = -1, cut - 1
+            if k < 0 and len(s) >= 2:
+                # S 오탈자(허럭 ↔ 허락, 증거 ↔ 증언) — 같은 길이, ¼ 이하 다르고 첫 · 끝 글자 하나는 같다.
+                L, lim = len(s), max(1, len(s) // 4)
+                for kk in range(p, min(p + win, len(flat) - L) + 1):
+                    seg = flat[kk:kk + L]
+                    if sum(a != b for a, b in zip(seg, s)) <= lim and (seg[0] == s[0] or seg[-1] == s[-1]):
+                        k = kk
+                        break
             if k < 0:
+                # 덧붙은 글자(그 이름을 ↔ 그의 이름을) — 뒷부분을 맞추고 앞은 p 부터 덮는다.
+                for cut in range(len(s) - 1, max(1, (len(s) + 1) // 2) - 1, -1):
+                    kk = flat.find(s[-cut:], p)
+                    if 0 <= kk and kk - p <= len(s):
+                        k, s = p, flat[p:kk + cut]
+                        break
+            if k < 0:
+                slack += len(s)
                 continue
         spans.append((k, k + len(s), code if code not in ('H0', 'G0') else None))
         p = k + len(s)
+        slack = 0
     # 덮이지 않은 글자 → 어절별 번호 없는 조각.
     full, pos = [], 0
     for s, e, c in spans + [(n, n, None)]:
@@ -159,10 +181,10 @@ def align_units(en_pairs, ko_text, ko_pieces, fine=True):
     en_at, ko_at = {}, {}
     for ri, r in enumerate(rows):
         if r['c'] and _plain(r['t']) not in FUNC:
-            en_at.setdefault(r['c'], []).append(ri)
+            en_at.setdefault(FOLD_LEX.get(r['c'], r['c']), []).append(ri)
     for ui, u in enumerate(units):
         if u['c']:
-            ko_at.setdefault(u['c'], []).append(ui)
+            ko_at.setdefault(FOLD_LEX.get(u['c'], u['c']), []).append(ui)
     # 1) 양쪽 개수가 같은 번호 = 차례대로(기준점).
     anchor = {}                                   # 영어 줄 → 한국어 조각
     for code, ris in en_at.items():
@@ -229,9 +251,10 @@ def align_units(en_pairs, ko_text, ko_pieces, fine=True):
     for i in range(nu):
         if i in owner:
             continue
-        w = units[i]['w']
-        prev = next((owner[k] for k in range(i - 1, -1, -1) if units[k]['w'] == w and k in owner), None)
-        nxt = next((owner[k] for k in range(i + 1, nu) if units[k]['w'] == w and k in owner), None)
+        w, we = units[i]['w'], units[i]['we']
+        # 여러 어절에 걸친 조각('권하는 자' + '임을')도 같은 어절로 본다(앞 조각의 끝 어절 = 이 어절).
+        prev = next((owner[k] for k in range(i - 1, -1, -1) if units[k]['we'] == w and k in owner), None)
+        nxt = next((owner[k] for k in range(i + 1, nu) if units[k]['w'] == we and k in owner), None)
         if prev is not None or nxt is not None:
             owner[i] = prev if prev is not None else nxt
     # 어절 전체가 짝이 없으면 이웃 어절로.
@@ -244,6 +267,28 @@ def align_units(en_pairs, ko_text, ko_pieces, fine=True):
         w = units[i]['w']
         word = words[w] if 0 <= w < len(words) else units[i]['t']
         bare = word.rstrip(',.')
+        # 대명사 주어 · 목적어(내가, 너희에게 …): 같은 인칭 · 격의 영어 대명사가 있는 덩어리 중 가까운 곳
+        # (뒤쪽 우선 — 한국어는 주어 · 목적어가 서술어 앞). 전수조사 오류의 2/3 가 이것이었다.
+        cls = _pron_class(bare)
+        if cls and (prev is not None or nxt is not None):
+            best, bd = None, None
+            for ci, c in enumerate(chunks):
+                if not c['u'] or not (_en_words(c) & cls):
+                    continue
+                dd = min((k - i) if k > i else (i - k) + 10 for k in c['u'])
+                if bd is None or dd < bd:
+                    best, bd = ci, dd
+            if best is not None and bd <= 99:
+                owner[i] = best
+                continue
+        # 영어 단서가 없는 대명사 · 지시어 체언(관형 포함)은 뒤 낱말과 함께.
+        if prev is not None and nxt is not None and _pron_stem(bare):
+            owner[i] = nxt
+            continue
+        # 동사 어미(이르되 · 하매 · 하거늘 …)는 앞 덩어리 — 맨 명사로 오인하던 것.
+        if bare and bare[-1] in _VERB_END and bare not in CONJ_NEXT and bare not in _ADN and prev is not None:
+            owner[i] = prev
+            continue
         # 조사 · 어미 없이 끝난 맨 명사(궁창 아래의, 땅 위)는 뒤 낱말을 꾸민다 → 다음 덩어리.
         if bare in CONJ_NEXT or prev is None or (bare and bare[-1] not in _ENDINGS):
             owner[i] = nxt if nxt is not None else prev
@@ -267,6 +312,63 @@ def align_units(en_pairs, ko_text, ko_pieces, fine=True):
             last = u
         out.append({'en': [[r['t'], r['c']] for r in c['rows']], 'ko': ko})
     return out
+
+
+_NP_PART = ('에게서', '에게로', '에게는', '에게', '께서', '께', '와', '과', '의', '가', '이', '은', '는', '을', '를', '도')
+_VERB_END = frozenset('되매늘까즉')                       # '러 · 려' 는 넣으면 나빠졌다(전수조사)
+_ADN = {'여러', '오히려', '아울러', '그런즉'}
+_PRON_STEM = {'나': '1s', '내': '1s', '우리': '1p', '너': '2', '네': '2', '너희': '2', '당신': '2', '그대': '2',
+              '당신들': '2', '그대들': '2', '그': '3s', '그녀': '3s', '그들': '3p',
+              '주': '2'}                                 # 기도문의 주께서 · 주께 = You
+_SUBJ = ('께서', '가', '이', '은', '는', '도', '만')
+_OBJ = ('에게서', '에게로', '에게는', '에게도', '에게', '께', '을', '를', '와', '과', '게')
+_EN_SUBJ = {'1s': {'i'}, '1p': {'we'}, '2': {'you', 'ye', 'thou'}, '3s': {'he', 'she'}, '3p': {'they'}}
+_EN_OBJ = {'1s': {'me', 'myself'}, '1p': {'us', 'ourselves'}, '2': {'you', 'thee', 'yourself', 'yourselves'},
+           '3s': {'him', 'her', 'himself', 'herself'}, '3p': {'them', 'themselves'}}
+_DEMO = {'이것', '그것', '저것', '이들', '이곳', '그곳', '거기', '여기'}
+_WORD = re.compile(r"[A-Za-z']+")
+
+
+def _pron_class(word):
+    """대명사 주어 · 목적어 어절 → 짝지을 영어 대명사 집합(관형 '나의' · 맨 '내' 는 None)."""
+    if not word:
+        return None
+    for p in _OBJ + _SUBJ:
+        stem = word[:-len(p)]
+        if word.endswith(p) and stem in _PRON_STEM:
+            k = _PRON_STEM[stem]
+            return frozenset(_EN_SUBJ[k] if p in _SUBJ else _EN_OBJ[k])
+    return None
+
+
+def _pron_stem(word):
+    """대명사 · 지시어로 시작하는 체언(관형 포함) — 뒤 덩어리로."""
+    if not word:
+        return False
+    if word in ('내', '네', '너희', '우리', '그들', '자기'):
+        return True
+    for p in _NP_PART:
+        stem = word[:-len(p)]
+        if word.endswith(p) and (stem in _PRON_STEM and stem != '주' or stem in _DEMO or stem == '자기'):
+            return True
+    return False
+
+
+def _en_words(chunk):
+    return {w.lower() for r in chunk['rows'] for w in _WORD.findall(r['t'])}
+
+
+# 번호 체계 차이(같은 낱말의 이형 번호) → 대표 번호. 짝 찾기에만 쓰고 화면 · 사전 번호는 원래 그대로.
+# 대명사 · be 동사 굴절군은 일부러 뺐다 — 합치면 덩어리가 잘게 쪼개지고 순서가 틀렸다(전수조사).
+FOLD_LEX = {}
+for _lemma, _forms in {
+    'G3708': 'G1492 G3700', 'G3004': 'G2036 G2046 G4483', 'G1520': 'G3391', 'G3173': 'G3187',
+    'G1438': 'G4572 G1683', 'G2400': 'G2396', 'G2112': 'G2117',
+    'H1980': 'H3212', 'H5117': 'H3240', 'H2396': 'H3169', 'H1841': 'H1840', 'H7122': 'H7125',
+    'H4714': 'H4713', 'H3372': 'H3373', 'H3415': 'H7489', 'H2895': 'H2896', 'H3878': 'H3881',
+}.items():
+    for _f in _forms.split():
+        FOLD_LEX[_f] = _lemma
 
 
 def chunk_text(chunk):

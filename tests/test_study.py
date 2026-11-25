@@ -48,6 +48,8 @@ def unit():
     # 조각 · 띄어쓰기: 조각 안 띄어쓰기는 그대로, 덮이지 않은 글자도 조각.
     us = korean_units('오만한 자들의 자리에', [('오만한 자', 'H3887'), ('자리에', 'H4186')])
     assert [(u['t'], u['c']) for u in us] == [('오만한 자', 'H3887'), ('들의', None), ('자리에', 'H4186')], us
+    # S 오탈자(허럭 ↔ 본문 허락)도 같은 길이 근사로 얹는다(전수조사 fuzzy).
+    assert [(u['t'], u['c']) for u in korean_units('바울이 허락이요', [('바울이', 'G1'), ('허럭이요', 'G2')])] ==         [('바울이', 'G1'), ('허락이요', 'G2')]
     # 같은 번호 개수가 다르면 위치가 가까운 쪽(영어 'surface' 2번 ↔ 한국어 '면' 1번 → 뒤쪽).
     assert _match([0.43, 0.86], [0.77]) == [(1, 0)] and _match([0.1], [0.2, 0.9]) == [(0, 0)]
     assert _match([0.1, 0.5], [0.2, 0.6]) == [(0, 0), (1, 1)]
@@ -107,6 +109,12 @@ def real():
     assert txt(ch[1])[1] == ['was', '하고'] and txt(ch[1])[2] == ['formless', '혼돈']   # 개역한글S: 혼돈<H8414> 하고<H1961>
     # 창 1:7 — 히브리어 '궁창' 3번 ↔ BSB 'the expanse' 1번: 기준점(made ↔ 만드사) 곁의 앞쪽 '궁창을'과 짝,
     # 남는 맨 명사 '궁창'은 뒤 낱말(아래의 · 위의)과 함께.
+    # 전수조사 규칙: 대명사 주어(내가 · 네가)는 같은 인칭 영어 대명사 덩어리로, '가로되'(동사 어미)는 앞으로.
+    t18 = dict(txt(lib.study_chapter(10, 18, ko='KRV')[30]))
+    assert t18['And Abraham said,'] == '아브라함이 또 가로되' and t18['I will not'] == '내가 아니하리라', t18
+    assert t18['“Now that I have ventured'] == '내가 고하나이다', t18
+    ex2 = dict(txt(lib.study_chapter(20, 2, ko='KRV')[12]))
+    assert ex2['are you attacking'] == '네가 치느냐 하매' and ex2['He asked'] == '이르되', ex2
     v7 = dict(txt(ch[6]))
     assert v7['the expanse'] == '궁창을' and v7['beneath'] == '궁창 아래의', v7
     john = lib.study_chapter(500, 3, ko='KRV', fine=False)[15]
