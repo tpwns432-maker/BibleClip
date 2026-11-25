@@ -709,7 +709,8 @@ body {
 .lex-tip .tip-code { font-size: 11px; font-weight: 700; color: var(--accent-text); }
 .interlin .strong { cursor: pointer; }
 
-/* 영한 끊어 읽기 카드 — 절마다 영어 줄 위, 한국어 줄 아래. 같은 차례 덩어리가 짝(.pk[data-i]). */
+/* 영어공부 카드(영한 끊어 읽기) — 절마다 영어 줄 위, 한국어 줄 아래. 같은 차례 덩어리가 짝(.pk[data-i]).
+   낱말(.sw[data-code]) = 영어 구절 · 한국어 Strong 조각 → 누르면 사전(원어), 올리면 미리보기. */
 .study { font-size: calc(14px * var(--reading-scale)); line-height: 1.65; color: var(--text); }
 .study .v { margin-bottom: 14px; padding: 2px 0 2px 2px; }
 .study .vnum { color: var(--vtag); font-weight: 800; margin-right: 6px; float: left; }
@@ -718,6 +719,10 @@ body {
 .study .sl { color: var(--accent); opacity: .55; font-weight: 700; }
 .study .pk { border-radius: 4px; transition: background-color .12s; }
 .study .pk.on { background: color-mix(in srgb, var(--accent) 18%, transparent); color: var(--text); }
+.study .sw { cursor: pointer; border-radius: 3px; }
+.hd-pill.study-tip { opacity: .6; }
+.hd-pill.study-tip.on { opacity: 1; color: var(--accent-text); border-color: var(--accent); }
+.study .sw:hover { text-decoration: underline; text-decoration-color: var(--accent); text-underline-offset: 3px; }
 
 /* ===== Search view (검색) ===== */
 .search-view {

@@ -688,9 +688,10 @@ class Library:
         return {'en': [{'name': n, 'display': n} for n in en], 'ko': ko}
 
     def study_chapter(self, book_num, chapter, en=None, ko=None, fine=True):
-        """한 장의 끊어 읽기: [{'n': 절, 'pairs': [[영어 덩어리, 한국어 덩어리], ...]}].
+        """한 장의 끊어 읽기: [{'n': 절, 'chunks': [{'en': [[구절, code]…], 'ko': [[조각, code, 띄움]…]}…]}]
+        (core/study.align_units).
         en/ko 를 안 주거나 없는 이름이면 study_sources 의 첫 것. 쓸 수 있는 짝이 없으면 []."""
-        from bibleclip.core.study import align_verse
+        from bibleclip.core.study import align_units
         from bibleclip.data.original_lang import parse_english_strongs, parse_korean_strongs
         src = self.study_sources()
         en_names = [x['name'] for x in src['en']]
@@ -705,9 +706,9 @@ class Library:
         ko_pieces = {v: parse_korean_strongs(t) for v, t in sdb.get_chapter_verses(book_num, chapter)}
         out = []
         for v, raw in self.dbs[en].get_chapter_raw(book_num, chapter):
-            pairs = align_verse(parse_english_strongs(raw, book_num), ko_text.get(v, ''),
-                                ko_pieces.get(v, []), fine=fine)
-            out.append({'n': v, 'pairs': [list(p) for p in pairs]})
+            chunks = align_units(parse_english_strongs(raw, book_num), ko_text.get(v, ''),
+                                 ko_pieces.get(v, []), fine=fine)
+            out.append({'n': v, 'chunks': chunks})
         return out
 
     # ---- Reference → output pipeline ----
