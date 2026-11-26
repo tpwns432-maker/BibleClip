@@ -151,6 +151,10 @@ class BibleRoutes:
 
     # ---- Lexicon ----
 
+    def lookup_english(self, phrase):
+        """영어공부 카드의 영어 낱말 → 영한 뜻풀이(성경 속 번역 + 일반 뜻) 또는 None."""
+        return self.lib.lookup_english(str(phrase or '')[:200])
+
     def lookup_strong(self, code, lang='ko', book=None, chapter=None, verse=None):
         """Full lexicon entry for a Strong's code: {code, headword, reading,
         html, morph}. ``morph`` (형태소 분석) is filled when verse context is

@@ -73,12 +73,14 @@ Copy-Item "bible_versions\KJV+.SQLite3" "$dst\bible_versions\" -Force
 Copy-Item "bible_versions\BSB.SQLite3" "$dst\bible_versions\" -Force   # BSB(CC0) + Strong's
 New-Item -ItemType Directory -Force "$dst\original_lang" | Out-Null
 Copy-Item "original_lang\개역한글S.sdb" "$dst\original_lang\" -Force
+Copy-Item "original_lang\enko_dict.sqlite" "$dst\original_lang\" -Force   # 영한 뜻풀이(kengdic MPL 2.0)
 
 # 동봉 검증: 한글 파일명이 PS5.1에서 깨져 누락되는 회귀를 빌드 단계에서 즉시 포착.
 $must = @("$dst\사용법.html","$dst\사용법.css","$dst\사용법.js",
           "$dst\BibleClipWeb.exe.config",
           "$dst\original_lang\개역한글S.sdb","$dst\bible_versions\KRV.SQLite3",
-          "$dst\bible_versions\KJV+.SQLite3","$dst\bible_versions\BSB.SQLite3")
+          "$dst\bible_versions\KJV+.SQLite3","$dst\bible_versions\BSB.SQLite3",
+          "$dst\original_lang\enko_dict.sqlite")
 foreach ($p in $must) {
   if (-not (Test-Path -LiteralPath $p)) { throw "필수 동봉 파일 누락: $p (한글 파일명 인코딩/ BOM 확인)" }
 }

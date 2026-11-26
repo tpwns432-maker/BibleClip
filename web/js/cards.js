@@ -849,9 +849,8 @@
       const lb = linkedBible(card);
       const cur = (lb && lexCurMap.get(lb.id)) || lexCur;
       if (cur) {
-        body.innerHTML = `<div class="panel-loading">${I18N.t("card.loadingCode", { code: esc(cur.code) })}</div>`;
-        api().lookup_strong(cur.code, lexLang, cur.book, cur.chapter, cur.verse || null)
-          .then((res) => { const b = bodyEl(card.id); if (b) renderLexEntryInto(b, cur.code, res); });
+        body.innerHTML = `<div class="panel-loading">${I18N.t("card.loadingCode", { code: esc(cur.code || cur.en || "") })}</div>`;
+        fillLexCard(card.id, cur);
       } else {
         // data-i18n 부착: 사전 카드를 띄운 채 언어를 바꿔도 I18N.apply 전역 스윕이
         // 이 안내 문구를 즉시 재번역한다(BUG-i18n: 영어 전환 후에도 한국어로 고정되던
@@ -1900,7 +1899,7 @@
 
       // Click: strong-code lookup, header actions, or verse copy.
       c.addEventListener("click", (e) => {
-        const codeEl = e.target.closest("[data-code]");
+        const codeEl = e.target.closest('[data-code], .mcard[data-type="study"] .sw[data-en]');
         if (codeEl) { handleCodeClick(codeEl); return; }
         const actEl = e.target.closest("[data-act]");
         if (actEl) {
@@ -2353,7 +2352,10 @@
     // 낱말(영어 구절 · 한국어 Strong 조각)마다 번호 → 누르면 사전(원어), 올리면 미리보기.
     const word = (t, code, v) => code
       ? `<span class="sw" data-code="${esc(code)}" data-v="${v}">${esc(t)}</span>` : esc(t);
-    const enOf = (ch, v) => ch.en.map(([t, c]) => word(t, c, v)).join(" ");
+    // 영어 낱말은 번호가 없어도 누를 수 있다 — 사전 카드에 영한 뜻풀이(data-en) + 원어(data-code).
+    const enWord = (t, code, v) =>
+      `<span class="sw" data-en="${esc(t)}"${code ? ` data-code="${esc(code)}"` : ""} data-v="${v}">${esc(t)}</span>`;
+    const enOf = (ch, v) => ch.en.map(([t, c]) => enWord(t, c, v)).join(" ");
     const koOf = (ch, v) => ch.ko.length
       ? ch.ko.map(([t, c, gap]) => (gap ? " " : "") + word(t, c, v)).join("") : "·";
     const line = (row, f) => row.chunks
@@ -2433,8 +2435,40 @@
   // that bible. Cross-reference clicks inside a lexicon card update only that card.
   //
   // sourceBibleId = null → fall back to updating all lexicon cards (rare legacy path).
-  async function showStrong(code, verse, book, chapter, sourceBibleId) {
-    const cur = { code, verse: verse || null, book: book || null, chapter: chapter || null };
+  // 영한 뜻풀이 덩어리(영어공부 카드에서 영어 낱말을 눌렀을 때 사전 카드 맨 위).
+  //   ① 성경 속 번역(BSB ↔ 개역한글 낱말장) ② 일반 뜻(kengdic, MPL 2.0) — core/enko.py
+  function enkoHTML(en, r) {
+    if (!state.enko) return "";
+    if (!r) {
+      return `<div class="enko"><div class="enko-h">${esc(en)}</div>` +
+        `<div class="enko-none">${I18N.t("lex.enNone")}</div></div>`;
+    }
+    const head = r.query && r.query !== r.word
+      ? `${esc(r.word)} <span class="enko-from">← ${esc(r.query)}</span>` : esc(r.word);
+    const bible = (r.bible || []).map(([k, n]) => `${esc(k)} <small>${n}</small>`).join(" · ");
+    const general = (r.general || []).map(esc).join(", ");
+    return `<div class="enko"><div class="enko-h">${head}</div>` +
+      (bible ? `<div class="enko-row"><span class="enko-lab">${I18N.t("lex.enBible")}</span><span>${bible}</span></div>` : "") +
+      (general ? `<div class="enko-row"><span class="enko-lab">${I18N.t("lex.enGeneral")}</span><span>${general}</span></div>` : "") +
+      (general ? `<div class="enko-src">${I18N.t("lex.enSource")}</div>` : "") +
+      `</div>`;
+  }
+
+  // 사전 카드 하나를 cur({code, en, verse, book, chapter})로 채운다: 영한 뜻풀이(en) + 원어(code).
+  async function fillLexCard(cardId, cur) {
+    const [res, enRes] = await Promise.all([
+      cur.code ? api().lookup_strong(cur.code, lexLang, cur.book, cur.chapter, cur.verse || null) : null,
+      cur.en && state.enko ? api().lookup_english(cur.en) : null,
+    ]);
+    const b = CardManager.bodyEl(cardId);
+    if (!b) return;
+    if (cur.code) renderLexEntryInto(b, cur.code, res);
+    else b.innerHTML = "";
+    if (cur.en) b.insertAdjacentHTML("afterbegin", enkoHTML(cur.en, enRes));
+  }
+
+  async function showStrong(code, verse, book, chapter, sourceBibleId, en) {
+    const cur = { code: code || null, en: en || null, verse: verse || null, book: book || null, chapter: chapter || null };
     lexCur = cur;  // global fallback (used by cards whose link resolves to null)
     if (sourceBibleId) lexCurMap.set(sourceBibleId, cur);
 
@@ -2454,9 +2488,8 @@
 
     targets.forEach((c) => {
       const b = CardManager.bodyEl(c.id);
-      if (b) b.innerHTML = `<div class="panel-loading">${I18N.t("card.loadingCode", { code: esc(code) })}</div>`;
+      if (b) b.innerHTML = `<div class="panel-loading">${I18N.t("card.loadingCode", { code: esc(code || en || "") })}</div>`;
     });
-    const res = await api().lookup_strong(code, lexLang, cur.book, cur.chapter, cur.verse);
     // Re-query in case a new card was just created and re-rendered.
     const finalTargets = sourceBibleId
       ? CardManager.lexiconCards().filter((c) => {
@@ -2464,10 +2497,7 @@
           return lb && lb.id === sourceBibleId;
         })
       : CardManager.lexiconCards();
-    finalTargets.forEach((c) => {
-      const b = CardManager.bodyEl(c.id);
-      if (b) renderLexEntryInto(b, code, res);
-    });
+    await Promise.all(finalTargets.map((c) => fillLexCard(c.id, cur)));
   }
 
   function handleCodeClick(el) {
@@ -2490,7 +2520,7 @@
       verse = null;  // cross-refs have no verse context
     }
 
-    showStrong(el.dataset.code, verse, book, chapter, sourceBibleId);
+    showStrong(el.dataset.code || null, verse, book, chapter, sourceBibleId, el.dataset.en || null);
   }
 
   async function copyVersesFromCard(card, verses) {

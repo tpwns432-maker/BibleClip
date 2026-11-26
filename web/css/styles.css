@@ -720,6 +720,15 @@ body {
 .study .pk { border-radius: 4px; transition: background-color .12s; }
 .study .pk.on { background: color-mix(in srgb, var(--accent) 18%, transparent); color: var(--text); }
 .study .sw { cursor: pointer; border-radius: 3px; }
+/* 사전 카드 맨 위 영한 뜻풀이(영어공부 카드의 영어 낱말) */
+.enko { padding: 10px 12px; margin: 0 0 12px; border-radius: 10px; background: color-mix(in srgb, var(--accent) 7%, transparent);
+        border: 1px solid color-mix(in srgb, var(--accent) 22%, transparent); line-height: 1.6; }
+.enko-h { font-family: Georgia, "Times New Roman", serif; font-size: 1.25em; font-weight: 700; margin-bottom: 4px; }
+.enko-from { font-family: inherit; font-size: .7em; font-weight: 500; color: var(--text-dim); }
+.enko-row { display: flex; gap: 10px; align-items: baseline; }
+.enko-lab { flex: 0 0 auto; font-size: .78em; font-weight: 700; color: var(--accent-text); min-width: 5.5em; }
+.enko-row small { color: var(--text-dim); font-size: .78em; }
+.enko-src, .enko-none { font-size: .75em; color: var(--text-dim); margin-top: 4px; }
 .study .v.copied { background: color-mix(in srgb, var(--accent) 14%, transparent); border-radius: 6px; }
 /* F11 발표: 한국어 줄도 읽기 좋게, 짝 표시는 조용히 */
 .mcard:is(:fullscreen, .pseudo-fs) .study .st-ko { font-size: .82em; }

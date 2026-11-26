@@ -90,6 +90,8 @@ jobs:
           # Copyright guard: ship only the copyright-clean 개역한글S (KRV+Strong tags).
           # English/Korean lexicons are user-supplied modules (not redistributed).
           Copy-Item "original_lang/개역한글S.sdb" dist/BibleClipWeb/original_lang/ -Force
+          # 영어공부 영한 뜻풀이(성경 낱말장 BSB×개역한글 + kengdic MPL 2.0) — tools/make_enko.py
+          Copy-Item "original_lang/enko_dict.sqlite" dist/BibleClipWeb/original_lang/ -Force
           Compress-Archive -Path dist/BibleClipWeb/* -DestinationPath "BibleClipWeb-windows-v$v.zip" -Force
 
       - uses: actions/upload-artifact@v4
@@ -153,6 +155,8 @@ jobs:
           # Copyright guard: only the copyright-clean 개역한글S (lexicons are user modules).
           # Shipped as KRV_S.sdb — see the ASCII-name check below.
           mkdir -p "$RES/original_lang" && cp "original_lang/개역한글S.sdb" "$RES/original_lang/KRV_S.sdb"
+          # 영어공부 영한 뜻풀이(성경 낱말장 + kengdic MPL 2.0)
+          cp "original_lang/enko_dict.sqlite" "$RES/original_lang/"
           # Stamp the real version into Info.plist (PyInstaller leaves 0.0.0)
           PLIST="$APP/Contents/Info.plist"
           /usr/libexec/PlistBuddy -c "Set :CFBundleShortVersionString $V" "$PLIST" 2>/dev/null \
