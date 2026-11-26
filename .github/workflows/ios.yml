@@ -68,6 +68,14 @@ jobs:
           [[ "$GITHUB_REF" == refs/tags/* ]] || ver="dev-${GITHUB_SHA::7}"
           mkdir -p out/Payload
           cp -R ios/build/Build/Products/Release-iphoneos/BibleClip.app out/Payload/
+          # 서명은 Impactor 가 하지만, 무슨 권한(App Group)이 필요한지는 바이너리에 든 권한을
+          # 보고 안다. 서명 없이 빌드하면 권한이 빠지므로 임시(ad-hoc) 서명으로 넣어 둔다 — 확장 먼저.
+          app=out/Payload/BibleClip.app
+          codesign --force --sign - --entitlements ios/BibleClipAction/BibleClipAction.entitlements \
+            "$app/PlugIns/BibleClipAction.appex"
+          codesign --force --sign - --entitlements ios/BibleClip/BibleClip.entitlements "$app"
+          codesign -d --entitlements - "$app/PlugIns/BibleClipAction.appex" 2>/dev/null | grep -A3 application-groups
+          /usr/libexec/PlistBuddy -c Print "$app/PlugIns/BibleClipAction.appex/Info.plist" | head -40
           (cd out && zip -qry "BibleClip-ios-${ver}.ipa" Payload && rm -rf Payload)
           echo "ver=${ver}" >> "$GITHUB_OUTPUT"
           ls -la out

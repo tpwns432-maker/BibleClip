@@ -23,12 +23,16 @@ targets:
           - Bundle
           - bridge.js
           - ios.js
+          - BibleClip.entitlements
+      - path: Shared
       # 폴더 그대로(구조 유지) 앱 안에 — Bundle/web/index.html 처럼 읽는다.
       - path: BibleClip/Bundle
         type: folder
         buildPhase: resources
     dependencies:
       - package: BibleClipCore
+      # 공유 메뉴 "BibleClip 구절" — PlugIns/ 에 넣는다.
+      - target: BibleClipAction
     settings:
       base:
         # Fixed for good: a different bundle id is a different app with its own data.
@@ -46,6 +50,40 @@ targets:
         TARGETED_DEVICE_FAMILY: "1"
         SWIFT_VERSION: "5.0"
         # Built unsigned in CI; Impactor signs it with the user's Apple ID.
+        CODE_SIGNING_ALLOWED: NO
+        CODE_SIGNING_REQUIRED: NO
+        CODE_SIGN_IDENTITY: ""
+
+  # 다른 앱에서 글자 선택 → 공유… → "BibleClip 구절"(android PROCESS_TEXT 대신).
+  BibleClipAction:
+    type: app-extension
+    platform: iOS
+    sources:
+      - path: BibleClipAction
+        excludes:
+          - BibleClipAction.entitlements
+          - Info.plist
+      - path: Shared
+    dependencies:
+      - package: BibleClipCore
+    info:
+      path: BibleClipAction/Info.plist
+      properties:
+        CFBundleDisplayName: BibleClip 구절
+        NSExtension:
+          NSExtensionPointIdentifier: com.apple.ui-services
+          NSExtensionPrincipalClass: $(PRODUCT_MODULE_NAME).ActionViewController
+          NSExtensionAttributes:
+            NSExtensionServiceRoleType: NSExtensionServiceRoleTypeEditor
+            NSExtensionActivationRule:
+              NSExtensionActivationSupportsText: true
+    settings:
+      base:
+        # 앱 번들 ID 아래여야 한다.
+        PRODUCT_BUNDLE_IDENTIFIER: com.bibleclip.app.sejun.action
+        PRODUCT_NAME: BibleClipAction
+        TARGETED_DEVICE_FAMILY: "1"
+        SWIFT_VERSION: "5.0"
         CODE_SIGNING_ALLOWED: NO
         CODE_SIGNING_REQUIRED: NO
         CODE_SIGN_IDENTITY: ""
