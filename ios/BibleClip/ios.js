@@ -42,6 +42,54 @@
       const r = n.getBoundingClientRect();
       n.style.left = Math.max(6, (window.innerWidth - r.width) / 2) + "px";
       n.style.top = Math.max(6, floor - r.height - 12) + "px";
+      copySelection();
     }
   }).observe(document.body, { childList: true });
+
+  // 글자 선택 → 걸친 절들 복사(데스크톱의 '드래그 → 복사'와 같은 결과).
+  // 데스크톱은 마우스를 뗄 때 복사하지만 손가락 선택은 손잡이로 늘이고 줄여서 그 순간이 없다 —
+  // 선택이 멈춰 색 줄이 뜰 때(cards.js 가 selectionchange 를 0.45초 기다린 뒤) 복사한다.
+  // 같은 절들이면 다시 복사하지 않는다(손잡이를 조금 움직일 때마다 알림이 뜨지 않게).
+  // cards.js 의 copyVersesFromCard 는 밖에서 부를 수 없어 같은 일을 여기서 한다(참조 기록만 빠짐).
+  let lastKey = "";
+  document.addEventListener("selectionchange", function () {
+    const sel = window.getSelection();
+    if (!sel || sel.isCollapsed) lastKey = "";
+  });
+  async function copySelection() {
+    const BC = window.BC, sel = window.getSelection();
+    if (!BC || !BC.CardManager || !sel || sel.isCollapsed || !sel.rangeCount) return;
+    const range = sel.getRangeAt(0);
+    const node = range.commonAncestorContainer;
+    const host = node.nodeType === 1 ? node : node.parentElement;
+    const sec = host && host.closest('.mcard[data-type="bible"]');
+    const card = sec && BC.CardManager.cardFor(sec.dataset.id);
+    if (!card) return;
+    const verses = [...new Set([...sec.querySelectorAll(".v[data-v]")]
+      .filter(function (el) { return range.intersectsNode(el); })
+      .map(function (el) { return +el.dataset.v; }))].sort(function (a, b) { return a - b; });
+    if (!verses.length) return;
+    const key = card.id + "|" + card.book + "|" + card.chapter + "|" + verses.join(",");
+    if (key === lastKey) return;
+    lastKey = key;
+    const st = BC.state;
+    const versions = st.viewer.length ? st.viewer.slice() : [st.viewer[0] || st.primary].filter(Boolean);
+    let r;
+    try { r = await BC.api().copy_reference(card.book, card.chapter, verses, versions); } catch (_) { return; }
+    if (!r || !r.ok) return;
+    const ref = (r.short_name || "") + " " + card.chapter + ":" + verses.join(",");
+    const wrap = document.getElementById("toast-wrap");
+    if (wrap) {
+      const el = document.createElement("div");
+      el.className = "toast";
+      el.textContent = window.I18N ? window.I18N.t("toast.copiedRef", { ref: ref }) : ref;
+      wrap.appendChild(el);
+      setTimeout(function () { el.classList.add("fade"); setTimeout(function () { el.remove(); }, 320); }, 2400);
+    }
+    verses.forEach(function (v) {
+      sec.querySelectorAll('.v[data-v="' + v + '"]').forEach(function (el) {
+        el.classList.add("copied"); setTimeout(function () { el.classList.remove("copied"); }, 700);
+      });
+    });
+  }
 })();
