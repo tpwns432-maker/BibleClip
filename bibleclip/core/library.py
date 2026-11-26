@@ -704,9 +704,20 @@ class Library:
               if key in self.dbs and getattr(self, attr, None) is not None]
         return {'en': [{'name': n, 'display': n} for n in en], 'ko': ko}
 
-    def study_chapter(self, book_num, chapter, en=None, ko=None, fine=True):
-        """한 장의 끊어 읽기: [{'n': 절, 'chunks': [{'en': [[구절, code]…], 'ko': [[조각, code, 띄움]…]}…]}]
-        (core/study.align_units).
+    def study_table(self, en, ko):
+        """미리 계산한 의미 덩어리 표(core/study_chunks.py) — original_lang/study_chunks_<en>_<ko>.sqlite
+        (예: study_chunks_BSB_KRV.sqlite)가 있으면 StudyChunks, 없으면 None. 한 번 찾으면 기억한다."""
+        cache = self.__dict__.setdefault('_study_tables', {})
+        if (en, ko) not in cache:
+            from bibleclip.core.study_chunks import StudyChunks
+            from bibleclip.data.original_lang import find_original_lang_file
+            t = StudyChunks(find_original_lang_file(f'study_chunks_{en}_{ko}.sqlite'))
+            cache[(en, ko)] = t if t.available and t.info.get('en') == en and t.info.get('ko') == ko else None
+        return cache[(en, ko)]
+
+    def study_chapter(self, book_num, chapter, en=None, ko=None, fine=True, chunk=False):
+        """한 장의 끊어 읽기: [{'n': 절, 'chunks': [{'en': [[낱말, code]…], 'ko': [[조각, code, 띄움]…]}…]}]
+        (core/study.align_units). chunk=True 면 미리 계산한 의미 덩어리 표가 있을 때 그것을(없으면 낱말 단위).
         en/ko 를 안 주거나 없는 이름이면 study_sources 의 첫 것. 쓸 수 있는 짝이 없으면 []."""
         from bibleclip.core.study import align_units
         from bibleclip.data.original_lang import parse_english_strongs, parse_korean_strongs
@@ -717,6 +728,11 @@ class Library:
             return []
         en = en if en in en_names else en_names[0]
         ko = ko if ko in ko_names else ko_names[0]
+        if chunk:
+            t = self.study_table(en, ko)
+            got = t.chapter(book_num, chapter) if t else None
+            if got is not None:
+                return [{'n': v, 'chunks': got[v]} for v in sorted(got)]
         attr = next(a for k, a, _ in self.STUDY_KO if k == ko)
         sdb = getattr(self, attr)
         ko_text = dict(self.dbs[ko].get_verses(book_num, chapter))

@@ -376,12 +376,11 @@ window.Tour = (() => {
         title: "카드 위쪽 메뉴",
         body: "<b>책 · 장</b>과 <b>‹ ›</b>로 이 카드만 따로 넘깁니다(성경 카드처럼 혼자 움직여요).<br>" +
               "<b>영어 · 한국어 역본</b>: 영어는 BSB(현대 영어)가 기본이고 KJV+ 도 고를 수 있어요.<br>" +
-              "<b>단어 / 구절</b>: 잘게 끊기 / 쉼표 · 마침표에서 끊기<br>" +
               "<b>미리보기</b>: 켜면 낱말에 마우스만 올려도 원어 뜻이 짧게 떠요.",
         en: { title: "The card's top menu",
           body: "<b>Book · chapter</b> and <b>‹ ›</b> move this card on its own.<br>" +
                 "<b>Versions</b>: English defaults to BSB (modern English); KJV+ is also available.<br>" +
-                "<b>Words / Phrases</b>: chunk size. <b>Preview</b>: hover to see the original word." },
+                "<b>Preview</b>: hover to see the original word." },
       },
       {
         part: "new", target: '.mcard[data-type="study"] .card-body', side: "right", prepare: openStudyCard, interact: true,

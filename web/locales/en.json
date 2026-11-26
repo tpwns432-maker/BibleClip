@@ -184,12 +184,9 @@
   "card.studyTipOn": "Preview on",
   "card.studyTipOff": "Preview off",
   "card.tip.studyTip": "Original-language preview on hover (click to toggle)",
-  "card.studyWord": "Words",
-  "card.studyPhrase": "Phrases",
   "card.studyNoData": "No English Study data — needs an English Strong's bible (BSB · KJV+) and 개역한글S.",
   "card.tip.studyEn": "English version",
   "card.tip.studyKo": "Korean version",
-  "card.tip.studyMode": "Chunk size (words / phrases at punctuation)",
   "card.type.lexicon": "Lexicon",
 
   "card.tip.move": "Drag to move",
