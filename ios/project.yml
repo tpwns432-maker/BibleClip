@@ -1,5 +1,6 @@
 # XcodeGen spec — CI turns this into BibleClip.xcodeproj (docs/IOS_PLAN.md).
 # There is no Mac in this project, so never hand-edit an .xcodeproj; change this file.
+# Run ios/prepare.sh first: it fills BibleClip/Bundle (web/, phone CSS/JS, bundled bibles).
 name: BibleClip
 options:
   bundleIdPrefix: com.bibleclip
@@ -7,14 +8,27 @@ options:
     iOS: "17.0"
 settings:
   base:
-    MARKETING_VERSION: "0.0.1"
+    MARKETING_VERSION: "1.2.4"
     CURRENT_PROJECT_VERSION: "1"
+packages:
+  BibleClipCore:
+    path: BibleClipCore
 targets:
   BibleClip:
     type: application
     platform: iOS
     sources:
-      - BibleClip
+      - path: BibleClip
+        excludes:
+          - Bundle
+          - bridge.js
+          - ios.js
+      # 폴더 그대로(구조 유지) 앱 안에 — Bundle/web/index.html 처럼 읽는다.
+      - path: BibleClip/Bundle
+        type: folder
+        buildPhase: resources
+    dependencies:
+      - package: BibleClipCore
     settings:
       base:
         # Fixed for good: a different bundle id is a different app with its own data.
@@ -25,10 +39,13 @@ targets:
         INFOPLIST_KEY_UILaunchScreen_Generation: YES
         INFOPLIST_KEY_UISupportedInterfaceOrientations: UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight
         INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents: YES
+        # Documents 를 "파일" 앱에 보이게 — 노트 · 형광펜 백업, 역본 넣기.
+        INFOPLIST_KEY_UIFileSharingEnabled: YES
+        INFOPLIST_KEY_LSSupportsOpeningDocumentsInPlace: YES
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
         TARGETED_DEVICE_FAMILY: "1"
         SWIFT_VERSION: "5.0"
-        # Built unsigned in CI; Sideloadly/AltStore signs it with the user's Apple ID.
+        # Built unsigned in CI; Impactor signs it with the user's Apple ID.
         CODE_SIGNING_ALLOWED: NO
         CODE_SIGNING_REQUIRED: NO
         CODE_SIGN_IDENTITY: ""

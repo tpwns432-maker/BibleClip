@@ -1,75 +1,120 @@
 import SwiftUI
+import UniformTypeIdentifiers
 import WebKit
 
-// 시험 앱 (docs/IOS_PLAN.md '위험' 단계): 이 아이폰에 무료 Apple ID로 서명한 앱이 깔리고,
-// WKWebView ↔ Swift 브리지가 도는지만 본다. 1단계에서 이 화면이 web/ 로 바뀐다.
+// 데스크톱 웹 화면(web/, 빌드 때 앱 안 Bundle/web 으로 복사)을 WKWebView 로 띄운다.
+// bibleclip://app/ 에서 읽게 해(WKURLSchemeHandler) fetch() 와 저장소가 보통 출처처럼 돈다.
+// index.html 에는 bridge.js(window.pywebview.api)와 안드로이드 휴대폰 화면(mobile.css · mobile.js)을 끼운다.
 
 @main
 struct BibleClipApp: App {
     var body: some Scene {
         WindowGroup {
-            WebView().ignoresSafeArea()
+            // 노치 · 홈 막대는 피한다(안전 영역 안에만 그린다). 여백 맞춤은 2단계.
+            WebView().background(Color(uiColor: .systemBackground))
         }
     }
 }
 
 struct WebView: UIViewRepresentable {
+    static let scheme = "bibleclip"
+    static let start = URL(string: "\(scheme)://app/web/index.html")!
+
+    func makeCoordinator() -> Coordinator { Coordinator() }
+
     func makeUIView(context: Context) -> WKWebView {
         let config = WKWebViewConfiguration()
-        // window.webkit.messageHandlers.api.postMessage(...) → Promise 로 답이 온다.
-        // 1단계의 bridge.js 가 window.pywebview.api 를 이 길 위에 얹는다.
-        config.userContentController.addScriptMessageHandler(
-            Bridge(), contentWorld: .page, name: "api")
-        let web = WKWebView(frame: .zero, configuration: config)
+        config.setURLSchemeHandler(BundleSchemeHandler(), forURLScheme: Self.scheme)
+        config.userContentController.addScriptMessageHandler(Bridge(), contentWorld: .page, name: "api")
+        let web = BibleWebView(frame: .zero, configuration: config)
         web.isInspectable = true  // 윈도우의 ios-webkit-debug-proxy 로 붙어 보기
-        web.loadHTMLString(Self.page, baseURL: nil)
+        web.allowsBackForwardNavigationGestures = false
+        web.scrollView.contentInsetAdjustmentBehavior = .never
+        web.scrollView.bouncesZoom = false
+        web.navigationDelegate = context.coordinator
+        web.isOpaque = false
+        web.backgroundColor = .systemBackground
+        web.load(URLRequest(url: Self.start))
         return web
     }
 
     func updateUIView(_ uiView: WKWebView, context: Context) {}
 
-    static let page = """
-    <!doctype html><html lang="ko"><head><meta charset="utf-8">
-    <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-    <style>
-      :root { color-scheme: light dark; }
-      body { font: 17px -apple-system, sans-serif; margin: 0;
-             padding: calc(env(safe-area-inset-top) + 24px) 20px 24px; }
-      h1 { font-size: 26px; } .ok { color: #2e8b57; } .bad { color: #c0392b; }
-      li { margin: 8px 0; }
-    </style></head><body>
-    <h1>BibleClip 시험 앱</h1>
-    <p>이 화면이 보이면 <b>설치는 성공</b>입니다.</p>
-    <ul>
-      <li>브리지: <span id="bridge">확인 중…</span></li>
-      <li>기기: <span id="info">—</span></li>
-    </ul>
-    <script>
-      const el = id => document.getElementById(id);
-      window.webkit.messageHandlers.api.postMessage({ method: "ping" })
-        .then(r => { el("bridge").textContent = "동작함 ✓"; el("bridge").className = "ok";
-                     el("info").textContent = r; })
-        .catch(e => { el("bridge").textContent = "실패: " + e; el("bridge").className = "bad"; });
-    </script>
-    </body></html>
-    """
+    final class Coordinator: NSObject, WKNavigationDelegate {
+        /// 바깥 링크(GitHub · 릴리스)는 사파리로.
+        func webView(_ webView: WKWebView, decidePolicyFor action: WKNavigationAction,
+                     decisionHandler: @escaping (WKNavigationActionPolicy) -> Void) {
+            guard let url = action.request.url, url.scheme != WebView.scheme, url.scheme != "about" else {
+                decisionHandler(.allow); return
+            }
+            UIApplication.shared.open(url)
+            decisionHandler(.cancel)
+        }
+    }
 }
 
-final class Bridge: NSObject, WKScriptMessageHandlerWithReply {
-    func userContentController(_ controller: WKUserContentController,
-                               didReceive message: WKScriptMessage,
-                               replyHandler: @escaping (Any?, String?) -> Void) {
-        guard let body = message.body as? [String: Any],
-              let method = body["method"] as? String else {
-            replyHandler(nil, "bad message"); return
+/// 글자를 길게 눌러 선택하면 iOS 가 띄우는 팝업(복사 · 찾아보기 …)에 '절 메뉴'를 더한다 —
+/// 노트 · 장바구니 · 원어를 여는 길(톡은 바로 복사, ios.js).
+final class BibleWebView: WKWebView {
+    override func buildMenu(with builder: UIMenuBuilder) {
+        let open = UIAction(title: "절 메뉴", image: UIImage(systemName: "text.badge.plus")) { [weak self] _ in
+            self?.evaluateJavaScript("window.BibleClipVerseMenuForSelection ? window.BibleClipVerseMenuForSelection() : false") { r, _ in
+                if r as? Bool == true { UIImpactFeedbackGenerator(style: .light).impactOccurred() }
+            }
         }
-        switch method {
-        case "ping":
-            let d = UIDevice.current
-            let ver = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "?"
-            replyHandler("\(d.model) · \(d.systemName) \(d.systemVersion) · 앱 \(ver)", nil)
-        default:
-            replyHandler(nil, "unknown method: \(method)")
+        builder.insertChild(UIMenu(title: "", options: .displayInline, children: [open]), atStartOfMenu: .standardEdit)
+        super.buildMenu(with: builder)
+    }
+}
+
+/// bibleclip://app/<경로> → 앱 안 Bundle/<경로>. web/index.html 만 고쳐서 준다.
+final class BundleSchemeHandler: NSObject, WKURLSchemeHandler {
+    private let root = AppModel.shared.bundleDir.standardizedFileURL
+
+    func webView(_ webView: WKWebView, start task: WKURLSchemeTask) {
+        guard let url = task.request.url else { return }
+        let path = url.path.hasPrefix("/") ? String(url.path.dropFirst()) : url.path
+        let file = root.appendingPathComponent(path).standardizedFileURL
+        // Bundle 밖으로 나가는 경로(../)는 막는다.
+        guard file.path.hasPrefix(root.path + "/"), var data = try? Data(contentsOf: file) else {
+            task.didReceive(HTTPURLResponse(url: url, statusCode: 404, httpVersion: "HTTP/1.1", headerFields: nil)!)
+            task.didFinish()
+            return
         }
+        if path == "web/index.html", let html = String(data: data, encoding: .utf8) {
+            data = Data(Self.inject(html).utf8)
+        }
+        let type = UTType(filenameExtension: file.pathExtension)?.preferredMIMEType ?? "application/octet-stream"
+        let headers = ["Content-Type": type.hasPrefix("text/") || type.hasSuffix("javascript") || type.hasSuffix("json")
+                       ? "\(type); charset=utf-8" : type,
+                       "Content-Length": String(data.count), "Cache-Control": "no-cache"]
+        task.didReceive(HTTPURLResponse(url: url, statusCode: 200, httpVersion: "HTTP/1.1", headerFields: headers)!)
+        task.didReceive(data)
+        task.didFinish()
+    }
+
+    func webView(_ webView: WKWebView, stop task: WKURLSchemeTask) {}
+
+    /// 휴대폰 스타일은 페이지 것 뒤에(이기게), bridge.js 는 첫 스크립트 앞에, mobile.js 는 마지막 뒤에.
+    static func inject(_ html: String) -> String {
+        var h = html
+        // 앱처럼: 손가락 벌리기 · 두 번 두드리기 확대, 입력칸 누를 때 자동 확대를 막는다
+        // (WKWebView 는 user-scalable=no 를 따른다). 글자 크기는 앱의 글자 크기 설정으로.
+        // 가로로 돌릴 때 사파리식 글자 키우기도 끈다.
+        if let r = h.range(of: #"<meta name="viewport"[^>]*>"#, options: .regularExpression) {
+            h.replaceSubrange(r, with: "<meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0, "
+                              + "maximum-scale=1.0, user-scalable=no\">")
+        }
+        h = insertBefore(h, "</head>", "<style>html{-webkit-text-size-adjust:100%;text-size-adjust:100%}</style>\n")
+        h = insertBefore(h, "</head>", "<link rel=\"stylesheet\" href=\"../android/mobile.css\">\n")
+        h = insertBefore(h, "<script", "<script src=\"../ios/bridge.js\"></script>\n")
+        h = insertBefore(h, "</body>", "<script src=\"../android/mobile.js\"></script>\n"
+                         + "<script src=\"../ios/ios.js\"></script>\n")
+        return h
+    }
+
+    private static func insertBefore(_ html: String, _ marker: String, _ tag: String) -> String {
+        guard let r = html.range(of: marker) else { return html + tag }
+        return html.replacingCharacters(in: r.lowerBound..<r.lowerBound, with: tag)
     }
 }
