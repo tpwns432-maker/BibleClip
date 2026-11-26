@@ -47,6 +47,7 @@ final class AppModel {
         log.info("library: \(lib.order, privacy: .public) in \(Int(Date().timeIntervalSince(t0) * 1000)) ms")
         // 기본 검색 역본 색인을 미리 — 첫 검색이 바로 되게. 같은 줄이라 다른 호출과 겹치지 않는다.
         queue.async {
+            self.mirrorShared()
             let t1 = Date()
             _ = lib.synonyms
             if let v = lib.searchVersion() { lib.searcher(v)?.warm() }
@@ -62,8 +63,7 @@ final class AppModel {
         let files = (try? FileManager.default.contentsOfDirectory(atPath: dir.path)) ?? []
         var added: [String] = []
         for name in files.sorted() {
-            let low = name.lowercased()
-            guard low.hasSuffix(".sqlite3") || low.hasSuffix(".sqlite") || low.hasSuffix(".db") else { continue }
+            guard SharedStore.isBible(name) else { continue }
             if lib.dbs[BibleDb.nameOf(name)] != nil { continue }
             do {
                 let db = try BibleDb(path: dir.appendingPathComponent(name).path, text: lib.text)
@@ -86,6 +86,38 @@ final class AppModel {
     func saveSettings() {
         let data = Data(JSON.string(library.settings.json, pretty: true).utf8)
         try? data.write(to: settingsFile, options: .atomic)
+        if let c = SharedStore.container {
+            try? data.write(to: c.appendingPathComponent(SharedStore.settingsName), options: .atomic)
+        }
+    }
+
+    /// 공유 메뉴 확장이 볼 수 있게 설정 · 별칭 · 사용자가 넣은 역본을 그룹 컨테이너에 비춘다
+    /// (SharedStore). 바뀐 파일만 복사하고, 앱에서 없어진 역본은 지운다. [queue] 위에서.
+    func mirrorShared() {
+        guard let c = SharedStore.container else { return }
+        let fm = FileManager.default
+        let dest = c.appendingPathComponent(SharedStore.biblesName)
+        try? fm.createDirectory(at: dest, withIntermediateDirectories: true)
+        func sync(_ from: URL, _ to: URL) {
+            let a = try? fm.attributesOfItem(atPath: from.path)
+            let b = try? fm.attributesOfItem(atPath: to.path)
+            if let a, let b, a[.size] as? Int == b[.size] as? Int,
+               a[.modificationDate] as? Date == b[.modificationDate] as? Date { return }
+            try? fm.removeItem(at: to)
+            do {
+                try fm.copyItem(at: from, to: to)
+                if let m = a?[.modificationDate] { try? fm.setAttributes([.modificationDate: m], ofItemAtPath: to.path) }
+            } catch {
+                log.warning("mirror \(from.lastPathComponent, privacy: .public): \(error.localizedDescription, privacy: .public)")
+            }
+        }
+        if fm.fileExists(atPath: settingsFile.path) { sync(settingsFile, c.appendingPathComponent(SharedStore.settingsName)) }
+        let mine = Set(((try? fm.contentsOfDirectory(atPath: bibleDir.path)) ?? [])
+            .filter { SharedStore.isBible($0) || $0 == SharedStore.aliasName })
+        for name in mine { sync(bibleDir.appendingPathComponent(name), dest.appendingPathComponent(name)) }
+        for name in (try? fm.contentsOfDirectory(atPath: dest.path)) ?? [] where !mine.contains(name) {
+            try? fm.removeItem(at: dest.appendingPathComponent(name))
+        }
     }
 
     private func readJson(_ url: URL) -> [String: Any]? {

@@ -131,7 +131,9 @@ final class Bridge: NSObject, WKScriptMessageHandlerWithReply {
         case "get_all_highlights": return model.highlights.all()
         case "add_bible_files": return addBibleFiles()
         case "refresh_databases":
-            return ["added": model.scan(model.bibleDir), "versions": versions()]
+            let added = model.scan(model.bibleDir)
+            model.mirrorShared()
+            return ["added": added, "versions": versions()]
         case "note_position":
             lib.settings["last_book_num"] = a.int(0)
             lib.settings["last_chapter"] = a.int(1)
@@ -240,6 +242,7 @@ final class Bridge: NSObject, WKScriptMessageHandlerWithReply {
         let (_, errors) = model.importBibles(sources)
         for u in picked { try? FileManager.default.removeItem(at: u) }   // 고르기 창이 만든 사본
         let added = model.scan(model.bibleDir)
+        model.mirrorShared()
         return ok(true, [
             "added": added.map { ["name": $0, "display": lib.dbs[$0]?.displayName ?? $0] },
             "errors": errors.map { $0.json },
