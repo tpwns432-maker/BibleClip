@@ -167,7 +167,7 @@ BibleClip Project/
   - **설정**: `load_settings()` / `save_settings()`
   - **읽기 API**: `versions()` / `books(version)` / `primary_version()` / `book_aliases()`(캐시) / `get_chapters(version, book_num)` / `get_chapter(version, book_num, chapter)` / `search(version, keyword)`
   - **원어**: `lookup_strong(code, lang='ko')` / `search_strong(code)` / `interlinear(book_num, chapter, version=None)` / `morphology(code, book_num, chapter, verse)` — 한국어 Strong 역본은 `bethlehem_strongs`(개역한글S, 기본 '') · `bethlehem_strongs_nkrv`(개역개정S, 사용자가 넣었을 때만 — **저작권 자료, 동봉 금지**). `interlinear(version=NKRV_STRONGS='개역개정S')` 로 고른다(#31)
-  - **영어공부(영한 끊어 읽기)**(v1.2.4 예정): `study_sources()` → `{en:[BSB, KJV+…], ko:[NRKV(개역개정S), KRV(개역한글S)]}` (`STUDY_KO` = 본문 키 · Strong 속성 · 이름, 둘 다 있어야 후보) / `study_chapter(book, chapter, en=None, ko=None, fine=True)` → `[{n, chunks:[{en:[[구절, code]…], ko:[[조각, code, 띄움]…]}…]}]` — 알고리즘은 `core/study.py`
+  - **영어공부(영한 끊어 읽기)**(v1.2.4 예정): `study_sources()` → `{en:[BSB, KJV+…], ko:[NRKV(개역개정S), KRV(개역한글S)]}` (`STUDY_KO` = 본문 키 · Strong 속성 · 이름, 둘 다 있어야 후보) / `study_chapter(book, chapter, en=None, ko=None, fine=True)` → `[{n, chunks:[{en:[[낱말, code|null]…], ko:[[조각, code, 띄움]…]}…]}]` (영어는 낱말마다, 번호는 구절 머리말 낱말에만 — 누른 낱말 그대로 영한 뜻풀이) — 알고리즘은 `core/study.py`
   - **약칭 오버라이드**: `parse_reference(text)` / `load_alias_overrides()` / `list_alias_overrides()` / `add_alias_override(alias, book_num)` / `remove_alias_override(alias)`
   - **참조→출력**: `build_output(text)` → {kind:'reference'|'keyword',...} / `format_reference(book_num, chapter, verses, order=None)` → (text, n_parts) — 템플릿에 `{content2}`/`{version2}`가 있고 2개 이상 역본이면 `Formatter.format_parallel()`로 병렬 결합(FEAT-05), (text, 2) 반환
   - **모니터링**: `start_monitoring(read_fn, write_fn, on_reference, on_keyword)` / `stop_monitoring()` / `set_poll_interval(seconds)` / `notify_clipboard_written(text)`
@@ -175,7 +175,8 @@ BibleClip Project/
   - 상수: `DEFAULT_SETTINGS`(20+ 키)
 
 ### core/study.py — 영어공부(영한 끊어 읽기) 엔진 (v1.2.4 예정, 순수 함수)
-- `align_units(en_pairs, ko_text, ko_pieces, fine=True)` → 덩어리 `[{en:[[구절, code]], ko:[[조각, code, 띄움]]}]` 영어 어순. 영어 = `parse_english_strongs`(BSB·KJV+), 한국어 = 실제 본문 + `parse_korean_strongs`(S 역본 조각). `align_verse`/`chunk_text` = 글자 버전(테스트용)
+- `align_units(en_pairs, ko_text, ko_pieces, fine=True)` → 덩어리 `[{en:[[낱말, code|null]], ko:[[조각, code, 띄움]]}]` 영어 어순.
+- 단어 모드(`fine`) 끝단 `_split_words`: 구절을 **내용어마다** 끊는다(`ATTACH` 관사·전치사·대명사·조동사·not 은 뒤 낱말에, `BACK` forth·away 소사는 앞 동사에, 끝에 남으면 앞에). 한국어는 같은 번호의 머리말 조각으로 → 한 덩이로 몰렸고 어절이 조각보다 많으면 어절을 앞 조각에도 나눔(be·have·do 조각 `AUXV` 은 제외) → **한국어가 빈 조각은 다음(끝이면 앞) 조각에 합침**(짝 있는 낱말만 끊기: is my shepherd ↔ 나의 목자시니). 구절 모드는 덩어리 그대로, 영어만 낱말 목록(`_en_tokens`). 영어 = `parse_english_strongs`(BSB·KJV+), 한국어 = 실제 본문 + `parse_korean_strongs`(S 역본 조각). `align_verse`/`chunk_text` = 글자 버전(테스트용)
 - 🔑 한국어는 **Strong 조각 단위**(`korean_units`: 조각을 본문 글자 위치에 얹고, 덮이지 않은 글자도 번호 없는 조각) — 어절 단위로 묶으면 `공허하며`(공허 H922 + 하며 H1961) 가 통째로 was 에 붙었다(창 1:2). 같은 번호 짝: 개수 같으면 차례대로(기준점), 다르면 `_match`(DP) 로 — 기대 위치 = 가장 가까운 기준점 이웃의 한국어 자리 −0.6(한국어는 목적어·꾸밈말이 앞, 창 1:7 궁창). S 조각이 본문과 판이 달라 안 맞으면 두 글자까지 앞부분만 맞춤(나뉘게↔나뉘라). 짝 없는 맨 명사(`_ENDINGS` 로 안 끝남)는 다음 덩어리. **전수조사 규칙(#37)**: 어절 전체가 짝 없으면 ① 대명사 주어·목적어 `_pron_class` → 같은 인칭·격 영어 대명사 덩어리(뒤 우선, 앞 +10) ② `_pron_stem` 대명사·지시어 → 다음 ③ `_VERB_END`(되매늘까즉) → 앞. `korean_units` 는 오탈자 근사(같은 길이 ¼)·뒷부분 맞춤·놓친 만큼 탐색 창(slack). 짝 찾기 키는 `FOLD_LEX`(이형 번호 22쌍). 같은 어절 판정은 앞 `we`·뒤 `w`. 오류율 11.0→6.0%(`_local/bsb/audit/REPORT.md`). `FUNC`(관사·전치사) 는 짝 없음 → 다음 덩어리. 짝 없는 조각은 같은 어절 조각 쪽(앞 우선), 어절 전체가 없으면 `CONJ_NEXT`(접속어·관형사)면 다음·아니면 앞. `fine=False` = 문장부호(`ends_clause`)에서만 끊고 한 어절은 한 덩어리. KJV+ 식 앞 문장부호(`', that'`)는 앞 구절로
 - 성경 전체 BSB↔개역개정S: 한국어 빈 덩어리 0.01%(19/312,196), 장당 ~5ms
 

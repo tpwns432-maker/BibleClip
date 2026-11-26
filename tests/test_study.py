@@ -32,8 +32,31 @@ def unit():
                                            ('created', '창조하시니라'), ('the heavens', '천'), ('and the earth.', '지를')]
     # 덩어리에는 조각마다 번호(화면이 눌러 사전을 띄운다).
     ch = align_units(en, ko, pieces)
-    assert ch[3] == {'en': [['the heavens', 'H8064']], 'ko': [['천', 'H8064', 0]]}, ch[3]
-    assert ch[4]['en'] == [['and', 'H853'], ['the earth.', 'H776']]
+    # 영어는 낱말마다 [낱말, 번호] — 번호는 그 구절의 머리말에만(누른 낱말의 사전을 띄우려고).
+    assert ch[3] == {'en': [['the', None], ['heavens', 'H8064']], 'ko': [['천', 'H8064', 0]]}, ch[3]
+    assert ch[4]['en'] == [['and', 'H853'], ['the', None], ['earth.', 'H776']]
+
+    # 단어 모드는 짝 있는 낱말만 끊는다: 한국어가 없는 was 는 뒤 낱말에(was hovering ↔ 운행하시니라).
+    out = align_units([('the Spirit', 'H7307'), ('was hovering', 'H7363')], '영은 운행하시니라',
+                      [('영은', 'H7307'), ('운행하시니라', 'H7363')])
+    assert [chunk_text(c) for c in out] == [('the Spirit', '영은'), ('was hovering', '운행하시니라')], out
+    assert out[1]['en'] == [['was', None], ['hovering', 'H7363']], out
+    # 한국어 어절이 남으면 앞 낱말에도 나눈다(And Abraham / said ↔ 아브라함이 또 / 가로되).
+    out = align_units([('And Abraham said,', 'H559')], '아브라함이 또 가로되', [('아브라함이 또 가로되', 'H559')])
+    assert [chunk_text(c) for c in out] == [('And Abraham', '아브라함이 또'), ('said,', '가로되')], out
+    # 소사는 앞 동사에(bring forth), 조동사 · not 은 뒤에(shall not perish).
+    out = align_units([('you will bring forth', 'H3205'), ('children.', 'H1121')], '자식을 낳을 것이며',
+                      [('자식을', 'H1121'), ('낳을 것이며', 'H3205')])
+    assert [chunk_text(c) for c in out] == [('you will bring forth', '낳을 것이며'), ('children.', '자식을')], out
+    out = align_units([('shall not perish', 'G622')], '멸망하지 않고', [('멸망하지 않고', 'G622')])
+    assert [chunk_text(c) for c in out] == [('shall not perish', '멸망하지 않고')]
+    # 내용어가 없어도 한국어 짝이 있는 구절은 남는다(beneath ↔ 아래의).
+    out = align_units([('the waters', 'H4325'), ('beneath', 'H8478')], '아래의 물', [('아래의', 'H8478'), ('물', 'H4325')])
+    assert [chunk_text(c) for c in out] == [('the waters', '물'), ('beneath', '아래의')], out
+    # 구절 모드는 그대로 한 덩어리(낱말마다 번호만 붙음).
+    out = align_units([('the Spirit', 'H7307'), ('was hovering', 'H7363')], '영은 운행하시니라',
+                      [('영은', 'H7307'), ('운행하시니라', 'H7363')], fine=False)
+    assert out[0]['en'] == [['the', None], ['Spirit', 'H7307'], ['was', None], ['hovering', 'H7363']], out
     assert align_verse(en, ko, pieces, fine=False) == [
         ('In the beginning God created the heavens and the earth.', '태초에 하나님이 천지를 창조하시니라')]
 
@@ -116,7 +139,7 @@ def real():
     # 남는 맨 명사 '궁창'은 뒤 낱말(아래의 · 위의)과 함께.
     # 전수조사 규칙: 대명사 주어(내가 · 네가)는 같은 인칭 영어 대명사 덩어리로, '가로되'(동사 어미)는 앞으로.
     t18 = dict(txt(lib.study_chapter(10, 18, ko='KRV')[30]))
-    assert t18['And Abraham said,'] == '아브라함이 또 가로되' and t18['I will not'] == '내가 아니하리라', t18
+    assert t18['And Abraham'] == '아브라함이 또' and t18['said,'] == '가로되' and t18['I will not'] == '내가 아니하리라', t18
     assert t18['“Now that I have ventured'] == '내가 고하나이다', t18
     ex2 = dict(txt(lib.study_chapter(20, 2, ko='KRV')[12]))
     assert ex2['are you attacking'] == '네가 치느냐 하매' and ex2['He asked'] == '이르되', ex2

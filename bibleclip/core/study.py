@@ -310,7 +310,148 @@ def align_units(en_pairs, ko_text, ko_pieces, fine=True):
             gap = 0 if (last is not None and last['e'] == u['s'] and last['we'] == u['w']) else 1
             ko.append([u['t'], u['c'], gap if ko else 0])
             last = u
-        out.append({'en': [[r['t'], r['c']] for r in c['rows']], 'ko': ko})
+        if fine:
+            out.extend(_split_words(c['rows'], ko))
+        else:
+            out.append({'en': _en_tokens(c['rows']), 'ko': ko})
+    return out
+
+
+# 단어 모드에서 뒤 내용어에 붙는 영어 작은 낱말(관사 · 전치사 · 접속사 · 대명사 · 소유격 · not · 조동사).
+# be · have · do 는 본동사일 수 있어 내용어로 친다(was hovering → was / hovering).
+ATTACH = frozenset({
+    'the', 'a', 'an', 'of', 'to', 'and', 'or', 'but', 'nor', 'in', 'on', 'at', 'for', 'with', 'by', 'from', 'as',
+    'into', 'onto', 'upon', 'unto', 'over', 'under', 'through', 'throughout', 'before', 'after', 'against', 'among',
+    'between', 'about', 'above', 'below', 'beside', 'beyond', 'toward', 'towards', 'within', 'without', 'around',
+    'near', 'across', 'along', 'behind', 'beneath', 'during', 'except', 'like', 'since', 'till', 'until', 'off',
+    'out', 'up', 'down', 'that', 'which', 'who', 'whom', 'whose', 'what', 'so', 'then', 'now', 'if', 'than',
+    'because', 'when', 'where', 'while', 'though', 'although', 'yet', 'also', 'even', 'his', 'her', 'their', 'my',
+    'your', 'our', 'its', 'thy', 'thine', 'this', 'these', 'those', 'all', 'every', 'each', 'any', 'some', 'no',
+    'not', 'he', 'she', 'it', 'they', 'we', 'you', 'i', 'me', 'him', 'them', 'us', 'thee', 'thou', 'ye', 'one',
+    'shall', 'will', 'would', 'should', 'may', 'might', 'can', 'could', 'must', 'let',
+})
+_ALPHA = re.compile(r"[^A-Za-z']")
+
+
+def _is_content(word):
+    w = _ALPHA.sub('', word).strip("'").lower()
+    return bool(w) and w not in ATTACH
+
+
+AUXV = frozenset({'is', 'was', 'are', 'were', 'am', 'be', 'been', 'being', 'have', 'has', 'had', 'having',
+                  'do', 'does', 'did'})
+# 앞 동사에 붙는 부사 소사(bring forth · cast away · come again) — 따로 끊지 않는다.
+BACK = frozenset({'forth', 'away', 'back', 'again', 'together', 'aside', 'apart', 'abroad', 'asunder'})
+
+
+def _plainw(word):
+    return _ALPHA.sub('', word).strip("'").lower()
+
+
+def _row_tokens(rows):
+    """구절 줄들 → [(낱말, 줄 번호, 머리말?, 끊는 자리?)].
+    머리말 = 그 줄의 마지막 내용어(BACK 소사 빼고, 없으면 마지막 낱말) — 원어 번호와 한국어를 단다.
+    끊는 자리 = 내용어, 또는 내용어가 없어도 한국어 짝이 있는 줄의 머리말(beneath ↔ 아래의 가 사라지지 않게)."""
+    toks = []
+    for ri, r in enumerate(rows):
+        ws = r['t'].split()
+        if not ws:
+            continue
+        heads = [i for i, w in enumerate(ws) if _is_content(w) and _plainw(w) not in BACK]
+        h = heads[-1] if heads else len(ws) - 1
+        for i, w in enumerate(ws):
+            back = _plainw(w) in BACK
+            split = (_is_content(w) and not back) or (i == h and not heads and bool(r['u']))
+            toks.append((w, ri, i == h, split, back))
+    return toks
+
+
+def _en_tokens(rows):
+    """덩어리의 영어 → 낱말마다 [낱말, 번호](번호는 각 줄의 머리말에만) — 화면이 낱말 하나씩 누르게."""
+    return [[w, rows[ri]['c'] if head else None] for w, ri, head, _, _ in _row_tokens(rows)]
+
+
+def _split_words(rows, ko):
+    """단어 모드: 덩어리를 내용어마다 끊는다(작은 낱말은 뒤 내용어에, 끝에 남으면 앞 덩어리에,
+    forth · away 같은 소사는 앞 동사에). 한국어는 짝이 맞은 줄(u 가 있는 마지막 줄)의 머리말이 든 조각에."""
+    toks = _row_tokens(rows)
+    subs, buf = [], []
+    for w, ri, head, split, back in toks:
+        t = (w, ri, head)
+        if back and not buf and subs:
+            subs[-1].append(t)              # bring / forth → bring forth
+            continue
+        buf.append(t)
+        if split:
+            subs.append(buf)
+            buf = []
+    if buf:
+        if subs:
+            subs[-1] += buf
+        else:
+            subs = [buf]
+    matched = [ri for ri, r in enumerate(rows) if r['u']]
+    target = None
+    if matched:
+        m = matched[-1]
+        target = next((si for si, s in enumerate(subs) for w, ri, head in s if ri == m and head), None)
+    if target is None:
+        target = len(subs) - 1
+    # 한국어 조각을 번호가 같은 줄의 머리말이 든 조각으로 나눈다(And Abraham / said ↔ 아브라함이 / 또 가로되).
+    # 번호가 안 맞는 조각은 바로 앞 조각을 따라가고, 맨 앞이면 target.
+    sub_of_code = {}
+    for si, s in enumerate(subs):
+        for w, ri, head in s:
+            if head and rows[ri]['c']:
+                sub_of_code.setdefault(rows[ri]['c'], si)
+    dest, prev = [], None
+    for text, code, gap in ko:
+        si = sub_of_code.get(code) if code else None
+        if si is None:
+            si = prev if prev is not None else target
+        dest.append(si)
+        prev = si
+    mine = [[ko[i] for i in range(len(ko)) if dest[i] == si] for si in range(len(subs))]
+    # 한 구절이 여러 낱말 조각으로 쪼개졌는데 한국어는 머리말 조각에 한 덩이로 몰렸으면(BSB · 개역한글S 가
+    # 'And Abraham said,' ↔ '아브라함이 또 가로되' 를 번호 하나로 묶음), 어절을 한국어 어순대로 나눈다:
+    # 마지막 어절은 머리말에, 그 앞 어절들은 앞 낱말 조각에(꾸밈말 · 주어가 앞).
+    def main_row(s):
+        return next((ri for w, ri, head in reversed(s) if head or _is_content(w)), s[-1][1])
+    # be · have · do 조각은 한국어 어절을 받지 않는다(한국어에선 어미에 녹는다: is my shepherd ↔ 나의 목자시니).
+    def aux_only(s):
+        cw = [_plainw(w) for w, _, _ in s if _is_content(w)]
+        return bool(cw) and all(w in AUXV for w in cw)
+    for ri in {main_row(s) for s in subs}:
+        sis = [si for si, s in enumerate(subs) if main_row(s) == ri]
+        hs = next((si for si in sis if any(r == ri and h for _, r, h in subs[si])), None)
+        if len(sis) < 2 or hs != sis[-1] or not mine[hs] or any(mine[si] for si in sis if si != hs):
+            continue
+        sis = [si for si in sis if si == hs or not aux_only(subs[si])]
+        eoj = [(e, c) for t, c, _ in mine[hs] for e in t.split()]
+        # 어절이 조각보다 많을 때만(한국어에 그 낱말이 없을 수 있다: Moses went out ↔ 다시 나가니).
+        if len(sis) < 2 or len(eoj) < len(sis) + 1:
+            continue
+        cut = len(eoj) - (len(sis) - 1)
+        parts = [eoj[:cut]] + [[x] for x in eoj[cut:]]
+        for si, part in zip(sis, parts):
+            code = part[-1][1] if si == hs else None
+            mine[si] = [[' '.join(e for e, _ in part), code, 0]]
+    # 짝 있는 낱말만 끊는다: 한국어가 빈 조각은 다음 조각에(끝이면 앞 조각에) 붙인다
+    # (is my shepherd ↔ 나의 목자시니 · Moses went out ↔ 다시 나가니).
+    i = 0
+    while len(subs) > 1 and i < len(subs):
+        if mine[i]:
+            i += 1
+            continue
+        if i + 1 < len(subs):
+            subs[i + 1] = subs[i] + subs[i + 1]
+        else:
+            subs[i - 1] = subs[i - 1] + subs[i]
+        del subs[i], mine[i]
+    out = []
+    for si, s in enumerate(subs):
+        m = [[t, c, g if j else 0] for j, (t, c, g) in enumerate(mine[si])]
+        out.append({'en': [[w, rows[ri]['c'] if head else None] for w, ri, head in s], 'ko': m})
     return out
 
 
