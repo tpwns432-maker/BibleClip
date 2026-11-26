@@ -339,6 +339,40 @@ window.Tour = (() => {
     if (!document.querySelector('.mcard[data-type="study"]') && typeof CardManager !== "undefined") CardManager.addCard("study");
   };
   const WHATSNEW = {
+    "1.2.5": [
+      {
+        part: "new",
+        title: "새 기능: 영어공부, 덩어리로 🧪",
+        body: "시험 삼아 만든 기능입니다. <b>성경으로 영어를 공부해 보세요.</b><br>" +
+              "<b>영어는 숙어로, 단어는 사전으로.</b><br>" +
+              "<b>[다음]</b>을 누르면 영어공부 카드를 열어 보여 드려요.",
+        en: { title: "New: English Study in chunks 🧪",
+          body: "An experimental feature. <b>Study English with the Bible.</b><br>" +
+                "<b>Phrases for English, the dictionary for words.</b><br>" +
+                "Press <b>[Next]</b> and we'll open an English Study card." },
+      },
+      {
+        part: "new", target: '.mcard[data-type="study"] .card-body', side: "right", prepare: openStudyCard, interact: true,
+        title: "영어는 숙어로",
+        body: "영어를 낱말이 아니라 <b>뜻이 이어지는 덩어리</b>로 끊고, 그 아래에 한국어를 짝지어 놓습니다.<br>" +
+              "<code>The LORD / is my shepherd; / I shall not want.</code><br>" +
+              "<code>여호와는 / 나의 목자시니 / 내가 부족함이 없으리로다</code><br>" +
+              "덩어리 하나가 통째로 외울 표현이에요. 마우스를 올리면 짝이 함께 밝아집니다.",
+        en: { title: "Phrases for English",
+          body: "English is cut into <b>meaningful chunks</b> instead of single words, each paired with its Korean.<br>" +
+                "Each chunk is an expression worth learning whole. Hover to light up its partner." },
+      },
+      {
+        part: "new", target: '.mcard[data-type="study"] .card-body', side: "right", prepare: openStudyCard, interact: true,
+        title: "단어는 사전으로",
+        body: "영어 <b>낱말을 누르면</b> 사전 카드 맨 위에 그 낱말의 뜻이 나옵니다.<br>" +
+              "<b>성경 속 번역</b>(성경에서 어떻게 옮겼는지)과 <b>일반 뜻</b>, 그 아래로 원어 뜻까지.<br>" +
+              "지금 아무 영어 낱말이나 눌러 보세요. 다 보셨습니다! 🎉",
+        en: { title: "The dictionary for words",
+          body: "<b>Click an English word</b> to see its meaning at the top of the Lexicon card: " +
+                "how the Bible translates it, its general meaning, and the original-language entry below. That's it! 🎉" },
+      },
+    ],
     "1.2.4": [
       {
         part: "new",
