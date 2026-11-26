@@ -31,4 +31,17 @@
     const r = rects.length ? rects[0] : sel.getRangeAt(0).getBoundingClientRect();
     return !!(window.BibleClipLongHold && window.BibleClipLongHold(r.left + 2, r.top + r.height / 2));
   };
+
+  // 형광펜 색 줄(cards.js .hl-pal)은 선택한 글자 옆에 뜨는데, iOS 글자 선택 팝업(절 메뉴 · 복사 …)도
+  // 같은 자리에 떠서 겹친다. 아이폰에서는 색 줄을 화면 아래 메뉴(nav.rail) 바로 위 가운데로 옮긴다.
+  new MutationObserver(function (muts) {
+    for (const m of muts) for (const n of m.addedNodes) {
+      if (n.nodeType !== 1 || !n.classList.contains("hl-pal")) continue;
+      const rail = document.querySelector("nav.rail");
+      const floor = rail && rail.getBoundingClientRect().height ? rail.getBoundingClientRect().top : window.innerHeight;
+      const r = n.getBoundingClientRect();
+      n.style.left = Math.max(6, (window.innerWidth - r.width) / 2) + "px";
+      n.style.top = Math.max(6, floor - r.height - 12) + "px";
+    }
+  }).observe(document.body, { childList: true });
 })();

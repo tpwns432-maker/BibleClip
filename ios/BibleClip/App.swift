@@ -108,7 +108,8 @@ final class BundleSchemeHandler: NSObject, WKURLSchemeHandler {
         h = insertBefore(h, "</head>", "<style>html{-webkit-text-size-adjust:100%;text-size-adjust:100%}</style>\n")
         h = insertBefore(h, "</head>", "<link rel=\"stylesheet\" href=\"../android/mobile.css\">\n")
         h = insertBefore(h, "<script", "<script src=\"../ios/bridge.js\"></script>\n")
-        h = insertBefore(h, "</body>", "<script src=\"../android/mobile.js\"></script>\n")
+        h = insertBefore(h, "</body>", "<script src=\"../android/mobile.js\"></script>\n"
+                         + "<script src=\"../ios/ios.js\"></script>\n")
         return h
     }
 
