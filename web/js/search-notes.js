@@ -2437,7 +2437,8 @@
 
   // Shared namespace (classic scripts, file:// safe). The three app scripts
   // share global scope; BC surfaces the principal handles for debugging.
-  window.BC = Object.assign(window.BC || {}, { state, api, CardManager, boot });
+  // runSearch · showView: 폰의 말로 구절 찾기(android voice.js)가 검색창과 같은 길로 보낸다.
+  window.BC = Object.assign(window.BC || {}, { state, api, CardManager, boot, runSearch, showView });
 
   if (hasBridge()) {
     boot();

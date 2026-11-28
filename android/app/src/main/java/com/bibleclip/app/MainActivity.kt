@@ -9,6 +9,7 @@ import android.net.Uri
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
+import android.speech.RecognizerIntent
 import android.view.HapticFeedbackConstants
 import android.view.MotionEvent
 import android.view.ViewConfiguration
@@ -63,7 +64,7 @@ class MainActivity : Activity() {
                 return true
             }
         }
-        web.addJavascriptInterface(Bridge(app, web, ::pickBibleFiles), "BibleClipNative")
+        web.addJavascriptInterface(Bridge(app, web, ::pickBibleFiles, ::listenVoice), "BibleClipNative")
         if (savedInstanceState == null) web.loadUrl(START_URL) else web.restoreState(savedInstanceState)
     }
 
@@ -140,8 +141,35 @@ class MainActivity : Activity() {
         }
     }
 
+    private var voiceDone: ((List<String>?) -> Unit)? = null
+
+    /** 말로 구절 찾기: the system speech dialog (Google 음성 입력 등). It records
+     *  for us, so the app itself needs no microphone permission. */
+    private fun listenVoice(lang: String, prompt: String, done: (List<String>?) -> Unit) {
+        voiceDone?.invoke(emptyList())
+        voiceDone = done
+        val intent = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH)
+            .putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
+            .putExtra(RecognizerIntent.EXTRA_LANGUAGE, lang)
+            .putExtra(RecognizerIntent.EXTRA_MAX_RESULTS, 5)
+        if (prompt.isNotEmpty()) intent.putExtra(RecognizerIntent.EXTRA_PROMPT, prompt)
+        try {
+            @Suppress("DEPRECATION")
+            startActivityForResult(intent, REQ_VOICE)
+        } catch (e: ActivityNotFoundException) {
+            voiceDone = null
+            done(null)
+        }
+    }
+
     @Deprecated("Deprecated in Java")
     override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
+        if (requestCode == REQ_VOICE) {
+            val done = voiceDone ?: return
+            voiceDone = null
+            done(if (resultCode == RESULT_OK) data?.getStringArrayListExtra(RecognizerIntent.EXTRA_RESULTS).orEmpty() else emptyList())
+            return
+        }
         if (requestCode != REQ_PICK_BIBLES) {
             @Suppress("DEPRECATION")
             super.onActivityResult(requestCode, resultCode, data)
@@ -166,6 +194,8 @@ class MainActivity : Activity() {
     override fun onDestroy() {
         pickDone?.invoke(emptyList())   // never leave the bridge worker waiting
         pickDone = null
+        voiceDone?.invoke(emptyList())
+        voiceDone = null
         web.destroy()
         super.onDestroy()
     }
@@ -173,6 +203,7 @@ class MainActivity : Activity() {
     companion object {
         private const val INDEX = "web/index.html"
         private const val REQ_PICK_BIBLES = 41
+        private const val REQ_VOICE = 42
         private const val HOLD_MS = 2000L
         private val START_URL = Uri.Builder().scheme("https").authority(WebViewAssetLoader.DEFAULT_DOMAIN)
             .path("/assets/$INDEX").build().toString()
