@@ -2367,6 +2367,18 @@
       if (e.key === "ArrowLeft") { e.preventDefault(); CardManager.chapStepActive(-1); }
       else if (e.key === "ArrowRight") { e.preventDefault(); CardManager.chapStepActive(1); }
     });
+
+    // Keyboard: ↑/↓ (두세 줄) · PageUp/PageDown (한 화면) — 선택된 카드의 본문을 부드럽게 스크롤.
+    // 본문을 직접 누르지 않아도(머리말을 눌렀어도) 그 카드가 움직인다. 입력 칸 · 메뉴 · 대화창은 그대로.
+    const SCROLL_KEYS = { ArrowUp: ["line", -1], ArrowDown: ["line", 1], PageUp: ["page", -1], PageDown: ["page", 1] };
+    document.addEventListener("keydown", (e) => {
+      const k = SCROLL_KEYS[e.key];
+      if (!k || e.defaultPrevented || e.ctrlKey || e.metaKey || e.altKey) return;
+      if (e.target.closest && e.target.closest("input, textarea, select, [contenteditable]")) return;
+      if ($("viewer-view").hidden) return;
+      if (document.querySelector(".menu, .modal-overlay:not([hidden]), .tour-back")) return;
+      if (CardManager.scrollActive(k[0], k[1])) e.preventDefault();
+    });
   }
 
   function applyVersions(versions) {
