@@ -61,6 +61,9 @@
   "search.go": "Search",
   "search.empty": "Type a search term, or copy <b>#keyword</b> from another app.",
   "search.placeholderPhone": "Keyword · reference  (e.g. love / Jn 1:1)",
+  "voice.title": "Find a passage by voice",
+  "voice.prompt": "Say a passage — e.g. John 3:16",
+  "voice.unavailable": "Voice input isn't available on this phone (needs the Google app)",
   "search.emptyPhone": "Type a keyword or a reference (e.g. Jn 3:16).<br>In other apps, select a reference and tap <b>BibleClip verse</b> to turn it into the text.",
   "search.emptyWeb": "Type a keyword or a reference (e.g. Jn 3:16).",
 

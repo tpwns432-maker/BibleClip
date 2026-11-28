@@ -22,6 +22,12 @@ fun interface FilePicker {
     fun pick(done: (List<Uri>) -> Unit)
 }
 
+/** Opens the system speech-input dialog; [done] gets what was heard, best guess
+ *  first (empty = cancelled or nothing heard, null = no recognizer on this phone). */
+fun interface VoiceInput {
+    fun listen(lang: String, prompt: String, done: (List<String>?) -> Unit)
+}
+
 /**
  * The Kotlin side of assets/android/bridge.js — same method names, arguments and
  * return shapes as the desktop's bibleclip/webui routes, so web/ needs no fork.
@@ -29,7 +35,12 @@ fun interface FilePicker {
  * 0단계(시험 제작): reading, reference, copy and settings methods. Anything else
  * answers null (logged once) and the page degrades the way it does headless.
  */
-class Bridge(private val app: BibleClipApp, private val web: WebView, private val picker: FilePicker) {
+class Bridge(
+    private val app: BibleClipApp,
+    private val web: WebView,
+    private val picker: FilePicker,
+    private val voice: VoiceInput,
+) {
 
     private val worker = Executors.newSingleThreadExecutor()
     private val unknown = mutableSetOf<String>()
@@ -113,6 +124,7 @@ class Bridge(private val app: BibleClipApp, private val web: WebView, private va
         "clear_verse_highlights" -> { app.highlights.clearVerse(int(a, 0), int(a, 1), int(a, 2), a.optString(3)); ok(true) }
         "get_all_highlights" -> app.highlights.all()
         "add_bible_files" -> addBibleFiles()
+        "voice_input" -> voiceInput(a.optString(0, "ko-KR"), a.optString(1, ""))
         "refresh_databases" -> JSONObject().put("added", JSONArray(app.scanBibles())).put("versions", versions())
         "note_position" -> {
             lib.settings["last_book_num"] = a.optInt(0)
@@ -220,6 +232,16 @@ class Bridge(private val app: BibleClipApp, private val web: WebView, private va
             }))
             .put("errors", JSONArray(errors.map { JSONObject().put("file", it.file).put("code", it.code) }))
             .put("versions", versions())
+    }
+
+    /** 말로 구절 찾기(voice.js): 음성 입력 창 → 들린 문장 후보들(최대 5개).
+     *  취소 = 빈 배열, 음성 인식기 없음 = {error}. 해석은 화면 쪽이 한다. */
+    private fun voiceInput(lang: String, prompt: String): Any {
+        val heard = CountDownLatch(1)
+        var result: List<String>? = emptyList()
+        web.post { voice.listen(lang, prompt) { result = it; heard.countDown() } }
+        heard.await()   // the bridge worker waits while the dialog is up, like the file picker
+        return result?.let { JSONArray(it) } ?: ok(false).put("error", "unavailable")
     }
 
     private fun displayName(u: Uri): String =
