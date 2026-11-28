@@ -38,6 +38,12 @@
     const firstBible = () => bibleCards()[0] || null;
     const primaryBible = () => firstBible();
     const linkedBible = (card) => cardById(card.link) || firstBible();
+    // 영어공부 카드가 따라가는 본문 카드 — 단독(link 없음)이면 null(원어 카드와 달리 첫 본문으로 대체하지 않는다).
+    const studyLinkOf = (card) => {
+      const b = card && card.link ? cardById(card.link) : null;
+      return b && b.type === "bible" ? b : null;
+    };
+    const linkedStudies = (bible) => cards.filter((c) => c.type === "study" && studyLinkOf(c) === bible);
 
     function nextId(type) {
       const p = ID_PREFIX[type];
@@ -59,8 +65,9 @@
         if (c.type === "bible") {
           o.version = c.version; o.book = c.book; o.chapter = c.chapter; o.locked = !!c.locked;
         } else if (c.type === "study") {
-          // 영어공부: 성경 카드처럼 단독(자기 책 · 장) — 다른 카드에 연결하지 않는다.
+          // 영어공부: 단독(자기 책 · 장) 또는 본문 카드에 연결(link = bible-N, 그 장을 따라감).
           o.book = c.book; o.chapter = c.chapter;
+          o.link = c.link || null;
           o.en = c.en || null; o.ko = c.ko || null;
           o.tip = !!c.tip;
         } else {
@@ -128,10 +135,11 @@
           });
           bibleN++;
         } else if (!IS_ANDROID && raw.type === "study") {
-          // 영어공부: 단독 카드 — 자기 책 · 장, 영어 · 한국어 역본. 끊는 단위는 의미 덩어리 하나(옛 mode 는 버림).
+          // 영어공부: 자기 책 · 장, 영어 · 한국어 역본, 연결(없으면 단독). 끊는 단위는 의미 덩어리 하나(옛 mode 는 버림).
           out.push({
             rawId: raw.id, id: "", type: "study",
             book: raw.book || state.lastBook, chapter: raw.chapter || state.lastChapter,
+            link: typeof raw.link === "string" ? raw.link : null,
             en: typeof raw.en === "string" ? raw.en : undefined,
             ko: typeof raw.ko === "string" ? raw.ko : undefined,
             tip: raw.tip === true,          // 낱말 미리보기 — 기본 꺼짐
@@ -187,7 +195,9 @@
       });
       const firstB = (out.find((c) => c.type === "bible") || {}).id || null;
       out.forEach((c) => {
-        if (c.type !== "bible" && c.type !== "study") {
+        if (c.type === "study") {
+          c.link = (c.link && idMap[c.link]) || null;   // 연결한 본문 카드가 없어졌으면 단독
+        } else if (c.type !== "bible") {
           c.link = (c.link && idMap[c.link]) || firstB;
         }
         delete c.rawId;
@@ -314,6 +324,7 @@
       if (card.type === "study") {
         return `<div class="card-hd">${grip}<span class="card-title" data-i18n="card.type.study">${typeLabel("study")}</span>` +
           `<span class="card-hd-ctrls">` +
+            `<span class="hd-pill dropdown${card.link ? " on" : ""}" data-act="study-link" data-tip="단독으로 보거나 본문 카드에 연결" data-i18n-tip="card.tip.studyLink">${esc(studyLinkLabel(card))}</span>` +
             `<span class="hd-pill dropdown" data-act="book">…</span>` +
             `<span class="hd-pill dropdown" data-act="chapter">${I18N.t("card.chapterLabel", { n: card.chapter || 1 })}</span>` +
             `<span class="hd-mini" data-act="prev" data-tip="이전 장" data-i18n-tip="card.tip.prevChapter">‹</span>` +
@@ -789,6 +800,10 @@
     function studyTipLabel(on) {
       return I18N.t(on ? "card.studyTipOn" : "card.studyTipOff");
     }
+    function studyLinkLabel(card) {
+      const b = studyLinkOf(card);
+      return b ? b.id : I18N.t("card.studyAlone");
+    }
     async function updateStudyHeader(card) {
       const s = sectionEl(card.id);
       if (!s) return;
@@ -800,11 +815,15 @@
       const pk = s.querySelector('[data-act="study-ko"]'); if (pk) pk.textContent = studyLabel("ko", card.ko);
       const pt = s.querySelector('[data-act="study-tip"]');
       if (pt) { pt.textContent = studyTipLabel(card.tip); pt.classList.toggle("on", !!card.tip); }
+      const pl = s.querySelector('[data-act="study-link"]');
+      if (pl) { pl.textContent = studyLinkLabel(card); pl.classList.toggle("on", !!studyLinkOf(card)); }
     }
-    // 영어공부 카드 = 단독 본문(자기 책 · 장). 연결 성경 카드를 따라가지 않는다.
+    // 영어공부 카드 = 단독(자기 책 · 장) 또는 연결(본문 카드의 책 · 장을 따라감 — 원어 카드처럼).
     async function loadStudyCard(card) {
       const body = bodyEl(card.id);
       if (!body) return;
+      const src = studyLinkOf(card);
+      if (src) { card.book = src.book; card.chapter = src.chapter; }
       updateStudyHeader(card);
       if (!studyList("en").length || !studyList("ko").length) {
         body.innerHTML = `<div class="panel-loading">${I18N.t("card.studyNoData")}</div>`;
@@ -881,6 +900,7 @@
       return Promise.all(
         cards.filter((c) => c.type === "interlinear" && linkedBible(c) === card)
           .map(loadInterlinearCard)
+          .concat(linkedStudies(card).map(loadStudyCard))   // 연결한 영어공부 카드도 같은 장으로
       );
     }
 
@@ -955,7 +975,9 @@
       if (wasBible) {
         const fb = (firstBible() && firstBible().id) || null;
         cards.forEach((c) => {
-          if (c.type !== "bible" && c.link === id) { c.link = fb; loadCard(c); }
+          // 영어공부 카드는 단독으로 돌아가 보던 장에 남는다.
+          if (c.type === "study" && c.link === id) { c.link = null; updateStudyHeader(c); }
+          else if (c.type !== "bible" && c.link === id) { c.link = fb; loadCard(c); }
         });
       }
       saveLayout();
@@ -1055,6 +1077,7 @@
     }
 
     async function cardChapStep(card, delta) {
+      if (card.type === "study" && studyLinkOf(card)) card = studyLinkOf(card);   // 연결 중이면 본문 카드를 넘긴다
       const navVer = state.viewer[0] || state.primary;
       const chs = await chaptersFor(navVer, card.book);
       const cur = chs.indexOf(card.chapter);
@@ -1128,13 +1151,16 @@
       // 선택된 카드가 영어공부 카드면 그 카드가 받는다(본문처럼). 발표 중인 성경 카드는 예외.
       const st = activeStudyCard();
       const fsBible = fsCardId && document.fullscreenElement && fsCardId !== (st && st.id);
-      if (st && !fsBible) return goToStudy(st, book, chapter, verses);
+      // 연결된 영어공부 카드는 본문 카드를 따라가므로, 보통 경로(본문 카드가 받음)로 보낸다.
+      if (st && !fsBible && !studyLinkOf(st)) return goToStudy(st, book, chapter, verses);
       const fsCard = (fsCardId && document.fullscreenElement)
         ? bibleCards().find((c) => c.id === fsCardId) : null;
-      const target = jumpTarget(book, chapter);
+      // 선택된 영어공부 카드가 연결 중이면 그 본문 카드가 받는다(잠금이어도 — 직접 고른 이동이므로).
+      const stSrc = st && !fsBible ? studyLinkOf(st) : null;
+      const target = stSrc || jumpTarget(book, chapter);
       if (!target) return;
 
-      if (target === fsCard || !target.locked) {
+      if (target === fsCard || target === stSrc || !target.locked) {
         // Navigate to the incoming position.
         target.book = book;
         const chs = await chaptersFor(state.viewer[0] || state.primary, book);
@@ -1163,6 +1189,8 @@
 
     async function handleAction(card, act, actEl) {
       if (!card) return;
+      // 연결한 영어공부 카드의 책 · 장 메뉴는 본문 카드를 움직인다(영어공부 카드는 따라온다).
+      if (card.type === "study" && studyLinkOf(card) && (act === "book" || act === "chapter")) card = studyLinkOf(card);
       const navVer = state.viewer[0] || state.primary;
       switch (act) {
         case "book": {
@@ -1226,6 +1254,19 @@
           const cur = card[side] || list[0].name;
           openMenu(actEl, list.map((x) => ({ label: x.display, value: x.name, on: x.name === cur })),
             (name) => { card[side] = name; loadStudyCard(card); saveLayout(); });
+          break;
+        }
+        case "study-link": {
+          // 단독(자기 책 · 장) 또는 본문 카드에 연결. 연결을 풀면 지금 보던 장에 그대로 남는다.
+          const opts = [{ label: I18N.t("card.studyAlone"), value: "", on: !studyLinkOf(card) }]
+            .concat(bibleCards().map((b) => ({ label: b.id, value: b.id, on: studyLinkOf(card) === b })));
+          openMenu(actEl, opts, async (id) => {
+            card.link = id || null;
+            await loadStudyCard(card);
+            const src = studyLinkOf(card);
+            if (src) requestAnimationFrame(() => syncFrom(src, primaryScroller(src)));   // 본문이 보던 절로
+            saveLayout();
+          });
           break;
         }
         case "study-tip":
@@ -1735,7 +1776,8 @@
     // 이 성경 카드에 연동된 원어 카드의 스크롤 바디들(원어는 단일 본문).
     function linkedInterlinScrollers(card) {
       return cards
-        .filter((c) => c.type === "interlinear" && linkedBible(c) === card)
+        .filter((c) => (c.type === "interlinear" && linkedBible(c) === card) ||
+                       (c.type === "study" && studyLinkOf(c) === card))   // 연결한 영어공부 카드도 같은 절로
         .map((c) => bodyEl(c.id))
         .filter(Boolean);
     }

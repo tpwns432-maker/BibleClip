@@ -184,6 +184,8 @@
   "card.studyTipOn": "Preview on",
   "card.studyTipOff": "Preview off",
   "card.tip.studyTip": "Original-language preview on hover (click to toggle)",
+  "card.studyAlone": "Standalone",
+  "card.tip.studyLink": "Standalone (moves on its own) or linked to a Bible card (follows it)",
   "card.studyNoData": "No English Study data — needs an English Strong's bible (BSB · KJV+) and 개역한글S.",
   "card.tip.studyEn": "English version",
   "card.tip.studyKo": "Korean version",

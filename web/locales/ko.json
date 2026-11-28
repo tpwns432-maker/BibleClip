@@ -184,6 +184,8 @@
   "card.studyTipOn": "미리보기 켬",
   "card.studyTipOff": "미리보기 끔",
   "card.tip.studyTip": "낱말에 마우스를 올리면 원어 미리보기(누르면 켜고 끔)",
+  "card.studyAlone": "단독",
+  "card.tip.studyLink": "단독(이 카드만 따로 넘김) 또는 본문 카드에 연결(본문을 따라감)",
   "card.studyNoData": "영어공부 자료가 없습니다 — 영어 Strong 역본(BSB · KJV+)과 개역한글S가 필요합니다.",
   "card.tip.studyEn": "영어 역본",
   "card.tip.studyKo": "한국어 역본",
