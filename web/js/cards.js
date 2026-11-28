@@ -1869,6 +1869,74 @@
       return Math.max(0, Math.min(0.9, f));
     }
 
+    // ---- 부드러운 스크롤(↑↓ · PageUp/Down · 마우스 휠) ----
+    // WebView2 는 기본 스크롤이 '툭' 건너뛴다 → 목표 위치를 쌓아 두고 매 프레임 남은 거리의
+    // 일부만 움직인다(감속, ~0.2초). 연달아 누르거나 휠을 계속 굴리면 목표만 늘어 끊김 없이 흐른다.
+    // 다른 코드가 그 사이 scrollTop 을 바꾸면(절 맞춤 · 장 이동) 애니메이션을 접는다.
+    // scroll 이벤트는 그대로 나므로 연결된 원어 · 영어공부 카드도 같은 절로 따라온다.
+    const smoothState = new WeakMap();
+    const SMOOTH_K = 0.26;            // 프레임마다 남은 거리의 26%(끝 1.5px 는 바로 붙인다)
+    function smoothScrollBy(el, dy) {
+      if (!el || !dy) return;
+      const max = Math.max(0, el.scrollHeight - el.clientHeight);
+      let st = smoothState.get(el);
+      if (st && Math.abs(el.scrollTop - st.set) > 3) st = null;   // 밖에서 움직임 → 지금 위치부터
+      if (!st) {
+        st = { pos: el.scrollTop, target: el.scrollTop, set: el.scrollTop, raf: 0 };
+        smoothState.set(el, st);
+      }
+      st.target = Math.max(0, Math.min(max, st.target + dy));
+      if (st.raf) return;
+      const step = () => {
+        if (Math.abs(el.scrollTop - st.set) > 3) { st.raf = 0; smoothState.delete(el); return; }
+        const d = st.target - st.pos;
+        st.pos = Math.abs(d) < 1.5 ? st.target : st.pos + d * SMOOTH_K;
+        el.scrollTop = st.pos;
+        st.set = el.scrollTop;
+        if (st.pos === st.target) { st.raf = 0; smoothState.delete(el); return; }
+        st.raf = requestAnimationFrame(step);
+      };
+      st.raf = requestAnimationFrame(step);
+    }
+    function lineHeightOf(el) {
+      const v = el.querySelector(".v, .pk, p, div") || el;
+      const cs = getComputedStyle(v);
+      const lh = parseFloat(cs.lineHeight);
+      return isFinite(lh) ? lh : (parseFloat(cs.fontSize) || 16) * 1.6;
+    }
+    // 키보드: 선택된 카드(없으면 첫 성경 카드)의 본문을 움직인다. kind = "line" | "page", dir = ±1.
+    function scrollActive(kind, dir) {
+      const card = (activeId && cardById(activeId)) || primaryBible();
+      if (!card) return false;
+      const el = card.type === "bible" ? primaryScroller(card) : bodyEl(card.id);
+      if (!el || el.scrollHeight <= el.clientHeight) return false;
+      const dy = kind === "page" ? el.clientHeight * 0.875 : lineHeightOf(el) * 2.5;   // 한 화면(조금 겹침) · 두세 줄
+      smoothScrollBy(el, dir * dy);
+      return true;
+    }
+    // 마우스 휠: 카드 본문 위에서 굴리면 부드럽게. 터치패드(잘고 촘촘한 값) · Ctrl+휠은 그대로 둔다.
+    function wireSmoothWheel(c) {
+      if (IS_ANDROID) return;
+      c.addEventListener("wheel", (e) => {
+        if (e.ctrlKey || e.defaultPrevented || Math.abs(e.deltaX) > Math.abs(e.deltaY)) return;
+        let dy = e.deltaY;
+        if (e.deltaMode === 0 && Math.abs(dy) < 50) return;      // 터치패드 · 정밀 스크롤
+        let el = e.target.nodeType === 1 ? e.target : e.target.parentElement;
+        const sec = el && el.closest(".mcard");
+        if (!sec) return;
+        while (el && el !== sec) {           // 가장 가까운 '스크롤되는' 상자(카드 본문 · 위아래 창)
+          const oy = getComputedStyle(el).overflowY;
+          if ((oy === "auto" || oy === "scroll") && el.scrollHeight > el.clientHeight) break;
+          el = el.parentElement;
+        }
+        if (!el || el === sec) return;
+        if (e.deltaMode === 1) dy *= lineHeightOf(el);
+        else if (e.deltaMode === 2) dy *= el.clientHeight;
+        e.preventDefault();
+        smoothScrollBy(el, dy);
+      }, { passive: false });
+    }
+
     // ---- BUG-01: hold the reading position across font family/size changes ----
     // A font swap or A−/A+ reflows the scripture (word-wrap + line height), so a
     // px-preserved scrollTop lands on a different verse — and the linked 원어 card
@@ -1916,6 +1984,7 @@
     function wireContainer() {
       const c = container();
       if (!c) return;
+      wireSmoothWheel(c);
 
       // 폰을 돌리면 병렬 독서 배치를 바꾼다(세로 = 위아래 창, 가로 = 좌우 칸).
       // 읽던 절은 그대로 — 바꾸기 전 앵커를 잡아 두었다가 다시 맞춘다.
@@ -2198,7 +2267,7 @@
 
     return { init, addCard, addCardWithLink, goToRef, primaryVersion, cardFor: cardById,
              primaryBible, bibleCards, lexiconCards, bodyEl, linkedBibleFor,
-             chapStepPrimary, chapStepActive, activeStudyCard, reloadAllBible, relabel,
+             chapStepPrimary, chapStepActive, activeStudyCard, reloadAllBible, relabel, scrollActive,
              presentToggle, ensureInterlinearFor, decorateNotesFor: decorateNotes,
              snapshotAnchors, realignAnchors, jumpContext };
   })();
